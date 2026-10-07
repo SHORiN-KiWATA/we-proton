@@ -17,6 +17,7 @@
 | `wine/0003-ntdll-Return-from-native-syscalls-without-writing-be` | 原生 `syscall` 指令返回时写坏 `[rsp-8]` |
 | `wine/0004-server-Follow-Windows-connect-semantics-for-datagram` | UDP socket `connect()` 到全零地址的 Windows 语义 |
 | `wine/0005-ntdll-Report-written-write-copy-pages-as-read-write` | 写过的写时复制页报告 `PAGE_READWRITE` |
+| `wine/0006-win32u-Don-t-activate-WS_EX_NOACTIVATE-windows-in-pl` | 活动窗口消失后不把 `WS_EX_NOACTIVATE` 窗口设成前台 |
 | `vkd3d-proton/0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
 
 每个补丁的现象、根因、Windows 实测、验证和排查过程见 `we/fixes/`。
@@ -28,9 +29,10 @@
 - `redzone_test`（0003）：在 rsp 下方放标记值，执行原生 syscall，检查标记有没有被改
 - `udp_connect_poll`、`udp_wakeup_probe`、`udp_connect_err_probe`、`udp_connect_err_probe2`（0004）：UDP `connect()` 的各种情况。`*.windows.txt` 是 Windows 11 26200 上的实测输出，`*.wine3.txt` 是修复后的输出
 - `writecopy_probe`、`writecopy_probe2`（0005）：写时复制页写前写后报告的保护属性、代码页打补丁、区域边界
+- `noactivate_probe`（0006）：普通窗口隐藏、最小化、销毁时谁接手前台，`WS_EX_NOACTIVATE` 窗口在同一进程和另一个进程两种情况；要在有显示的环境里跑（Xvfb 即可）
 - `dxil-spirv/run.sh`（vkd3d-proton 0001）：用 dxil-spirv 的 `structurize-test` 跑 `*.st` 控制流图，检查生成的 SPIR-V 能通过校验。源码取 `build/overlay/src-vkd3d-proton`（先跑 `overlay-build.sh`）；`--unpatched` 用未打补丁的子模块，应该失败
 
-Wine 自己的测试：用 `build/overlay/src-wine` 另配一个 `--enable-tests` 的构建目录，编 `dlls/kernel32/tests`、`dlls/ntdll/tests`，用新旧 runner 各跑一遍对比（0005 就是这样验证的）。
+Wine 自己的测试：用 `build/overlay/src-wine` 另配一个 `--enable-tests` 的构建目录，编 `dlls/kernel32/tests`、`dlls/ntdll/tests`、`dlls/user32/tests`，用新旧 runner 各跑一遍、逐条比对失败项（0005、0006 就是这样验证的）。
 
 ## 诊断
 
@@ -60,7 +62,7 @@ we/overlay-build.sh --install
 
 1. 下载官方 `dwproton-11.0-14` 发布包到 `~/.cache/we-proton/`，校验 sha512
 2. 从 `wine/` 导出源码，打 `patches/wine/*.patch`，生成 configure 和 vulkan 头文件
-3. 只编补丁动到的东西：`dlls/ntdll/unix` → `ntdll.so`，`server` → `wineserver`，`dlls/ntoskrnl.exe` → `ntoskrnl.exe`。补丁动到别的目录时脚本会报错，要先在 `TARGETS` 里加映射（`*/tests/*` 不发布，跳过）
+3. 只编补丁动到的东西：`dlls/ntdll/unix` → `ntdll.so`，`server` → `wineserver`，`dlls/ntoskrnl.exe` → `ntoskrnl.exe`，`dlls/win32u` → `win32u.so`。补丁动到别的目录时脚本会报错，要先在 `TARGETS` 里加映射（`*/tests/*` 不发布，跳过）
 4. `patches/vkd3d-proton/` 有补丁时：同步 `vkd3d-proton/` 源码到 `build/overlay/src-vkd3d-proton`，打补丁，用 meson 交叉编译 x86_64 和 i386 的 `d3d12.dll`、`d3d12core.dll`，编译参数照抄 `Makefile.in`（`-march=nocona`、禁用 AVX、`-O3`、静态 libstdc++）。需要 `git submodule update --init --recursive vkd3d-proton`；widl 用 overlay 里 wine 编出来的
 5. 替换进发布包，改名为 `we-proton-11.0-14-<N>`，输出到 `build/` 并打包 `.tar.xz`
 6. `--install` 时复制到 `~/.local/share/proton/runners/WE-Proton`

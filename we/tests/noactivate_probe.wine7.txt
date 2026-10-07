@@ -1,0 +1,34 @@
+noactivate_probe, wine yes
+B: WS_EX_NOACTIVATE popup, same process
+  start, A activated                           fg A        active A
+  ShowWindow(A, SW_MINIMIZE)                   fg A        active A
+  ShowWindow(A, SW_HIDE)                       fg (none)   active (none)
+  C active, A minimized, DestroyWindow(C)      fg C        active C
+    -> after destroy                           fg (none)   active (none)
+  ShowWindow(B, SW_HIDE then SW_SHOW)          fg B-plain  active B-plain
+  SetWindowPos(B, HWND_TOP, no NOACTIVATE)     fg B-plain  active B-plain
+  SetForegroundWindow(B)                       fg B-plain  active B-plain
+B: NOACTIVATE|TOOLWINDOW|LAYERED popup, same process
+  start, A activated                           fg A        active A
+  ShowWindow(A, SW_MINIMIZE)                   fg A        active A
+  ShowWindow(A, SW_HIDE)                       fg (none)   active (none)
+  C active, A minimized, DestroyWindow(C)      fg C        active C
+    -> after destroy                           fg (none)   active (none)
+  ShowWindow(B, SW_HIDE then SW_SHOW)          fg B-overlay active B-overlay
+  SetWindowPos(B, HWND_TOP, no NOACTIVATE)     fg B-overlay active B-overlay
+  SetForegroundWindow(B)                       fg B-overlay active B-overlay
+control, B: plain popup without NOACTIVATE
+  start, A activated                           fg A        active A
+  ShowWindow(A, SW_MINIMIZE)                   fg A        active A
+  ShowWindow(A, SW_HIDE)                       fg B-normal active B-normal
+  C active, A minimized, DestroyWindow(C)      fg C        active C
+    -> after destroy                           fg B-normal active B-normal
+  ShowWindow(B, SW_HIDE then SW_SHOW)          fg B-normal active B-normal
+  SetWindowPos(B, HWND_TOP, no NOACTIVATE)     fg B-normal active B-normal
+  SetForegroundWindow(B)                       fg B-normal active B-normal
+B: NOACTIVATE|TOOLWINDOW|LAYERED popup, other process
+  start, A activated                           fg A        active A
+  ShowWindow(A, SW_MINIMIZE)                   fg A        active A
+  ShowWindow(A, SW_HIDE)                       fg (none)   active (none)
+  C active, A minimized, DestroyWindow(C)      fg C        active C
+    -> after destroy                           fg (none)   active (none)

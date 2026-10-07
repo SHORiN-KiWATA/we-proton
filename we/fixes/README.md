@@ -9,11 +9,14 @@
 | wine 0003 | 原生 `syscall` 指令返回时写坏 `[rsp-8]` | `0003-native-syscall-red-zone/` |
 | wine 0004 | UDP socket `connect(0.0.0.0)` 的语义和 Windows 不同，靠它唤醒的 `select()` 要等满超时 | `0004-udp-connect-unspecified/` |
 | wine 0005 | 写过的写时复制页仍报告 `PAGE_WRITECOPY`，CEF 渲染进程的断言失败 | `0005-write-copy-tracking/` |
+| wine 0006 | 活动窗口消失后，Wine 会把 `WS_EX_NOACTIVATE` 窗口设成前台 | `0006-noactivate-activation/` |
 | vkd3d-proton 0001 | dxil-spirv 生成非法的结构化控制流，RADV 拒绝后崩溃 | `vkd3d-0001-dxil-spirv-loop-breaks/` |
 
 ## 已知、没修的问题
 
 - **wineserver fsync 断言**（`fsync.c:271`，`fsync_free_shm_idx`）：进程在短时间内反复异常退出时触发，wineserver 退出，前缀里的进程卡住。只在一次崩溃循环里见过
+- **N 卡渲染、核显显示时交帧卡住**（niri 不用 N 卡，屏幕接在核显上）：D3D11 程序在 N 卡上约 2 fps，渲染线程在等交帧。见 `0006-noactivate-activation/`
+- **xwayland-satellite 不执行最小化**：会在失去前台时最小化自己的程序会进入「最小化 → 被恢复」循环
 - **RADV 在 `spirv_to_nir` 失败时解引用 NULL**（Mesa 26.2.4，`radv_shader.c:544`）：本该只是一处渲染失败，结果整个进程崩溃。触发它的非法 SPIR-V 已经由 vkd3d-proton 0001 修掉
 
 ## 做法

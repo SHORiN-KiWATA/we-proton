@@ -41,6 +41,7 @@ declare -A TARGETS=(
     [dlls/ntdll/unix]="dlls/ntdll/ntdll.so:x86_64-unix/ntdll.so"
     [server]="server/wineserver:../../bin/wineserver"
     [dlls/ntoskrnl.exe]="dlls/ntoskrnl.exe/x86_64-windows/ntoskrnl.exe:x86_64-windows/ntoskrnl.exe"
+    [dlls/win32u]="dlls/win32u/win32u.so:x86_64-unix/win32u.so"
 )
 declare -A WANT=()
 for p in "$ROOT"/patches/wine/*.patch; do

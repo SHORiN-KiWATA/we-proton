@@ -1,0 +1,39 @@
+From 984e3d292c350556062be93e65f49325dd763043 Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Wed, 7 Oct 2026 18:26:38 +0900
+Subject: [PATCH] win32u: Don't activate WS_EX_NOACTIVATE windows in place of a
+ window that goes away.
+
+When the active window is hidden, minimized or destroyed,
+activate_other_window() picks another window to activate. The
+documentation of WS_EX_NOACTIVATE says "The system does not bring this
+window to the foreground when the user minimizes or closes the
+foreground window", but Wine picked such windows too. A no-activate
+overlay popup, even one in another process, could then become the
+foreground window, and the application that lost it could not get it
+back with SetForegroundWindow().
+
+Skip WS_EX_NOACTIVATE windows there; can_activate_window() is only used
+by activate_other_window().
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/win32u/window.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 586ae27..ca897cb 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -4429,6 +4429,8 @@ static BOOL can_activate_window( HWND hwnd )
+     if (!(style & WS_VISIBLE)) return FALSE;
+     if ((style & (WS_POPUP|WS_CHILD)) == WS_CHILD) return FALSE;
+     if (style & WS_MINIMIZE) return FALSE;
++    /* the system does not bring these to the foreground when the active window goes away */
++    if (get_window_long( hwnd, GWL_EXSTYLE ) & WS_EX_NOACTIVATE) return FALSE;
+     return !(style & WS_DISABLED);
+ }
+ 
+-- 
+2.56.0
+
