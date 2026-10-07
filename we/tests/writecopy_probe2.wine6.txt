@@ -1,0 +1,27 @@
+writecopy_probe2, wine yes
+code page, patched:
+  initial                            protect 0x20 size 0x4000
+  -> EXECUTE_READWRITE               ok 1 old 0x20
+  before write                       protect 0x80 size 0x1000
+  after write                        protect 0x40 size 0x1000
+  -> EXECUTE_READ                    ok 1 old 0x40
+  restored                           protect 0x20 size 0x4000
+  -> EXECUTE_READWRITE again         ok 1 old 0x20
+  reopened                           protect 0x40 size 0x1000
+  -> EXECUTE_READ                    ok 1 old 0x40
+  patch_me(1) = 2
+code page, opened but not written:
+  -> EXECUTE_READWRITE               ok 1 old 0x20
+  opened                             protect 0x80 size 0x1000
+  -> EXECUTE_READ                    ok 1 old 0x80
+  leave_me(1) = 3
+data section, middle page written:
+  page 0                             protect 0x08 size 0x1000
+  page 1                             protect 0x04 size 0x1000
+  page 2                             protect 0x08 size 0x1000
+  pages 0-2 -> READONLY              ok 1 old 0x08
+  pages 0-2 -> READWRITE             ok 1 old 0x02
+  page 0 after                       protect 0x08 size 0x1000
+  page 1 after                       protect 0x04 size 0x1000
+  page 1 -> READONLY                 ok 1 old 0x04
+  page 1 -> READWRITE                ok 1 old 0x02

@@ -1,0 +1,29 @@
+udp_connect_err_probe2, wine no
+A fresh: connect 0.0.0.0:80 -> 10049
+    after 0.0.0.0:80                   poll flags 0x104 status 0xc0000207
+B connect lo -> 0
+    connected                          poll flags 0x44 status 0
+B connect 0.0.0.0:0 -> 0
+    after disconnect                   poll flags 0x4 status 0
+B connect 0.0.0.0:0 -> 10049
+    after failed connect (was connected) poll flags 0x104 status 0xc0000207
+B connect 0.0.0.0:80 -> 10049
+    after 0.0.0.0:80                   poll flags 0x104 status 0xc0000207
+B connect lo -> 0
+    reconnected                        poll flags 0x44 status 0
+C fail 0.0.0.0:0 -> 10049
+    after failed connect               poll flags 0x104 status 0xc0000207
+C connect lo -> 0
+    after good connect                 poll flags 0x44 status 0
+C connect 0.0.0.0:0 -> 0
+    after disconnect                   poll flags 0x4 status 0
+D v6 fresh: connect [::]:0 -> 10049
+    v6 after failed connect            poll flags 0x104 status 0xc0000207
+D v6 connect [::1] -> 0
+    v6 connected                       poll flags 0x44 status 0
+D v6 connect [::]:0 -> 0
+    v6 after disconnect                poll flags 0x4 status 0
+E bound: connect 0.0.0.0:0 -> 10049
+    bound, after failed connect        poll flags 0x104 status 0xc0000207
+E sendto after failed connect -> 1 (0)
+    after sendto                       poll flags 0x104 status 0xc0000207

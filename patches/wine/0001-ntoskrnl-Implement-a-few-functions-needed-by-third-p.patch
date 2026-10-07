@@ -1,0 +1,190 @@
+From 236383bd0a5370208f5ad181c75f7be443265f29 Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Sun, 4 Oct 2026 17:57:46 +0900
+Subject: [PATCH 1/5] ntoskrnl: Implement a few functions needed by third-party
+ drivers.
+
+Some third-party KMDF drivers need functions that are currently stubs
+in Wine's ntoskrnl.exe:
+
+- ZwQueryValueKey: a driver may query its own service key values with
+  counted names whose Length includes trailing NULs; tolerate that in
+  the kernel wrapper (user-mode NtQueryValueKey is unaffected).
+- IoGetBaseFileSystemDeviceObject: implement the Windows fallback chain
+  (FileObject->Vpb->DeviceObject,
+   FileObject->DeviceObject->Vpb->DeviceObject,
+   FileObject->DeviceObject).
+- InbvAcquireDisplayOwnership, InbvResetDisplay: safe no-ops, for
+  drivers that resolve them via MmGetSystemRoutineAddress.
+- SeQueryInformationToken: query a token object by pointer, allocating
+  the result with ExAllocatePool.
+---
+ dlls/ntoskrnl.exe/ntoskrnl.c        | 95 +++++++++++++++++++++++++++++
+ dlls/ntoskrnl.exe/ntoskrnl.exe.spec | 10 +--
+ 2 files changed, 100 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.c b/dlls/ntoskrnl.exe/ntoskrnl.c
+index 95d7e74..75f337f 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.c
++++ b/dlls/ntoskrnl.exe/ntoskrnl.c
+@@ -3193,6 +3193,66 @@ BOOLEAN WINAPI MmIsAddressValid(PVOID VirtualAddress)
+     return !IsBadReadPtr(VirtualAddress, 1);
+ }
+ 
++/***********************************************************************
++ *           IoGetBaseFileSystemDeviceObject   (NTOSKRNL.EXE.@)
++ *
++ * Return the device object of the volume the file resides on, using the
++ * same fallback order as Windows.
++ */
++PDEVICE_OBJECT WINAPI IoGetBaseFileSystemDeviceObject( PFILE_OBJECT file )
++{
++    TRACE( "(%p)\n", file );
++    if (!file) return NULL;
++    if (file->Vpb && file->Vpb->DeviceObject) return file->Vpb->DeviceObject;
++    if (file->DeviceObject && file->DeviceObject->Vpb && file->DeviceObject->Vpb->DeviceObject)
++        return file->DeviceObject->Vpb->DeviceObject;
++    return file->DeviceObject;
++}
++
++/***********************************************************************
++ *           ZwQueryValueKey   (NTOSKRNL.EXE.@)
++ *
++ * Some drivers pass counted value names with
++ * trailing null characters to ZwQueryValueKey; tolerate that here.
++ * This only affects kernel drivers, not the user-mode NtQueryValueKey.
++ */
++NTSTATUS WINAPI ZwQueryValueKey( HANDLE key, const UNICODE_STRING *name, KEY_VALUE_INFORMATION_CLASS class,
++                                 void *info, ULONG length, ULONG *result )
++{
++    UNICODE_STRING normalized;
++    USHORT len;
++
++    if (name && name->Buffer && name->Length)
++    {
++        len = name->Length;
++        while (len >= sizeof(WCHAR) && !name->Buffer[len / sizeof(WCHAR) - 1]) len -= sizeof(WCHAR);
++        if (len != name->Length)
++        {
++            WARN( "value name %s: stripping %u trailing NULs\n",
++                  debugstr_us(name), (name->Length - len) / sizeof(WCHAR) );
++            normalized = *name;
++            normalized.Length = len;
++            name = &normalized;
++        }
++    }
++    return NtQueryValueKey( key, name, class, info, length, result );
++}
++
++/***********************************************************************
++ *           InbvAcquireDisplayOwnership   (NTOSKRNL.EXE.@)
++ *
++ * Boot video no-op, for drivers that resolve this and InbvResetDisplay
++ * via MmGetSystemRoutineAddress.
++ */
++void WINAPI InbvAcquireDisplayOwnership( void ) { }
++
++/***********************************************************************
++ *           InbvResetDisplay   (NTOSKRNL.EXE.@)
++ *
++ * Boot video no-op; see InbvAcquireDisplayOwnership.
++ */
++void WINAPI InbvResetDisplay( void ) { }
++
+ /***********************************************************************
+  *           MmGetPhysicalAddress   (NTOSKRNL.EXE.@)
+  */
+@@ -3716,6 +3776,41 @@ PACCESS_TOKEN WINAPI PsReferencePrimaryToken( PEPROCESS process )
+     return ret;
+ }
+ 
++/***********************************************************************
++ *           SeQueryInformationToken   (NTOSKRNL.EXE.@)
++ *
++ * Query information about a token object.  The returned buffer is
++ * allocated with ExAllocatePool and must be freed by the caller with
++ * ExFreePool.
++ */
++NTSTATUS WINAPI SeQueryInformationToken( PACCESS_TOKEN token, TOKEN_INFORMATION_CLASS class, PVOID *info )
++{
++    NTSTATUS status;
++    HANDLE handle;
++    ULONG size;
++
++    if (!token || !info) return STATUS_INVALID_PARAMETER;
++    *info = NULL;
++
++    TRACE( "(%p,%u,%p)\n", token, class, info );
++
++    if ((status = ObOpenObjectByPointer( token, 0, NULL, TOKEN_QUERY, SeTokenObjectType,
++                                         KernelMode, &handle ))) return status;
++
++    status = NtQueryInformationToken( handle, class, NULL, 0, &size );
++    if (status == STATUS_BUFFER_TOO_SMALL)
++    {
++        if (!(*info = ExAllocatePool( NonPagedPool, size ))) status = STATUS_INSUFFICIENT_RESOURCES;
++        else if ((status = NtQueryInformationToken( handle, class, *info, size, &size )))
++        {
++            ExFreePool( *info );
++            *info = NULL;
++        }
++    }
++    NtClose( handle );
++    return status;
++}
++
+ /***********************************************************************
+  *           PsTerminateSystemThread   (NTOSKRNL.EXE.@)
+  */
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+index b1c8582..3c5b382 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
++++ b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+@@ -314,7 +314,7 @@
+ @ stub HalDispatchTable
+ @ stub HalPrivateDispatchTable
+ @ stub HeadlessDispatch
+-@ stub InbvAcquireDisplayOwnership
++@ stdcall InbvAcquireDisplayOwnership()
+ @ stub InbvCheckDisplayOwnership
+ @ stub InbvDisplayString
+ @ stub InbvEnableBootDriver
+@@ -322,7 +322,7 @@
+ @ stub InbvInstallDisplayStringFilter
+ @ stub InbvIsBootDriverInstalled
+ @ stub InbvNotifyDisplayOwnershipLost
+-@ stub InbvResetDisplay
++@ stdcall InbvResetDisplay()
+ @ stub InbvSetScrollRegion
+ @ stub InbvSetTextColor
+ @ stub InbvSolidColorFill
+@@ -401,7 +401,7 @@
+ @ stdcall IoFreeWorkItem(ptr)
+ @ stdcall IoGetAttachedDevice(ptr)
+ @ stdcall IoGetAttachedDeviceReference(ptr)
+-@ stub IoGetBaseFileSystemDeviceObject
++@ stdcall IoGetBaseFileSystemDeviceObject(ptr)
+ @ stub IoGetBootDiskInformation
+ @ stdcall IoGetConfigurationInformation()
+ @ stdcall IoGetCurrentProcess()
+@@ -1369,7 +1369,7 @@
+ @ stub SePrivilegeObjectAuditAlarm
+ @ stub SePublicDefaultDacl
+ @ stub SeQueryAuthenticationIdToken
+-@ stub SeQueryInformationToken
++@ stdcall SeQueryInformationToken(ptr long ptr)
+ @ stub SeQuerySecurityDescriptorInfo
+ @ stub SeQuerySessionIdToken
+ @ stub SeRegisterLogonSessionTerminatedRoutine
+@@ -1506,7 +1506,7 @@
+ @ stdcall -private ZwQuerySystemInformation(long ptr long ptr) NtQuerySystemInformation
+ @ stdcall -private ZwQuerySystemInformationEx(long ptr long ptr long ptr) NtQuerySystemInformationEx
+ @ stdcall -private ZwQueryTimerResolution(ptr ptr ptr) NtQueryTimerResolution
+-@ stdcall ZwQueryValueKey(long ptr long ptr long ptr) NtQueryValueKey
++@ stdcall ZwQueryValueKey(long ptr long ptr long ptr)
+ @ stdcall -private ZwQueryVirtualMemory(long ptr long ptr long ptr) NtQueryVirtualMemory
+ @ stdcall -private ZwQueryVolumeInformationFile(long ptr ptr long long) NtQueryVolumeInformationFile
+ @ stdcall -private ZwReadFile(long long ptr ptr ptr ptr long ptr ptr) NtReadFile
+-- 
+2.56.0
+

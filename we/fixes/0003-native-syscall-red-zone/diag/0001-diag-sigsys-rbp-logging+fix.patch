@@ -1,0 +1,112 @@
+diff --git a/dlls/ntdll/unix/process.c b/dlls/ntdll/unix/process.c
+index a3607a5..e6c5d5f 100644
+--- a/dlls/ntdll/unix/process.c
++++ b/dlls/ntdll/unix/process.c
+@@ -1904,6 +1904,7 @@ NTSTATUS WINAPI NtSetInformationProcess( HANDLE handle, PROCESSINFOCLASS class,
+             FIXME( "Setting ProcessInstrumentationCallback is not yet supported for other process.\n" );
+             break;
+         }
++        ERR( "DBG ProcessInstrumentationCallback %p\n", callback );
+         set_process_instrumentation_callback( callback );
+         break;
+     }
+diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
+index efc9f67..f62e762 100644
+--- a/dlls/ntdll/unix/signal_x86_64.c
++++ b/dlls/ntdll/unix/signal_x86_64.c
+@@ -547,6 +547,7 @@ static inline TEB *get_current_teb(void)
+ 
+ extern void __wine_syscall_dispatcher_instrumentation(void);
+ static void *instrumentation_callback;
++static __thread ULONG64 dbg_sigsys_rip, dbg_sigsys_rbp, dbg_sigsys_rax;
+ static pthread_mutex_t instrumentation_callback_mutex = PTHREAD_MUTEX_INITIALIZER;
+ 
+ void set_process_instrumentation_callback( void *callback )
+@@ -1177,6 +1178,11 @@ NTSTATUS WINAPI NtSetContextThread( HANDLE handle, const CONTEXT *context )
+ 
+     if (flags & CONTEXT_INTEGER)
+     {
++        if (frame->rbp != context->Rbp)
++            TRACE_(seh)( "DBG set_context rbp %#llx -> %#llx flags %#x rip %#llx -> %#llx rcx %#llx restore_flags %#x last_sigsys rax %#llx rip %#llx rbp %#llx\n",
++                         (ULONG64)frame->rbp, (ULONG64)context->Rbp, (UINT)flags, (ULONG64)frame->rip,
++                         (flags & CONTEXT_CONTROL) ? (ULONG64)context->Rip : 0, (ULONG64)context->Rcx,
++                         (UINT)frame->restore_flags, dbg_sigsys_rax, dbg_sigsys_rip, dbg_sigsys_rbp );
+         frame->rax = context->Rax;
+         frame->rbx = context->Rbx;
+         frame->rcx = context->Rcx;
+@@ -1728,6 +1734,9 @@ NTSTATUS call_user_apc_dispatcher( CONTEXT *context, unsigned int flags, ULONG_P
+     stack->context.P4Home    = (ULONG64)func;
+     stack->machine_frame.rip = stack->context.Rip;
+     stack->machine_frame.rsp = stack->context.Rsp;
++    TRACE_(seh)( "DBG apc func %p ctx %p rip %#llx rbp %#llx (frame rbp %#llx) last_sigsys rip %#llx rbp %#llx\n",
++                 func, context, (ULONG64)stack->context.Rip, (ULONG64)stack->context.Rbp, (ULONG64)frame->rbp,
++                 dbg_sigsys_rip, dbg_sigsys_rbp );
+     frame->rbp = stack->context.Rbp;
+     frame->rsp = (ULONG64)stack;
+     frame->rip = (ULONG64)pKiUserApcDispatcher;
+@@ -1772,6 +1781,8 @@ NTSTATUS call_user_exception_dispatcher( EXCEPTION_RECORD *rec, CONTEXT *context
+     if (stack->rec.ExceptionCode == EXCEPTION_BREAKPOINT) stack->context.Rip--;
+     stack->machine_frame.rip = stack->context.Rip;
+     stack->machine_frame.rsp = stack->context.Rsp;
++    TRACE_(seh)( "DBG user_exception code %#x rip %#llx rbp %#llx (frame rbp %#llx)\n",
++                 (UINT)rec->ExceptionCode, (ULONG64)stack->context.Rip, (ULONG64)stack->context.Rbp, (ULONG64)frame->rbp );
+     frame->rbp = stack->context.Rbp;
+     frame->rsp = (ULONG64)stack;
+     frame->rip = (ULONG64)pKiUserExceptionDispatcher;
+@@ -2050,7 +2061,12 @@ static void sigsys_handler( int signal, siginfo_t *siginfo, void *sigcontext )
+     ucontext_t *ucontext = init_handler( sigcontext );
+     struct syscall_frame *frame = get_syscall_frame();
+ 
+-    TRACE_(seh)("SIGSYS, rax %#llx, rip %#llx.\n", RAX_sig(ucontext), RIP_sig(ucontext));
++    TRACE_(seh)("SIGSYS, rax %#llx, rip %#llx, rbp %#llx, rsp %#llx, frame %p, prev_rbp %#llx, instr %p.\n",
++                RAX_sig(ucontext), RIP_sig(ucontext), RBP_sig(ucontext), RSP_sig(ucontext), frame,
++                (ULONG64)frame->rbp, instrumentation_callback);
++    dbg_sigsys_rip = RIP_sig(ucontext);
++    dbg_sigsys_rbp = RBP_sig(ucontext);
++    dbg_sigsys_rax = RAX_sig(ucontext);
+ 
+     if (RAX_sig(ucontext) == 0xffff)
+     {
+@@ -2062,15 +2078,17 @@ static void sigsys_handler( int signal, siginfo_t *siginfo, void *sigcontext )
+     frame->rip = RIP_sig(ucontext) + 0xb;
+     frame->rcx = RIP_sig(ucontext);
+     frame->eflags = EFL_sig(ucontext);
+-    frame->restore_flags = 0;
++    /* A native syscall instruction was not reached through a call, so the fast
++     * return path, which pushes eflags and rip onto the user stack, would
++     * overwrite the caller's data below rsp. Windows never writes there on
++     * sysret, and code may rely on it (e.g. a syscall stub keeping the
++     * saved rbp at rsp-8), so return through iretq from the kernel stack. */
++    frame->restore_flags = CONTEXT_CONTROL;
+     if (instrumentation_callback) frame->restore_flags |= RESTORE_FLAGS_INSTRUMENTATION;
+     RCX_sig(ucontext) = (ULONG_PTR)frame;
+     R11_sig(ucontext) = frame->eflags;
+     if (EFL_sig(ucontext) & 0x100)
+-    {
+         EFL_sig(ucontext) &= ~0x100;  /* clear single-step flag */
+-        frame->restore_flags |= CONTEXT_CONTROL;
+-    }
+     RIP_sig(ucontext) = (ULONG64)__wine_syscall_dispatcher_prolog_end_ptr;
+ }
+ #endif
+@@ -2946,6 +2964,10 @@ static void usr1_handler( int signal, siginfo_t *siginfo, void *sigcontext )
+ {
+     ucontext_t *ucontext = init_handler( sigcontext );
+ 
++    TRACE_(seh)( "DBG usr1 inside %d rip %#llx rsp %#llx rbp %#llx rcx %#llx frame rip %#llx rbp %#llx restore_flags %#x\n",
++                 is_inside_syscall( RSP_sig(ucontext) ), (ULONG64)RIP_sig(ucontext), (ULONG64)RSP_sig(ucontext),
++                 (ULONG64)RBP_sig(ucontext), (ULONG64)RCX_sig(ucontext), (ULONG64)get_syscall_frame()->rip,
++                 (ULONG64)get_syscall_frame()->rbp, (UINT)get_syscall_frame()->restore_flags );
+     if (is_inside_syscall( RSP_sig(ucontext) ))
+     {
+         struct syscall_frame *frame = get_syscall_frame();
+@@ -2999,6 +3021,9 @@ static void usr1_handler( int signal, siginfo_t *siginfo, void *sigcontext )
+         context.c.ContextFlags |= CONTEXT_EXCEPTION_REPORTING;
+         if (is_wow64() && context.c.SegCs == cs64_sel) context.c.ContextFlags |= CONTEXT_EXCEPTION_ACTIVE;
+         wait_suspend( &context.c );
++        if (context.c.Rbp != RBP_sig(ucontext) || context.c.Rip != RIP_sig(ucontext))
++            TRACE_(seh)( "DBG usr1 user ctx changed rip %#llx -> %#llx rbp %#llx -> %#llx\n",
++                         (ULONG64)RIP_sig(ucontext), (ULONG64)context.c.Rip, (ULONG64)RBP_sig(ucontext), (ULONG64)context.c.Rbp );
+         restore_context( &context, ucontext );
+     }
+ }

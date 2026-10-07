@@ -1,0 +1,40 @@
+diff --git a/dlls/ntdll/unwind.c b/dlls/ntdll/unwind.c
+index bfffb1a..e09d403 100644
+--- a/dlls/ntdll/unwind.c
++++ b/dlls/ntdll/unwind.c
+@@ -1027,7 +1027,10 @@ PARM64_RUNTIME_FUNCTION WINAPI RtlLookupFunctionEntry( ULONG_PTR pc, ULONG_PTR *
+     ULONG size;
+ 
+     if ((func = (ARM64_RUNTIME_FUNCTION *)RtlLookupFunctionTable( pc, base, &size )))
+-        return find_function_info_arm64( pc, *base, func, size / sizeof(*func));
++    {
++        func = find_function_info_arm64( pc, *base, func, size / sizeof(*func));
++        if (func) return func;   /* 同上：模块表未覆盖时继续查动态函数表 */
++    }
+ 
+     if ((func = (ARM64_RUNTIME_FUNCTION *)lookup_dynamic_function_table( pc, &dynbase, &size )))
+     {
+@@ -1719,7 +1722,10 @@ PRUNTIME_FUNCTION WINAPI RtlLookupFunctionEntry( ULONG_PTR pc, ULONG_PTR *base,
+     ULONG size;
+ 
+     if ((func = RtlLookupFunctionTable( pc, base, &size )))
+-        return find_function_info( pc, *base, func, size / sizeof(*func));
++    {
++        func = find_function_info( pc, *base, func, size / sizeof(*func));
++        if (func) return func;   /* 模块表里没有覆盖该 pc 的条目时，继续查动态函数表（JIT） */
++    }
+ 
+     if ((func = lookup_dynamic_function_table( pc, &dynbase, &size )))
+     {
+@@ -2419,7 +2425,10 @@ PRUNTIME_FUNCTION WINAPI RtlLookupFunctionEntry( ULONG_PTR pc, ULONG_PTR *base,
+ #endif
+ 
+     if ((func = RtlLookupFunctionTable( pc, base, &size )))
+-        return find_function_info( pc, *base, func, size / sizeof(*func));
++    {
++        func = find_function_info( pc, *base, func, size / sizeof(*func));
++        if (func) return func;   /* 模块表里没有覆盖该 pc 的条目时，继续查动态函数表（JIT） */
++    }
+ 
+     if ((func = lookup_dynamic_function_table( pc, &dynbase, &size )))
+     {

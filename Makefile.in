@@ -1266,10 +1266,21 @@ $(eval $(call rules-meson,vkd3d-proton,i386,windows))
 $(eval $(call rules-meson,vkd3d-proton,x86_64,windows))
 $(eval $(call rules-meson,vkd3d-proton,arm64ec,windows))
 
-$(OBJ)/.vkd3d-proton-post-source:
-	sed -re 's#@VCS_TAG@#$(shell git -C $(SRCDIR)/vkd3d-proton describe --always --exclude=* --abbrev=15 --dirty=0 || echo deadbeef)#' \
+# vkd3d_build is vkd3d-proton's shader cache key. With patches/vkd3d-proton applied
+# the tree is effectively dirty, so tag it that way (hash + 0, version + '+').
+ifneq ($(wildcard $(SRCDIR)/patches/vkd3d-proton/*.patch),)
+VKD3D_PROTON_BUILD_TAG = $(addsuffix 0,$(shell git -C $(SRCDIR)/vkd3d-proton describe --always --exclude=* --abbrev=15))
+VKD3D_PROTON_VERSION_TAG = $(addsuffix +,$(shell git -C $(SRCDIR)/vkd3d-proton describe --always --tags))
+else
+VKD3D_PROTON_BUILD_TAG = $(shell git -C $(SRCDIR)/vkd3d-proton describe --always --exclude=* --abbrev=15 --dirty=0)
+VKD3D_PROTON_VERSION_TAG = $(shell git -C $(SRCDIR)/vkd3d-proton describe --always --tags --dirty=+)
+endif
+
+$(OBJ)/.vkd3d-proton-post-source: patches-source
+	$(foreach p,$(shell find $(PATCHES_SRC)/vkd3d-proton/ -name "*.patch" | sort),patch -d $(VKD3D_PROTON_SRC) -Np1 -i $(p) &&) true
+	sed -re 's#@VCS_TAG@#$(or $(VKD3D_PROTON_BUILD_TAG),deadbeef)#' \
 	    $(SRCDIR)/vkd3d-proton/vkd3d_build.h.in > $(VKD3D_PROTON_SRC)/vkd3d_build.h.in
-	sed -re 's#@VCS_TAG@#$(shell git -C $(SRCDIR)/vkd3d-proton describe --always --tags --dirty=+ || echo deadbeef)#' \
+	sed -re 's#@VCS_TAG@#$(or $(VKD3D_PROTON_VERSION_TAG),deadbeef)#' \
 	    $(SRCDIR)/vkd3d-proton/vkd3d_version.h.in > $(VKD3D_PROTON_SRC)/vkd3d_version.h.in
 	mkdir -p $(DST_LIBDIR)/wine/vkd3d-proton
 	rm -rf $(DST_LIBDIR)/wine/vkd3d-proton/version

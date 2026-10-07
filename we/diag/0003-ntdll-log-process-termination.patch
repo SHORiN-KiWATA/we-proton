@@ -1,0 +1,63 @@
+diff -ruN a/dlls/ntdll/unix/process.c b/dlls/ntdll/unix/process.c
+--- a/dlls/ntdll/unix/process.c	2026-10-07 16:08:29.144424158 +0900
++++ b/dlls/ntdll/unix/process.c	2026-10-07 16:08:51.860980693 +0900
+@@ -971,6 +971,16 @@
+     BOOL self;
+ 
+     TRACE("handle %p, exit_code %d, process_exiting %d.\n", handle, (int)exit_code, process_exiting);
++    {
++        /* diagnostic build: who terminates whom, and from where */
++        PROCESS_BASIC_INFORMATION pbi;
++        ULONG_PTR target = 0;
++        if (!NtQueryInformationProcess( handle, ProcessBasicInformation, &pbi, sizeof(pbi), NULL ))
++            target = pbi.UniqueProcessId;
++        ERR( "DBGTERM pid %04x terminates %04lx (handle %p) exit_code %#x\n",
++             (int)GetCurrentProcessId(), (unsigned long)target, handle, (int)exit_code );
++        dbg_dump_user_stack( "DBGTERM stack" );
++    }
+ 
+     if (handle == GetCurrentProcess())
+     {
+diff -ruN a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
+--- a/dlls/ntdll/unix/signal_x86_64.c	2026-10-07 16:08:29.141424158 +0900
++++ b/dlls/ntdll/unix/signal_x86_64.c	2026-10-07 16:08:51.860856049 +0900
+@@ -2944,6 +2944,28 @@
+  *
+  * Handler for SIGUSR1, used to signal a thread that it got suspended.
+  */
++/* diagnostic build: print the user-mode return addresses of the current syscall */
++void dbg_dump_user_stack( const char *tag )
++{
++    struct syscall_frame *frame = get_syscall_frame();
++    const ULONG64 *sp = (const ULONG64 *)frame->rsp;
++    unsigned int i, n = 0;
++    char buf[1024];
++    int len = snprintf( buf, sizeof(buf), "rip %#lx", (unsigned long)frame->rip );
++
++    for (i = 0; i < 256 && n < 24 && len < (int)sizeof(buf) - 24; i++)
++    {
++        ULONG64 v;
++        if (!virtual_check_buffer_for_read( sp + i, sizeof(*sp) )) break;
++        v = sp[i];
++        if (v < 0x10000 || v >= 0x800000000000ull) continue;
++        if (!virtual_is_valid_code_address( (const void *)v, 1 )) continue;
++        len += snprintf( buf + len, sizeof(buf) - len, " %#lx", (unsigned long)v );
++        n++;
++    }
++    ERR( "%s %s\n", tag, buf );
++}
++
+ static void usr1_handler( int signal, siginfo_t *siginfo, void *sigcontext )
+ {
+     ucontext_t *ucontext = init_handler( sigcontext );
+diff -ruN a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
+--- a/dlls/ntdll/unix/unix_private.h	2026-10-07 16:08:29.139424157 +0900
++++ b/dlls/ntdll/unix/unix_private.h	2026-10-07 16:08:51.860581614 +0900
+@@ -281,6 +281,7 @@
+ extern void copy_xstate( XSAVE_AREA_HEADER *dst, XSAVE_AREA_HEADER *src, UINT64 mask );
+ 
+ extern void set_process_instrumentation_callback( void *callback );
++extern void dbg_dump_user_stack( const char *tag );
+ 
+ extern void *get_cpu_area( USHORT machine );
+ extern void set_thread_id( TEB *teb, DWORD pid, DWORD tid );

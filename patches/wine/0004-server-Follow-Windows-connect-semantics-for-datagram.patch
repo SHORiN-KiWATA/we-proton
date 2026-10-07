@@ -1,0 +1,155 @@
+From 6963f0df3ee29d1a6cce437b2e3e42d4311aa62f Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Wed, 7 Oct 2026 14:26:58 +0900
+Subject: [PATCH 4/5] server: Follow Windows connect() semantics for datagram
+ sockets.
+
+Measured on Windows 11 (26200):
+- A connected datagram socket reports AFD_POLL_CONNECT.
+- connect() to the unspecified address (0.0.0.0 or ::, any port)
+  disconnects a connected socket. On a socket without a peer it fails
+  with WSAEADDRNOTAVAIL, and polls then report AFD_POLL_CONNECT_ERR with
+  STATUS_INVALID_ADDRESS_COMPONENT until the next successful connect.
+  SO_ERROR stays 0.
+
+Some applications block a network thread in select() with a UDP socket
+in exceptfds and wake it by connecting that socket to 0.0.0.0:0. On
+Linux that connect succeeds, so the thread only woke up when its select
+timeout expired, adding up to a second to every request it handled.
+
+This also makes the AFD_POLL_CONNECT check in test_poll pass.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/ws2_32/tests/afd.c |  2 +-
+ server/sock.c           | 51 ++++++++++++++++++++++++++++++++++++++---
+ 2 files changed, 49 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/ws2_32/tests/afd.c b/dlls/ws2_32/tests/afd.c
+index b011c0d..a9c1db9 100644
+--- a/dlls/ws2_32/tests/afd.c
++++ b/dlls/ws2_32/tests/afd.c
+@@ -854,7 +854,7 @@ static void test_poll(void)
+     ok(!ret, "got error %lu\n", GetLastError());
+ 
+     ret = WaitForSingleObject(event, 100);
+-    todo_wine ok(!ret, "got %#x\n", ret);
++    ok(!ret, "got %#x\n", ret);
+     if (!ret)
+     {
+         ok(!io.Status, "got %#lx\n", io.Status);
+diff --git a/server/sock.c b/server/sock.c
+index d12afc0..db87670 100644
+--- a/server/sock.c
++++ b/server/sock.c
+@@ -301,6 +301,7 @@ struct sock
+     unsigned int        aborted : 1; /* did we get a POLLERR or irregular POLLHUP? */
+     unsigned int        nonblocking : 1; /* is the socket nonblocking? */
+     unsigned int        bound : 1;   /* is the socket bound? */
++    unsigned int        dgram_connected : 1; /* does the datagram socket have a default peer? */
+     unsigned int        reset : 1;   /* did we get a TCP reset? */
+     unsigned int        reuseaddr : 1; /* winsock SO_REUSEADDR option value */
+     unsigned int        exclusiveaddruse : 1; /* winsock SO_EXCLUSIVEADDRUSE option value */
+@@ -1124,6 +1125,17 @@ static void free_poll_req( void *private )
+     free( req );
+ }
+ 
++static int is_unspecified_addr( const struct WS_sockaddr *addr )
++{
++    static const unsigned char zero[16];
++
++    if (addr->sa_family == WS_AF_INET)
++        return !memcmp( &((const struct WS_sockaddr_in *)addr)->sin_addr, zero, 4 );
++    if (addr->sa_family == WS_AF_INET6)
++        return !memcmp( &((const struct WS_sockaddr_in6 *)addr)->sin6_addr, zero, 16 );
++    return 0;
++}
++
+ static int is_oobinline( struct sock *sock )
+ {
+     int oobinline;
+@@ -1151,7 +1163,7 @@ static int get_poll_flags( struct sock *sock, int event )
+         flags |= is_oobinline( sock ) ? AFD_POLL_READ : AFD_POLL_OOB;
+     if (event & POLLOUT)
+         flags |= AFD_POLL_WRITE;
+-    if (sock->state == SOCK_CONNECTED)
++    if (sock->state == SOCK_CONNECTED || sock->dgram_connected)
+         flags |= AFD_POLL_CONNECT;
+     if (event & POLLHUP)
+         flags |= AFD_POLL_HUP;
+@@ -1236,9 +1248,8 @@ static void complete_async_poll( struct poll_req *req, unsigned int status )
+     }
+ }
+ 
+-static void complete_async_polls( struct sock *sock, int event, int error )
++static void complete_async_polls_with_flags( struct sock *sock, int flags, int error )
+ {
+-    int flags = get_poll_flags( sock, event );
+     struct poll_req *req, *next;
+ 
+     LIST_FOR_EACH_ENTRY_SAFE( req, next, &poll_list, struct poll_req, entry )
+@@ -1268,6 +1279,11 @@ static void complete_async_polls( struct sock *sock, int event, int error )
+     }
+ }
+ 
++static void complete_async_polls( struct sock *sock, int event, int error )
++{
++    complete_async_polls_with_flags( sock, get_poll_flags( sock, event ), error );
++}
++
+ static void async_poll_timeout( void *private )
+ {
+     struct poll_req *req = private;
+@@ -2852,6 +2868,28 @@ static void sock_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
+             set_error( STATUS_INVALID_ADDRESS );
+             return;
+         }
++
++        if (sock->type == WS_SOCK_DGRAM && is_unspecified_addr( addr ))
++        {
++            /* Windows disconnects a connected datagram socket. Otherwise the
++             * connect fails, and polls keep reporting AFD_POLL_CONNECT_ERR
++             * until the next successful connect; applications use this to
++             * wake a thread waiting in select(). */
++            if (sock->dgram_connected)
++            {
++                struct sockaddr unspec = { .sa_family = AF_UNSPEC };
++
++                connect( unix_fd, &unspec, sizeof(unspec) );
++                sock->dgram_connected = 0;
++                sock->peer_addr_len = 0;
++                return;
++            }
++            sock->errors[AFD_POLL_BIT_CONNECT_ERR] = EADDRNOTAVAIL;
++            complete_async_polls_with_flags( sock, AFD_POLL_CONNECT_ERR, EADDRNOTAVAIL );
++            set_error( sock_get_ntstatus( EADDRNOTAVAIL ) );
++            return;
++        }
++
+         if (unix_addr.addr.sa_family == AF_INET && !memcmp( &unix_addr.in.sin_addr, magic_loopback_addr, 4 ))
+             unix_addr.in.sin_addr.s_addr = htonl( INADDR_LOOPBACK );
+ 
+@@ -2920,6 +2958,12 @@ static void sock_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
+                 sock->state = SOCK_CONNECTED;
+                 sock->connect_time = current_time;
+             }
++            else
++            {
++                sock->dgram_connected = 1;
++                sock->errors[AFD_POLL_BIT_CONNECT_ERR] = 0;
++                complete_async_polls_with_flags( sock, AFD_POLL_CONNECT, 0 );
++            }
+ 
+             if (!send_len) return;
+         }
+@@ -3464,6 +3508,7 @@ static void sock_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
+         {
+             for (i = 0; i < ARRAY_SIZE( sock->errors ); ++i)
+             {
++                if (sock->type == WS_SOCK_DGRAM && i == AFD_POLL_BIT_CONNECT_ERR) continue;
+                 if (sock->errors[i])
+                 {
+                     error = sock->errors[i];
+-- 
+2.56.0
+

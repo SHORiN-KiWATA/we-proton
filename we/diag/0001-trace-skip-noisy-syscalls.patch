@@ -1,0 +1,32 @@
+--- a/dlls/ntdll/unix/loader.c
++++ b/dlls/ntdll/unix/loader.c
+@@ -726,11 +726,20 @@
+     return TRUE;
+ }
+ 
++/* diagnostic build: spin loops call these millions of times */
++static BOOL is_noisy_syscall( const char *name )
++{
++    return name && (!strcmp( name, "NtQueryPerformanceCounter" ) || !strcmp( name, "NtYieldExecution" )
++                    || !strcmp( name, "NtQuerySystemTime" ));
++}
++
+ void trace_syscall( UINT id, ULONG_PTR *args, ULONG len )
+ {
+     UINT idx = (id >> 12) & 3, num = id & 0xfff;
+     const char **names = syscall_names[idx];
+ 
++    if (names && is_noisy_syscall( names[num] )) return;
++
+     if (names && names[num])
+         TRACE_(syscall)( "\1SysCall  %s(", names[num] );
+     else
+@@ -750,6 +759,8 @@
+     UINT idx = (id >> 12) & 3, num = id & 0xfff;
+     const char **names = syscall_names[idx];
+ 
++    if (names && is_noisy_syscall( names[num] )) return;
++
+     if (names && names[num])
+         TRACE_(syscall)( "\1SysRet   %s() retval=%08lx\n", names[num], retval );
+     else

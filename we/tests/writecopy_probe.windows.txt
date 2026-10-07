@@ -1,0 +1,4 @@
+writecopy_probe, wine no
+.data written          query 0x04 type 0x1000000 | VirtualProtect(RO) ok 1 old 0x04 | back to RW old 0x02, now 0x04
+.data not written      query 0x08 type 0x1000000 | VirtualProtect(RO) ok 1 old 0x08 | back to RW old 0x02, now 0x08
+.bss written           query 0x04 type 0x1000000 | VirtualProtect(RO) ok 1 old 0x04 | back to RW old 0x02, now 0x04

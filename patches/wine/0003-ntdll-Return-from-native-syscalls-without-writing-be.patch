@@ -1,0 +1,55 @@
+From cf19976581a368d7f19ed042c9d22471e3cb170b Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Wed, 7 Oct 2026 07:51:23 +0900
+Subject: [PATCH 3/5] ntdll: Return from native syscalls without writing below
+ the user stack.
+
+The fast return path of the syscall dispatcher restores eflags and rip
+with push/popf/push/ret on the user stack. That is harmless for Wine's
+own syscall thunks, which call the dispatcher, but a native syscall
+instruction trapped through seccomp was not called, so the push
+overwrites the caller's data at rsp-8. Windows never writes the user
+stack on sysret.
+
+Code that keeps data below rsp across a syscall instruction breaks: for
+example, a syscall stub that saves rbp at rsp-8 gets the return address
+back as rbp, and the caller then crashes writing a local into a
+read-only section.
+
+Return from SIGSYS-trapped syscalls through iretq on the kernel stack,
+which the single-step case already used.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/ntdll/unix/signal_x86_64.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
+index efc9f67..f9a8f06 100644
+--- a/dlls/ntdll/unix/signal_x86_64.c
++++ b/dlls/ntdll/unix/signal_x86_64.c
+@@ -2062,15 +2062,17 @@ static void sigsys_handler( int signal, siginfo_t *siginfo, void *sigcontext )
+     frame->rip = RIP_sig(ucontext) + 0xb;
+     frame->rcx = RIP_sig(ucontext);
+     frame->eflags = EFL_sig(ucontext);
+-    frame->restore_flags = 0;
++    /* A native syscall instruction was not reached through a call, so the fast
++     * return path, which pushes eflags and rip onto the user stack, would
++     * overwrite the caller's data below rsp. Windows never writes there on
++     * sysret, and code may rely on it (e.g. a syscall stub keeping the saved
++     * rbp at rsp-8), so return through iretq from the kernel stack. */
++    frame->restore_flags = CONTEXT_CONTROL;
+     if (instrumentation_callback) frame->restore_flags |= RESTORE_FLAGS_INSTRUMENTATION;
+     RCX_sig(ucontext) = (ULONG_PTR)frame;
+     R11_sig(ucontext) = frame->eflags;
+     if (EFL_sig(ucontext) & 0x100)
+-    {
+         EFL_sig(ucontext) &= ~0x100;  /* clear single-step flag */
+-        frame->restore_flags |= CONTEXT_CONTROL;
+-    }
+     RIP_sig(ucontext) = (ULONG64)__wine_syscall_dispatcher_prolog_end_ptr;
+ }
+ #endif
+-- 
+2.56.0
+

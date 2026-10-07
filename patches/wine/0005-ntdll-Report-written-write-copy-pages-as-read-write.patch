@@ -1,0 +1,217 @@
+From 8052c56c81124ca203129e98b73aab3cf8d8339e Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Wed, 7 Oct 2026 17:19:50 +0900
+Subject: [PATCH 5/5] ntdll: Report written write-copy pages as read-write.
+
+Windows tracks whether a write-copy page has been privately copied. Once
+it has been written, VirtualQuery() and the old protection returned by
+VirtualProtect() report PAGE_READWRITE (or PAGE_EXECUTE_READWRITE), and
+the page stays copied across later protection changes. Pages that were
+never written keep reporting PAGE_WRITECOPY.
+
+Wine maps write-copy pages MAP_PRIVATE and writable (or reads unaligned
+sections into anonymous memory), so the copy happens without Wine
+noticing, and it always reported PAGE_WRITECOPY. Chromium relies on the
+Windows behaviour: it makes a written global in a DLL's data section
+read-only and CHECKs that VirtualProtect() returns PAGE_READWRITE as the
+old protection, so CEF-based renderer processes crash right after start.
+
+When the kernel supports asynchronous userfaultfd write protection (the
+mechanism already used for write watches), register each image view once
+it is mapped and relocated, and before reporting protections use
+PAGEMAP_SCAN to set VPROT_COPIED on the write-copy pages written since.
+Without kernel support nothing changes.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/kernel32/tests/loader.c  |  4 +-
+ dlls/kernel32/tests/virtual.c |  4 +-
+ dlls/ntdll/unix/virtual.c     | 93 ++++++++++++++++++++++++++++++++++-
+ 3 files changed, 95 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/kernel32/tests/loader.c b/dlls/kernel32/tests/loader.c
+index 529b9de..43277af 100644
+--- a/dlls/kernel32/tests/loader.c
++++ b/dlls/kernel32/tests/loader.c
+@@ -1983,9 +1983,7 @@ static void test_section_access(void)
+             SetLastError(0xdeadbeef);
+             size = VirtualQuery((char *)hlib + section.VirtualAddress, &info, sizeof(info));
+             ok(size == sizeof(info), "%d: VirtualQuery error %ld\n", i, GetLastError());
+-            /* FIXME: remove the condition below once Wine is fixed */
+-            todo_wine_if (info.Protect == PAGE_WRITECOPY || info.Protect == PAGE_EXECUTE_WRITECOPY)
+-                ok(info.Protect == td[i].scn_page_access_after_write, "%d: got %#lx != expected %#lx\n", i, info.Protect, td[i].scn_page_access_after_write);
++            ok(info.Protect == td[i].scn_page_access_after_write, "%d: got %#lx != expected %#lx\n", i, info.Protect, td[i].scn_page_access_after_write);
+         }
+ 
+         SetLastError(0xdeadbeef);
+diff --git a/dlls/kernel32/tests/virtual.c b/dlls/kernel32/tests/virtual.c
+index 4bf3bbb..ad80365 100644
+--- a/dlls/kernel32/tests/virtual.c
++++ b/dlls/kernel32/tests/virtual.c
+@@ -4278,7 +4278,7 @@ static void test_mapping( HANDLE hfile, DWORD sec_flags, BOOL readonly )
+                 if (ret) *(DWORD*)base = 0xdeadbeef;
+                 ret = VirtualQuery(base, &info, sizeof(info));
+                 ok(ret, "%ld: VirtualQuery failed %ld\n", j, GetLastError());
+-                todo_wine
++                todo_wine_if (!(sec_flags & SEC_IMAGE))
+                 ok(info.Protect == PAGE_READWRITE, "VirtualProtect wrong prot, map %#lx, view %#lx got %#lx\n",
+                    page_prot[i], view[j].prot, info.Protect );
+                 todo_wine_if (!(sec_flags & SEC_IMAGE))
+@@ -4316,7 +4316,7 @@ static void test_mapping( HANDLE hfile, DWORD sec_flags, BOOL readonly )
+ 
+                         ret = VirtualQuery(base, &info, sizeof(info));
+                         ok(ret, "%ld: VirtualQuery failed %ld\n", j, GetLastError());
+-                        todo_wine_if( map_prot_written( page_prot[k] ) != actual_prot )
++                        todo_wine_if( !(sec_flags & SEC_IMAGE) && map_prot_written( page_prot[k] ) != actual_prot )
+                         ok(info.Protect == map_prot_written( page_prot[k] ),
+                            "VirtualProtect wrong prot, map %#lx, view %#lx, requested prot %#lx got %#lx\n",
+                            page_prot[i], view[j].prot, page_prot[k], info.Protect );
+diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
+index 1cf3efc..5116c46 100644
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -270,6 +270,7 @@ struct file_view
+ #define VPROT_PLACEHOLDER      0x0400
+ #define VPROT_FREE_PLACEHOLDER 0x0800
+ #define VPROT_NATIVE           0x1000
++#define VPROT_COPY_TRACKED     0x2000  /* image view registered for write-copy tracking */
+ 
+ /* Conversion from VPROT_* to Win32 flags */
+ static const BYTE VIRTUAL_Win32Flags[16] =
+@@ -546,11 +547,43 @@ static void kernel_get_write_watches( void *base, SIZE_T size, void **buffer, UL
+         addr = next_addr;
+     }
+ }
++
++/* Register an image view for asynchronous write protection, so that pages written
++ * from now on (privately copied, for write-copy pages) can be told apart. */
++static void kernel_writecopy_track( struct file_view *view )
++{
++    struct uffdio_register uffdio_register;
++    struct uffdio_writeprotect wp;
++
++    if (!use_kernel_writewatch) return;
++
++    uffdio_register.range.start = (UINT_PTR)view->base;
++    uffdio_register.range.len = ROUND_SIZE( view->base, view->size, host_page_mask );
++    uffdio_register.mode = UFFDIO_REGISTER_MODE_WP;
++    if (ioctl( uffd_fd, UFFDIO_REGISTER, &uffdio_register ) == -1)
++    {
++        WARN( "ioctl( UFFDIO_REGISTER ) failed, %s.\n", strerror(errno) );
++        return;
++    }
++    wp.range = uffdio_register.range;
++    wp.mode = UFFDIO_WRITEPROTECT_MODE_WP;
++    if (ioctl( uffd_fd, UFFDIO_WRITEPROTECT, &wp ) == -1)
++    {
++        WARN( "ioctl( UFFDIO_WRITEPROTECT ) failed, %s.\n", strerror(errno) );
++        return;
++    }
++    view->protect |= VPROT_COPY_TRACKED;
++}
++
+ #else
+ static void kernel_writewatch_init(void)
+ {
+ }
+ 
++static void kernel_writecopy_track( struct file_view *view )
++{
++}
++
+ static void kernel_writewatch_reset( void *start, SIZE_T len )
+ {
+ }
+@@ -1975,6 +2008,55 @@ static DWORD get_win32_prot( BYTE vprot, unsigned int map_prot )
+ }
+ 
+ 
++/***********************************************************************
++ *           update_copied_pages
++ *
++ * Windows reports a write-copy page as read-write once it has been written
++ * (privately copied), and keeps doing so across later protection changes.
++ * Write-copy pages are mapped MAP_PRIVATE and writable, so the copy happens
++ * in the kernel; for image views registered with kernel_writecopy_track(),
++ * find the write-copy pages written since and set VPROT_COPIED on them.
++ * virtual_mutex must be held by caller.
++ */
++static void update_copied_pages( struct file_view *view, char *base, size_t size )
++{
++#ifdef USE_UFFD_WRITEWATCH
++    struct pm_scan_arg arg = { 0 };
++    struct page_region rgns[64];
++    char *addr, *end = base + size;
++    int rgn_count, i;
++
++    if (!(view->protect & VPROT_COPY_TRACKED)) return;
++
++    arg.size = sizeof(arg);
++    arg.start = (UINT_PTR)ROUND_ADDR( base, host_page_mask );
++    arg.end = (UINT_PTR)ROUND_SIZE( 0, end, host_page_mask );
++    arg.vec = (ULONG_PTR)rgns;
++    arg.vec_len = ARRAY_SIZE(rgns);
++    arg.category_mask = PAGE_IS_WRITTEN;
++    arg.return_mask = PAGE_IS_WRITTEN;
++
++    while (arg.start < arg.end)
++    {
++        if ((rgn_count = ioctl( pagemap_fd, PAGEMAP_SCAN, &arg )) < 0)
++        {
++            WARN( "ioctl( PAGEMAP_SCAN ) failed, error %s.\n", strerror(errno) );
++            return;
++        }
++        for (i = 0; i < rgn_count; i++)
++        {
++            for (addr = max( (char *)(UINT_PTR)rgns[i].start, base );
++                 addr < min( (char *)(UINT_PTR)rgns[i].end, end ); addr += page_size)
++                if (get_page_vprot( addr ) & VPROT_WRITECOPY)
++                    set_page_vprot_bits( addr, page_size, VPROT_COPIED, 0 );
++        }
++        if (rgn_count < arg.vec_len) break;
++        arg.start = arg.walk_end;
++    }
++#endif
++}
++
++
+ /***********************************************************************
+  *           get_vprot_flags
+  *
+@@ -3514,6 +3596,7 @@ static NTSTATUS map_image_into_view( struct file_view *view, const UNICODE_STRIN
+     VALGRIND_LOAD_PDB_DEBUGINFO(fd, ptr, total_size, ptr - (char *)wine_server_get_ptr( image_info->base ));
+ #endif
+     r_debug_add_module( ptr, fd, ptr - (char *)wine_server_get_ptr( image_info->base ) );
++    kernel_writecopy_track( view );
+     status = STATUS_SUCCESS;
+ 
+ done:
+@@ -5914,6 +5997,7 @@ NTSTATUS WINAPI NtProtectVirtualMemory( HANDLE process, PVOID *addr_ptr, SIZE_T
+ 
+     if ((view = find_view( base, size )))
+     {
++        update_copied_pages( view, base, size );
+         /* Make sure all the pages are committed */
+         if (get_committed_size( view, base, size, &vprot, VPROT_COMMITTED ) >= size && (vprot & VPROT_COMMITTED))
+         {
+@@ -6084,9 +6168,16 @@ static unsigned int fill_basic_memory_info( const void *addr, MEMORY_BASIC_INFOR
+     else
+     {
+         BYTE vprot;
++        SIZE_T size;
+ 
+         info->AllocationBase = alloc_base;
+-        info->RegionSize = get_committed_size( view, base, ~(size_t)0, &vprot, ~VPROT_WRITEWATCH );
++        size = get_committed_size( view, base, ~(size_t)0, &vprot, ~VPROT_WRITEWATCH );
++        if ((vprot & (VPROT_COMMITTED | VPROT_WRITECOPY | VPROT_COPIED)) == (VPROT_COMMITTED | VPROT_WRITECOPY))
++        {
++            update_copied_pages( view, base, size );
++            size = get_committed_size( view, base, size, &vprot, ~VPROT_WRITEWATCH );
++        }
++        info->RegionSize = size;
+         info->State = (vprot & VPROT_COMMITTED) ? MEM_COMMIT : MEM_RESERVE;
+         info->Protect = (vprot & VPROT_COMMITTED) ? get_win32_prot( vprot, view->protect ) : 0;
+         info->AllocationProtect = get_win32_prot( view->protect, view->protect );
+-- 
+2.56.0
+

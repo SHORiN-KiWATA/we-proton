@@ -1,0 +1,94 @@
+From 687e0056898eb229137fe7421a37ea388e55259a Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Wed, 7 Oct 2026 16:43:01 +0900
+Subject: [PATCH] Iterate loop break rewrites until no frozen loop is left
+ broken.
+
+rewrite_invalid_loop_breaks() moves blocks that escape a frozen loop
+behind dispatch blocks after the loop merge, then structurize(1) runs
+once more. That pass can promote one of the new dispatch blocks to a
+frozen loop itself (fixup_broken_selection_merges()), and nothing
+checks the breaks of that loop, so the output can contain a loop that
+is exited through a block other than its merge:
+
+  block 'X' exits the loop headed by 'Y', but not via a structured exit
+
+Repeat the rewrite and structurize(1) until no rewrite is needed.
+
+Seen in a pixel shader from a game, where RADV then crashed on the NULL
+NIR returned by spirv_to_nir. The CFG reduces to:
+
+  b entry n31
+  c n31 n38 n100
+  c n38 n43 n39
+  c n43 n46 n44
+  sideeffect n46
+  b n46 n100
+  sideeffect n44
+  b n44 n100
+  c n39 n57 n48
+  c n57 n46 n100
+  c n48 n77 n86
+  b n77 n100
+  c n86 n46 n82
+  sideeffect n82
+  b n82 n100
+
+No change in output for any shader in the test suite.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ cfg_structurizer.cpp | 28 +++++++++++++++++++---------
+ 1 file changed, 19 insertions(+), 9 deletions(-)
+
+diff --git a/subprojects/dxil-spirv/cfg_structurizer.cpp b/subprojects/dxil-spirv/cfg_structurizer.cpp
+index c2273eba..52bcd31d 100644
+--- a/subprojects/dxil-spirv/cfg_structurizer.cpp
++++ b/subprojects/dxil-spirv/cfg_structurizer.cpp
+@@ -1457,24 +1457,34 @@ bool CFGStructurizer::run()
+ 		log_cfg_graphviz(graphviz_final.c_str());
+ 	}
+ 
+-	bool need_restructure = false;
+-	while (rewrite_invalid_loop_breaks())
++	bool need_restructure;
++	// Redoing the final structurization pass can promote a selection to a frozen loop again
++	// (fixup_broken_selection_merges()), typically one of the dispatch blocks we just created.
++	// That loop needs the same fixup, so iterate until nothing breaks out of a frozen loop.
++	for (unsigned iteration = 0; iteration < 16; iteration++)
+ 	{
+-		if (!graphviz_path.empty())
++		need_restructure = false;
++		while (rewrite_invalid_loop_breaks())
+ 		{
+-			auto graphviz_final = graphviz_path + ".loop-break-rewrite";
+-			log_cfg_graphviz(graphviz_final.c_str());
++			if (!graphviz_path.empty())
++			{
++				auto graphviz_final = graphviz_path + ".loop-break-rewrite";
++				log_cfg_graphviz(graphviz_final.c_str());
++			}
++
++			need_restructure = true;
+ 		}
+ 
+-		need_restructure = true;
+-	}
++		if (!need_restructure)
++			break;
+ 
+-	if (need_restructure)
+-	{
+ 		// Need to redo the final structurization pass if we end up here.
+ 		structurize(1);
+ 	}
+ 
++	if (need_restructure)
++		LOGW("Loop break rewrites did not converge.\n");
++
+ 	need_restructure = false;
+ 	if (rewrite_invalid_switch_breaks())
+ 	{
+-- 
+2.56.0
+

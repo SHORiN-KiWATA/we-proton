@@ -1,0 +1,109 @@
+From db77063480b25f7af680edc8241edab5b6a5cac1 Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Wed, 7 Oct 2026 07:51:23 +0900
+Subject: [PATCH 2/5] server: Free thread input attachments when either queue
+ is destroyed.
+
+An attachment is linked into the attachments list of the thread input
+that queue_from had when it was created. msg_queue_destroy() only went
+through the queue's current input list, so once a queue had moved to
+another input the attachment survived with a dangling queue pointer,
+and the next attach_thread_input() / assign_thread_input() walked it
+into freed memory (wineserver SIGSEGV, taking down the whole prefix).
+
+Keep every attachment in a global list as well, remove the ones that
+reference a queue when it is destroyed, and free attachments in one
+place.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ server/queue.c | 29 ++++++++++++++++++++---------
+ 1 file changed, 20 insertions(+), 9 deletions(-)
+
+diff --git a/server/queue.c b/server/queue.c
+index 2a40673..90e4002 100644
+--- a/server/queue.c
++++ b/server/queue.c
+@@ -119,6 +119,7 @@ struct pointer_state
+ struct attachment
+ {
+     struct list entry;
++    struct list global_entry;
+     struct msg_queue *queue_from;
+     struct msg_queue *queue_to;
+ };
+@@ -250,6 +251,10 @@ static unsigned int cursor_history_latest;
+ 
+ static void queue_hardware_message( struct desktop *desktop, struct message *msg, int always_queue );
+ static void free_message( struct message *msg );
++static void free_attachment( struct attachment *attach );
++
++/* global list of all attachments, so that they can be removed when either of their queues is destroyed */
++static struct list all_attachments = LIST_INIT(all_attachments);
+ 
+ /* set the caret window in a given thread input, requires write lock on the thread input shared member */
+ static void set_caret_window( struct thread_input *input, input_shm_t *shared, user_handle_t win )
+@@ -1389,11 +1394,12 @@ static void msg_queue_destroy( struct object *obj )
+         }
+     }
+ 
+-    LIST_FOR_EACH_ENTRY_SAFE( attach, next, &queue->input->attachments, struct attachment, entry )
++    /* remove the attachments referencing this queue; they may not all be in the queue's current
++     * input list, so go through the global list of attachments instead */
++    LIST_FOR_EACH_ENTRY_SAFE( attach, next, &all_attachments, struct attachment, global_entry )
+     {
+         if (attach->queue_from != queue && attach->queue_to != queue) continue;
+-        list_remove( &attach->entry );
+-        free( attach );
++        free_attachment( attach );
+     }
+ 
+     while ((ptr = list_head( &queue->pending_timers )))
+@@ -1447,10 +1453,7 @@ static void thread_input_destroy( struct object *obj )
+     struct desktop *desktop;
+ 
+     LIST_FOR_EACH_ENTRY_SAFE( attach, next, &input->attachments, struct attachment, entry )
+-    {
+-        list_remove( &attach->entry );
+-        free( attach );
+-    }
++        free_attachment( attach );
+ 
+     empty_msg_list( &input->msg_list );
+     if ((desktop = input->desktop))
+@@ -1510,6 +1513,14 @@ int init_thread_queue( struct thread *thread )
+     return (create_msg_queue( thread, NULL ) != NULL);
+ }
+ 
++/* remove an attachment from its input and from the global list, and free it */
++static void free_attachment( struct attachment *attach )
++{
++    list_remove( &attach->entry );
++    list_remove( &attach->global_entry );
++    free( attach );
++}
++
+ /* attach two thread input data structures */
+ void attach_thread_input( struct msg_queue *queue_from, struct msg_queue *queue_to )
+ {
+@@ -1519,6 +1530,7 @@ void attach_thread_input( struct msg_queue *queue_from, struct msg_queue *queue_
+     if (!(attach = mem_alloc( sizeof(*attach) ))) return;
+     attach->queue_from = queue_from;
+     attach->queue_to = queue_to;
++    list_add_tail( &all_attachments, &attach->global_entry );
+ 
+     old_input = (struct thread_input *)grab_object( queue_from->input );
+     list_add_tail( &old_input->attachments, &attach->entry );
+@@ -1545,8 +1557,7 @@ void detach_thread_input( struct msg_queue *queue_from, struct msg_queue *queue_
+         if (attach->queue_from != queue_from && (!queue_to || attach->queue_from != queue_to)) continue;
+         if (attach->queue_to != queue_from && (!queue_to || attach->queue_to != queue_to)) continue;
+         if (count++ && queue_to) break;
+-        list_remove( &attach->entry );
+-        free( attach );
++        free_attachment( attach );
+     }
+     if (queue_to)
+     {
+-- 
+2.56.0
+
