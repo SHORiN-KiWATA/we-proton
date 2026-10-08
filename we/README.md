@@ -99,5 +99,5 @@ git format-patch --src-prefix=a/subprojects/dxil-spirv/ --dst-prefix=b/subprojec
 
 ## 注意
 
-- 上游的 `AGENTS.md` 对 agent 有规定，动手前先看
+- 根目录的 `AGENTS.md` 是给 AI agent 的规定（问题报到哪里、反作弊和竞技游戏、补丁和报告的写法），动手前先看
 - 不要以 DWProton 的名义发布，也不要往上游提 issue/PR

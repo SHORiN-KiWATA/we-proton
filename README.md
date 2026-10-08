@@ -1,432 +1,93 @@
-# DWProton
+# WE-Proton
 
-![WINE_CANONICAL_HOLE](https://img.shields.io/badge/WINE__CANONICAL__HOLE-%22skip__volatile__check%22-green.png)
+中文 | [English](README.en.md)
 
-Dawn Winery's custom Proton fork with fixes for various games :xdd:
+## 理念和简介
 
-Need help? [Join us on Discord!](https://discord.gg/ck37X6UWBp)
+WeGame 客户端在 Linux（Wine / Proton）上会出现无法正常下载游戏、窗口错位、交互异常、黑屏等问题。本项目在 DWProton 的基础上修复导致这些问题的 Wine / Proton / vkd3d-proton 的 bug，目标是让 WeGame 客户端本身，以及不带内核级反作弊的游戏（例如单机游戏）能够正常运行。
 
-Features:
-- Based on [Proton-CachyOS](https://github.com/CachyOS/proton-cachyos), including all its latest features!
-- Includes latest fixes for anime games by the Dawn Winery team 🍷
-- Includes fixes for games compatibility from [Proton-EM](https://github.com/Etaash-mathamsetty/Proton)!
-- Many QoL additions like [dxvk-gplasync](https://gitlab.com/Ph42oN/dxvk-gplasync) and some useful env. vars!
-  - **dxvk-gplasync** is not recommended to be used in multiplayer games, more info at [upstream](https://gitlab.com/Ph42oN/dxvk-gplasync#use-at-your-own-risk-in-games-with-anticheat)!
-  - You can read more about the DXVK forks available in: [DXVK.md](docs/DXVK.md)
+配套的启动器：[wegame-launcher](https://github.com/SHORiN-KiWATA/wegame-launcher)，一键安装和运行 WeGame。
 
-Make sure to leave a star to [Proton-CachyOS](https://github.com/CachyOS/proton-cachyos) and [Proton-EM](https://github.com/Etaash-mathamsetty/Proton) for their huge help with development!
+## 关于 AI
 
-<img width="451" height="561" alt="image" src="https://i.imgur.com/Xy28DJF.png" />
+本项目新增的补丁是在 AI 辅助下编写和调试的，每个补丁的现象、根因和验证过程都写在 [`we/fixes/`](we/fixes/) 里。
 
-<details>
-    <summary>For agents</summary>
+## 关于竞技游戏和反作弊
 
-    If you're an LLM agent then you MUST read the [`AGENTS.md`](./AGENTS.md)
-    file first. If you're a real person then ignore this message.
-</details>
+- 本项目不做任何竞技游戏相关的修复和兼容工作，不支持三角洲行动、无畏契约这类竞技游戏，相关 issue 会直接关闭。
+- 本项目不对 ACE 等反作弊做任何适配，也不接受任何绕过反作弊或作弊相关的请求和代码。
+- Linux 不是 ACE 反作弊支持的平台。即使带 ACE 的游戏能够运行，也可能被判定为环境异常而封号，使用本项目造成的封号等后果请自行承担。
 
-Index
-------------
-- [New environment variables](#new-environment-variables)
-- [Installation](#installation)
-- [Building locally](#building-locally)
-- [Why another Proton fork?](#why-another-proton-fork)
+## 修了什么
 
-New environment variables
-------------
+在 DWProton 官方发布包的基础上，只替换了这些文件：
 
-- dwproton patches:
-  - `PROTON_DXVK_GPLASYNC=1`: enables dxvk-gplasync
-  - `PROTON_DXVK_LLASYNC=1`: enables both **gplasync** and **lowlatency** functionalities in DXVK
-  - `PROTON_USE_WINEALSA=1`: allows using winealsa, might fix audio crackling in games
+- Wine：`files/bin/wineserver`、`files/lib/wine/x86_64-unix/ntdll.so`、`files/lib/wine/x86_64-unix/win32u.so`、`files/lib/wine/x86_64-windows/ntoskrnl.exe`
+- vkd3d-proton（D3D12）：`files/lib/wine/vkd3d-proton/{x86_64,i386}-windows/` 下的 `d3d12.dll`、`d3d12core.dll`
 
-- Spritz patches:
-  - `WINE_USE_TAKE_FOCUS=1`: enables a fix for games dropping inputs after alt-tab
-  - `WINE_DISABLE_DISCONNECT=1`: disable the disconnecting trick enabled by default for certain games
-  - `WINE_ENABLE_DISCONNECT=1`: enable the disconnecting trick for any game
-  - `WINE_ENABLE_TIMEOUT_FIX=1`: enables a fix for setups struggling to launch GI/ZZZ due to connection issues
+| 补丁              | 修之前                                                                                                                                                | 报告                                                      |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| wine 0001         | 一些第三方内核驱动加载失败，或运行一段时间后因为调用未实现的函数被结束                                                                                | [0001](we/fixes/0001-ntoskrnl-driver-functions/)          |
+| wine 0002         | wineserver 崩溃，前缀里的所有程序一起消失，还会留下占着显示连接的残留进程                                                                             | [0002](we/fixes/0002-wineserver-thread-input-uaf/)        |
+| wine 0003         | 直接执行 `syscall` 指令、并在栈指针下方存数据的代码，返回后数据被改坏而崩溃                                                                           | [0003](we/fixes/0003-native-syscall-red-zone/)            |
+| wine 0004         | 靠 UDP `connect(0.0.0.0)` 唤醒 `select()` 的程序，每次都要等满超时，网络请求极慢                                                                      | [0004](we/fixes/0004-udp-connect-unspecified/)            |
+| wine 0005         | 写时复制页被写过之后仍报告 `PAGE_WRITECOPY`，基于 CEF 的程序渲染进程一启动就崩                                                                        | [0005](we/fixes/0005-write-copy-tracking/)                |
+| wine 0006         | 活动窗口消失后，不该被激活的覆盖层窗口（`WS_EX_NOACTIVATE`）被设成前台，全屏程序因失去焦点而反复最小化                                                | [0006](we/fixes/0006-noactivate-activation/)              |
+| wine 0007         | 用 `UpdateLayeredWindow` 绘制的子窗口（`WS_CHILD` + `WS_EX_LAYERED`）变成一个单独的窗口，出现在屏幕左上角或被窗口管理器当成另一个窗口，不跟着主窗口走 | [0007](we/fixes/0007-layered-child-windows/)              |
+| vkd3d-proton 0001 | 部分 D3D12 着色器被翻译成非法的 SPIR-V，AMD 显卡（Mesa RADV）上直接崩溃                                                                               | [vkd3d-0001](we/fixes/vkd3d-0001-dxil-spirv-loop-breaks/) |
 
-We recommend using `UMU_USE_STEAM=1` when launching GI/ZZZ outside of Steam, if the automation doesn't work.
+## 安装
 
-Installation
-------------
+1. 从 [Releases](https://github.com/SHORiN-KiWATA/we-proton/releases) 下载 `we-proton-<版本>.tar.xz`
+2. 解压到启动器的 Proton 目录：
+   - wegame-launcher：`~/.local/share/proton/runners/`
+   - Steam：`~/.local/share/Steam/compatibilitytools.d/`
+   - Lutris、Heroic 等：各自的 Proton / runner 目录
+3. 在启动器里选 `we-proton-<版本>`。wegame-launcher 默认自动使用最新的 DWProton，需要手动选择：在图形界面的「设置 → 运行器」里选，或者运行
 
-You can either use [ProtonPlus](https://github.com/Vysp3r/ProtonPlus) that now also includes dwproton (thanks!) or download latest build from [Releases](https://dawn.wine/dawn-winery/dwproton/releases) and extract manually to `compatibilitytools.d` in your Steam folder.
+   ```
+   wegame-launcher runner we-proton-<版本>
+   ```
 
-<img src="https://i.imgur.com/13CQED2.png" />
+说明：
 
-Building locally
-------------
-To build your own **dwproton** (make sure you have Docker setup):
-```
-git clone --recurse-submodules https://dawn.wine/dawn-winery/dwproton.git
-cd dwproton
-mkdir build && cd build
-../configure.sh --build-name=dwproton-local --container-engine=docker --enable-ccache --without-tts
-make -j$(nproc) redist
-```
-You can also add your own Wine patches by adding them to the `patches/wine` folder.
+- 前缀版本和所基于的 DWProton 版本相同，两者之间切换不会触发前缀升级
+- 0005 依赖 Linux 6.7 及以上内核的 userfaultfd 异步写保护；内核更旧时这一项不生效，其他照常
+- 构建出的 `d3d12.dll`、`d3d12core.dll` 使用 UCRT（`api-ms-win-crt-*`），官方版本用 `msvcrt.dll`，Wine 两者都提供
 
-
-Why another Proton fork?
-------------
-
-`dwproton` exists mainly so we can test and ship our game fixes quickly, and so [I](https://dawn.wine/NelloKudo) have one place to merge fixes coming in from everyone in the Dawn Winery community.
-
-That said, our real goal isn't "yet another fork" for its own sake, it's getting games to run *everywhere*. That's why most of the games we target already work fine on upstream Wine, or get shipped to other Protons once we've confirmed the fixes don't regress anything else (see **proton-cachyos** and **proton-em**, both of which we work closely with and contribute to).
-
-Ideally, all of this work gets upstreamed. But upstreaming takes a lot more testing and polish than a quick fix does, and since everything we do is open-source, that path is always open.
-
-At its core, `dwproton` is about making Linux gaming work well while staying on good terms with game developers, so the whole ecosystem benefits. For that reason, we **don't support and don't recommend external tools** that break a game's ToS.
-
-Introduction
-------------
-
-**Proton** is a tool for use with the Steam client which allows games which are
-exclusive to Windows to run on the Linux operating system. It uses Wine to
-facilitate this.
-
-**Most users should use Proton provided by the Steam Client itself.** See
-[this Steam Community post][steam-play-introduction] for more details.
-
-The source code is provided to enable advanced users the ability to alter
-Proton. For example, some users may wish to use a different version of Wine
-with a particular title.
-
-**The changelog** is available on [our wiki][changelog].
-
-[steam-play-introduction]: https://steamcommunity.com/games/221410/announcements/detail/1696055855739350561
-[changelog]: https://github.com/ValveSoftware/Proton/wiki/Changelog
-
-
-Obtaining Proton sources
-------------------------
-
-Acquire Proton's source by cloning <https://github.com/ValveSoftware/Proton>
-and checking out the branch you desire.
-
-You can clone the latest Proton to your system with this command:
-
-```bash
-git clone --recurse-submodules https://github.com/ValveSoftware/Proton.git proton
-```
-
-Be sure to update submodules when switching between branches:
-
-```bash
-git checkout experimental_6.3
-git submodule update --init --recursive
-```
-
-If you want to change any subcomponent, now is the time to do so. For
-example, if you wish to make changes to Wine, you would apply them to the
-`wine/` directory.
-
-
-Building Proton
----------------
-
-Most of Proton builds inside the [Proton SDK](docker/README.md) (a downstream
-of [SteamRT SDK][steamrt-sdk]) container with very few dependencies on the host
-side.
-
-## Preparing the build environment
-
-You need either a Docker or a Podman setup which Proton's build system uses
-internally. You should never need to use either container engine manually unless
-working on those parts of build system directly.
-
-We highly recommend [the rootless Podman setup][rootless-podman]. Please refer
-to your distribution's documentation for setup instructions (e.g. Arch
-[Podman][arch-podman] / [Docker][arch-docker], Debian [Podman][debian-podman] /
-[Docker][debian-docker]).
-
-[steamrt-sdk]: https://gitlab.steamos.cloud/steamrt/steamrt4/sdk
-[rootless-podman]: https://github.com/containers/podman/blob/main/docs/tutorials/rootless_tutorial.md
-[arch-podman]: https://wiki.archlinux.org/title/Podman
-[arch-docker]: https://wiki.archlinux.org/title/Docker
-[debian-podman]: https://wiki.debian.org/Podman
-[debian-docker]: https://wiki.debian.org/Docker
-
-
-## The Easy Way
-
-We provide a top-level Makefile which will execute most of the build commands
-for you.
-
-After checking out the repository and updating its submodules, assuming that
-you have a working Docker or Podman setup, you can build and install Proton
-with a simple:
-
-```bash
-make install
-```
-
-If your build system is missing dependencies, it will fail quickly with a clear
-error message.
-
-After the build finishes, you may need to restart the Steam client to see the
-new Proton tool. The tool's name in the Steam client will be based on the
-currently checked out branch of Proton. You can override this name using the
-`build_name` variable.
-
-See `make help` for other build targets and options.
-
-
-
-## Manual building
-
-### Configuring the build
-
-```bash
-mkdir ../build && cd ../build
-../proton/configure.sh --enable-ccache --build-name=my_build
-```
-
-Running `configure.sh` will create a `Makefile` allowing you to build Proton.
-The scripts checks if containers are functional and prompt you if any
-host-side dependencies are missing. You should run the command from a
-directory created specifically for your build.
-
-The configuration script tries to discover a working Docker or Podman setup
-to use, but you can force a compatible engine with
-`--container-engine=<executable_name>`.
-
-You can enable ccache with `--enable-cache` flag. This will mount your
-`$CCACHE_DIR` or `$HOME/.ccache` inside the container.
-
-`--proton-sdk-image=registry.gitlab.steamos.cloud/proton/soldier/sdk:<version>`
-can be used to build with a custom version of the Proton SDK images.
-
-Check `--help` for other configuration options.
-
-NOTE: If **SELinux** is in use, the Proton build container may fail to access
-your user's files. This is caused by [SELinux's filesystem
-labels][selinux-labels]. You may pass the `--relabel-volumes` switch to
-configure to cause the [container engine to relabel its
-bind-mounts][bind-mounts] and allow access to those files from within the
-container. This can be dangerous when used with system directories. Proceed
-with caution and refer your container engine's manual.
-
-[selinux-labels]: https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/security-enhanced_linux/sect-security-enhanced_linux-working_with_selinux-selinux_contexts_labeling_files
-[bind-mounts]: https://docs.docker.com/storage/bind-mounts/
-
-
-### Building
+## 从源码构建
 
 ```
-make
+git clone https://github.com/SHORiN-KiWATA/we-proton.git
+cd we-proton
+git submodule update --init wine Vulkan-Headers
+git submodule update --init --recursive vkd3d-proton
+we/overlay-build.sh --release <N>             # 输出到 build/
+we/overlay-build.sh --release <N> --install   # 同时安装到 ~/.local/share/proton/runners/WE-Proton
 ```
 
-**Important make targets:**
+脚本的详细步骤、测试程序、诊断工具以及跟进上游新版本的方法见 [`we/README.md`](we/README.md)。
 
-`make install` - install Proton into your user's Steam directory, see the [install Proton
-locally](#install-proton-locally) section for details.
+完整构建（`make redist`，在容器里从头编译所有组件）和上游相同（本项目没有实际测试过），见 [DWProton](https://dawn.wine/dawn-winery/dwproton) 和 [Proton](https://github.com/ValveSoftware/Proton) 的说明。
 
-`make redist` - create a redistribute build (`redist/`) that can be copied to
-`~/.steam/root/compatibilitytools.d/`.
+## 仓库结构
 
-`make deploy` - create a deployment build (`deploy/`). This is what we use to
-deploy Proton to Steam users via Steamworks.
+- `patches/wine/`、`patches/vkd3d-proton/`：补丁。`wine/`、`vkd3d-proton/` 子模块停在上游 commit，构建时自动打上补丁
+- `we/fixes/`：每个补丁一份报告（现象、根因、修复、验证）
+- `we/tests/`：测试程序和修复前后的输出
+- `we/diag/`：诊断补丁和脚本，不进正式构建
+- `we/overlay-build.sh`：快速构建脚本
+- 其余是 DWProton / Proton 的原有内容
 
-`make module=<module> module` - build both 32- and 64-bit versions of the
-specified wine module. This allows rapid iteration on one module. This target
-is only useful after building Proton.
+## 源码与许可证
 
-`make dxvk` / `make vkd3d-proton` - rebuild DXVK / vkd3d-proton.
+- Proton 顶层内容：BSD-3-Clause（Valve Corporation，见 [`LICENSE`](LICENSE)、[`LICENSE.proton`](LICENSE.proton)）
+- vkd3d-proton：上游 vkd3d-proton 加上 `patches/vkd3d-proton/` 里的补丁，LGPL-2.1；其中 dxil-spirv 子项目以及改它的补丁为 MIT
+- 其他组件见各自目录下的 `LICENSE`、`COPYING`，以及发布包里的 `LICENSE`、`LICENSE.OFL`、`PATENTS.AV1`
+- `we/` 下的脚本和文档沿用 BSD-3-Clause
 
+## 致谢
 
-### Figuring Out What Failed To Build
-
-Proton build system invokes builds of many subprojects in parallel. If one
-subprojects fails there can be thousands of lines printed by other sub-builds
-before the top level exits. This can make the real reason of the build failing
-hard to find.
-
-Appending `2>&1 | tee build.log` will log the full build output to a `build.log`
-file. Searching that file from the bottom up for occurrences of `Error` should
-point to the right area. E.g.:
-
-```
-make 2>&1 | tee build.log
-grep -n '] Error [0-9]' build.log
-```
-
-```
-11220:make: *** [../Makefile.in:465: /builds/proton/proton/build-dir/.kaldi-i386-configure] Error 1
-12427:make: *** [../Makefile.in:1323: deploy] Error 2
-```
-
-
-### Debug Builds
-
-To prevent symbol stripping add `UNSTRIPPED_BUILD=1` to the `make`
-invocation. This should be used only with a clean build directory.
-
-E.g.:
-
-```
-mkdir ../debug-proton-build && cd ../debug-proton-build
-../proton/configure.sh --enable-ccache --build-name=debug_build
-make UNSTRIPPED_BUILD=1 install
-```
-
-
-### ARM64 Builds
-
-You need an ARM64 build machine and pass `--target-arch=arm64` to `configure.sh`.
-
-It's not possible to use the resulting builds in x86 Steam running via FEX.
-
-
-Install Proton locally
-----------------------
-
-Steam ships with several versions of Proton, which games will use by default or
-that you can select in Steam Settings' Steam Play page. Steam also supports
-running games with local builds of Proton, which you can install on your
-machine.
-
-To install a local build of Proton into Steam, make a new directory in
-`~/.steam/root/compatibilitytools.d/` with a tool name of your choosing and
-place the directory containing your redistributable build under that path.
-
-The `make install` target will perform this task for you, installing the
-Proton build into the Steam folder for the current user. You will have to
-restart the Steam client for it to pick up on a new tool.
-
-A correct local tool installation should look similar to this:
-
-```
-compatibilitytools.d/my_proton/
-├── compatibilitytool.vdf
-├── filelock.py
-├── LICENSE
-├── proton
-├── proton_dist.tar
-├── toolmanifest.vdf
-├── user_settings.sample.py
-└── version
-```
-
-To enable your local build in Steam, go to the Steam Play section of the
-Settings window. If the build was correctly installed, you should see
-"proton-localbuild" in the drop-down list of compatibility tools.
-
-Each component of this software is used under the terms of their licenses.
-See the `LICENSE` files here, as well as the `LICENSE`, `COPYING`, etc files
-in each submodule and directory for details. If you distribute a built
-version of Proton to other users, you must adhere to the terms of these
-licenses.
-
-
-Debugging
----------
-
-Proton builds have their symbols stripped by default. You can switch to
-"debug" beta branch in Steam (search for Proton in your library,
-Properties... -> BETAS -> select "debug") or build without stripping (see
-[Debug Builds section](#debug-builds)).
-
-The symbols are provided through the accompanying `.debug` files which may
-need to be explicitly loaded by the debugging tools. For GDB there's a helper
-script `wine/tools/gdbinit.py` (source it) that provides `load-symbol-files`
-(or `lsf` for short) command which loads the symbols for all the mapped files.
-
-For tips on debugging see [docs/DEBUGGING-LINUX.md](docs/DEBUGGING-LINUX.md)
-and [docs/DEBUGGING-WINDOWS.md](docs/DEBUGGING-WINDOWS.md).
-
-
-`compile_commands.json`
------------------------
-
-For use with [clangd](https://clangd.llvm.org/) LSP server and similar tooling.
-
-Projects built using cmake or meson (e.g. vkd3d-proton) automatically come with
-`compile_commands.json`. Wine also generates the file on its own via `makedep`.
-
-Proton's build system collects all the `compile_commands.json` files in a build
-subdirectory named `compile_commands/`.
-
-The paths are translated to point to the real source (i.e. not the rsynced
-copy). It still may depend on build directory for things like auto-generated
-`config.h` though and for wine it may be beneficial to run `tools/make_requests`
-in you source directories as those changes are not committed.
-
-You can then configure your editor to use that file for clangd in a few ways:
-
-1) directly - some editors/plugins allow you to specify the path to `compile_commands.json`
-2) via `.clangd` file, e.g.
-```bash
-cd src/proton/wine/
-cat > .clangd <<EOF
-CompileFlags:
-  CompilationDatabase: ../build/current-dev/compile_commands/wine-x86_64/
-EOF
-```
-3) by symlinking:
-```bash
-ln -s ../build/current-dev/compile_commands/wine-x86_64/compile_commands.json .
-```
-
-
-Runtime Config Options
-----------------------
-
-Proton can be tuned at runtime to help certain games run. The Steam client sets
-some options for known games using the `STEAM_COMPAT_CONFIG` variable.
-You can override these options using the environment variables described below.
-
-The best way to set these environment overrides for all games is by renaming
-`user_settings.sample.py` to `user_settings.py` and modifying it appropriately.
-This file is located in the Proton installation directory in your Steam library
-(often `~/.steam/steam/steamapps/common/Proton #.#`).
-
-If you want to change the runtime configuration for a specific game, you can
-use the `Set Launch Options` setting in the game's `Properties` dialog in the
-Steam client. Set the variable, followed by `%command%`. For example, input
-"`PROTON_USE_WINED3D=1 %command%`" to use the OpenGL-based wined3d renderer
-instead of the Vulkan-based DXVK renderer.
-
-To enable an option, set the variable to a non-`0` value.  To disable an
-option, set the variable to `0`. To use Steam's default configuration, do
-not specify the variable at all.
-
-All of the below are runtime options. They do not effect permanent changes to
-the Wine prefix. Removing the option will revert to the previous behavior.
-
-| Compat config string  | Environment Variable               | Description  |
-| :-------------------- | :--------------------------------- | :----------- |
-|                       | `PROTON_LOG`                       | Convenience method for dumping a useful debug log to `$PROTON_LOG_DIR/steam-$APPID.log`. Set to `1` to enable default logging, or set to a string to be appended to the default `WINEDEBUG` channels. |
-|                       | `PROTON_LOG_DIR`                   | Output log files into the directory specified. Defaults to your home directory. |
-|                       | `PROTON_WAIT_ATTACH`               | Wait for a debugger to attach to steam.exe before launching the game process. To attach to the game process at startup, debuggers should be set to follow child processes. |
-|                       | `PROTON_CRASH_REPORT_DIR`          | Write crash logs into this directory. Does not clean up old logs, so may eat all your disk space eventually. |
-| `wined3d`             | `PROTON_USE_WINED3D`               | Use OpenGL-based wined3d instead of Vulkan-based DXVK for d3d11, d3d10, and d3d9. |
-| `nod3d11`             | `PROTON_NO_D3D11`                  | Disable `d3d11.dll`, for d3d11 games which can fall back to and run better with d3d9. |
-| `nod3d10`             | `PROTON_NO_D3D10`                  | Disable `d3d10.dll` and `dxgi.dll`, for d3d10 games which can fall back to and run better with d3d9. |
-| `dxvkd3d8`            | `PROTON_DXVK_D3D8`                 | Use DXVK's `d3d8.dll`. |
-| `nofsync`             | `PROTON_NO_FSYNC`                  | Do not use futex-based in-process synchronization primitives. (Automatically disabled on systems with no `FUTEX_WAIT_MULTIPLE` support.) |
-|                       | `PROTON_NO_NTSYNC`                 | Do not use ntsync. |
-|                       | `HOST_LC_ALL`                      | Set value to a locale to override all other system locale settings for a game.  This variable should be used instead of `LC_ALL`. |
-| `disablenvapi`        | `PROTON_DISABLE_NVAPI`             | Disable NVIDIA's NVAPI GPU support library. |
-| `nativevulkanloader`  |                                    | Use the Vulkan loader shipped with the game instead of Proton's built-in Vulkan loader. This breaks VR support, but is required by a few games. |
-| `forcelgadd`          | `PROTON_FORCE_LARGE_ADDRESS_AWARE` | Force Wine to enable the LARGE_ADDRESS_AWARE flag for all executables. Enabled by default. |
-| `heapdelayfree`       | `PROTON_HEAP_DELAY_FREE`           | Delay freeing some memory, to work around application use-after-free bugs. |
-| `gamedrive`           | `PROTON_SET_GAME_DRIVE`            | Create an S: drive which points to the Steam Library which contains the game. |
-| `noforcelgadd`        |                                    | Disable forcelgadd. If both this and `forcelgadd` are set, enabled wins. |
-| `oldglstr`            | `PROTON_OLD_GL_STRING`             | Set some driver overrides to limit the length of the GL extension string, for old games that crash on very long extension strings. |
-| `vkd3dfl12`           |                                    | Force the Direct3D 12 feature level to 12, regardless of driver support. |
-| `vkd3dbindlesstb`     |                                    | Put `force_bindless_texel_buffer` into `VKD3D_CONFIG`. |
-| `nomfdxgiman`         | `WINE_DO_NOT_CREATE_DXGI_DEVICE_MANAGER` | Enable hack to work around video issues in some games due to incomplete IMFDXGIDeviceManager support. |
-| `noopwr`              | `WINE_DISABLE_VULKAN_OPWR`               | Enable hack to disable Vulkan other process window rendering which sometimes causes issues on Wayland due to blit being one frame behind. |
-| `hidenvgpu`           | `PROTON_HIDE_NVIDIA_GPU`           | Force Nvidia GPUs to always be reported as AMD GPUs. Some games require this if they depend on Windows-only Nvidia driver functionality. See also DXVK's nvapiHack config, which only affects reporting from Direct3D. |
-|                       | `WINE_FULLSCREEN_INTEGER_SCALING`  | Enable integer scaling mode, to give sharp pixels when upscaling. |
-|                       | `WINE_USE_KWIN_HACKS`              | Enable KDE-specific windowing hacks that may improve experience with KDE older than 6.4 on Wayland and KDE older than 6.6 on X11. |
-| `cmdlineappend:`      |                                    | Append the string after the colon as an argument to the game command. May be specified more than once. Escape commas and backslashes with a backslash. |
-| `xalia` or `noxalia`  | `PROTON_USE_XALIA`                 | Enable Xalia, a program that can add a gamepad UI for some keyboard/mouse interfaces, or set to 0 to disable. The default is to enable it dynamically based on window contents. |
-| `fnad3d11`            | `FNA3D_FORCE_DRIVER=D3D11`         | Force FNA to use D3D11 for rendering. |
-| `seccomp`             | `PROTON_USE_SECCOMP`               | **Note: Obsoleted in Proton 5.13.** In older versions, enable seccomp-bpf filter to emulate native syscalls, required for some DRM protections to work. |
-| `d9vk`                | `PROTON_USE_D9VK`                  | **Note: Obsoleted in Proton 5.0.** In older versions, use Vulkan-based DXVK instead of OpenGL-based wined3d for d3d9. |
-| `noesync`             | `PROTON_NO_ESYNC`                  | **Note: Obsoleted in Proton 11.0.** In older versions, do not use eventfd-based in-process synchronization primitives. |
-
-<!-- Target:  GitHub Flavor Markdown.  To test locally:  pandoc -f markdown_github -t html README.md  -->
+- Valve 和 CodeWeavers 的 [Proton](https://github.com/ValveSoftware/Proton)
+- Dawn Winery 的 [DWProton](https://dawn.wine/dawn-winery/dwproton)
+- [Wine](https://www.winehq.org/)、[DXVK](https://github.com/doitsujin/dxvk)、[vkd3d-proton](https://github.com/HansKristian-Work/vkd3d-proton) 等项目

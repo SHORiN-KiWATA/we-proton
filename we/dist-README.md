@@ -42,4 +42,4 @@ WE-Proton 是 DW-Proton 的一个个人修改版，补了几个 Wine 和 vkd3d-p
 - Proton：dwproton `@BASE@`（https://dawn.wine/dawn-winery/dwproton ）
 - Wine：wine-dwproton @WINE@ 加上 `we-proton-patches/wine/` 里的补丁
 - vkd3d-proton：@VKD3D@（https://github.com/HansKristian-Work/vkd3d-proton ）加上 `we-proton-patches/vkd3d-proton/` 里的补丁
-- Wine、vkd3d-proton 以 LGPL 2.1 发布，dxil-spirv 以 MIT 发布，Proton 及其组件的许可证见包内的 `LICENSE`、`LICENSE.OFL`、`PATENTS.AV1`
+- Proton 及其组件（包括 Wine、vkd3d-proton）的许可证见包内的 `LICENSE`、`LICENSE.OFL`、`PATENTS.AV1`
