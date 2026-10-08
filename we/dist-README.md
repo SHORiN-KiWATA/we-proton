@@ -2,10 +2,15 @@
 
 WE-Proton 是 DW-Proton 的一个个人修改版，补了几个 Wine 和 vkd3d-proton 的 bug。**它不是 DW-Proton**，遇到问题不要去 DW-Proton 那边报告。
 
-基于 `@BASE@` 官方发布包，只替换了这些文件：
+基于 `@BASE@` 官方发布包，只替换了这些文件（都在 `files/` 下）：
 
-- Wine：`files/bin/wineserver`、`files/lib/wine/x86_64-unix/ntdll.so`、`files/lib/wine/x86_64-unix/win32u.so`、`files/lib/wine/x86_64-unix/explorer.so`（新增）、`files/lib/wine/x86_64-unix/qcap.so`、`files/lib/wine/{x86_64,i386}-windows/explorer.exe`、`files/lib/wine/x86_64-windows/ntoskrnl.exe`、`files/lib/wine/{x86_64,i386}-windows/rpcrt4.dll`、`winhttp.dll`，以及同一目录下的 `d3d10.dll` 和 `d3dcompiler_33`～`43`、`46`、`47`
-- vkd3d-proton（D3D12）：`files/lib/wine/vkd3d-proton/{x86_64,i386}-windows/` 下的 `d3d12.dll`、`d3d12core.dll`
+- `bin/wineserver`
+- `lib/wine/x86_64-unix/` 下的 `ntdll.so`、`win32u.so`、`qcap.so`、`nsiproxy.so`，以及新增的 `explorer.so`、`wintun.so`
+- `lib/wine/x86_64-windows/` 下的 `ntoskrnl.exe`、`nsiproxy.sys`
+- `lib/wine/{x86_64,i386}-windows/` 下的 `ntdll.dll`、`kernelbase.dll`、`kernel32.dll`、`rpcrt4.dll`、`winhttp.dll`、`iphlpapi.dll`、`nsi.dll`、`explorer.exe`、`d3d10.dll`、`d3dcompiler_33`～`43`、`46`、`47`，以及新增的 `wintun.dll`
+- vkd3d-proton（D3D12）：`lib/wine/vkd3d-proton/{x86_64,i386}-windows/` 下的 `d3d12.dll`、`d3d12core.dll`
+
+Unix 侧只换了 64 位的库（`x86_64-unix`）。32 位程序要在 WoW64 模式下运行（`PROTON_USE_WOW64=1`，wegame-launcher 默认开启）才用得上 `*.so` 里的修复；不开 WoW64 时，它们用的是官方发布包里没改过的 `i386-unix` 库。
 
 ## 修了什么
 
