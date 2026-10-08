@@ -1,0 +1,41 @@
+$ capture_mt_probe32.exe   (WINEARCH=wow64)
+32-bit, sizeof(AM_MEDIA_TYPE) 72, free with CoTaskMemFree
+device USB2.0 HD UVC WebCam: USB2.0 HD
+  GetNumberOfCapabilities hr 0 count 6 size 128
+  GetStreamCaps      0  hr 0  cbFormat 88  pUnk 00000000
+  GetStreamCaps      1  hr 0  cbFormat 88  pUnk 00000000
+  GetStreamCaps      2  hr 0  cbFormat 88  pUnk 00000000
+  GetStreamCaps      3  hr 0  cbFormat 88  pUnk 00000000
+  GetStreamCaps      4  hr 0  cbFormat 88  pUnk 00000000
+  GetStreamCaps      5  hr 0  cbFormat 88  pUnk 00000000
+  GetFormat          0  hr 0  cbFormat 88  pUnk 00000000
+  EnumMediaTypes     0  hr 0  cbFormat 88  pUnk 00000000
+1 device(s), 0 media type(s) with a non-NULL pUnk
+
+$ capture_mt_probe32.exe --delete   (WINEARCH=wow64)
+32-bit, sizeof(AM_MEDIA_TYPE) 72, free with DeleteMediaType
+device USB2.0 HD UVC WebCam: USB2.0 HD
+  GetNumberOfCapabilities hr 0 count 6 size 128
+  GetStreamCaps      0  hr 0  cbFormat 88  pUnk 00000000
+  GetStreamCaps      1  hr 0  cbFormat 88  pUnk 00000000
+  GetStreamCaps      2  hr 0  cbFormat 88  pUnk 00000000
+  GetStreamCaps      3  hr 0  cbFormat 88  pUnk 00000000
+  GetStreamCaps      4  hr 0  cbFormat 88  pUnk 00000000
+  GetStreamCaps      5  hr 0  cbFormat 88  pUnk 00000000
+  GetFormat          0  hr 0  cbFormat 88  pUnk 00000000
+  EnumMediaTypes     0  hr 0  cbFormat 88  pUnk 00000000
+1 device(s), 0 media type(s) with a non-NULL pUnk
+
+$ capture_mt_probe.exe   (WINEARCH=wow64)
+64-bit, sizeof(AM_MEDIA_TYPE) 88, free with CoTaskMemFree
+device USB2.0 HD UVC WebCam: USB2.0 HD
+  GetNumberOfCapabilities hr 0 count 6 size 128
+  GetStreamCaps      0  hr 0  cbFormat 88  pUnk 0000000000000000
+  GetStreamCaps      1  hr 0  cbFormat 88  pUnk 0000000000000000
+  GetStreamCaps      2  hr 0  cbFormat 88  pUnk 0000000000000000
+  GetStreamCaps      3  hr 0  cbFormat 88  pUnk 0000000000000000
+  GetStreamCaps      4  hr 0  cbFormat 88  pUnk 0000000000000000
+  GetStreamCaps      5  hr 0  cbFormat 88  pUnk 0000000000000000
+  GetFormat          0  hr 0  cbFormat 88  pUnk 0000000000000000
+  EnumMediaTypes     0  hr 0  cbFormat 88  pUnk 0000000000000000
+1 device(s), 0 media type(s) with a non-NULL pUnk

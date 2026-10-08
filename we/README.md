@@ -23,6 +23,7 @@
 | `wine/0009-d3dcompiler-Handle-the-ISG1-OSG1-and-PSG1-signature-` | d3dcompiler 的反射和 `D3DGetBlobPart` 能读最低精度签名段（ISG1/OSG1/PSG1），和 Windows 一致 |
 | `wine/0010-winhttp-Skip-empty-lines-in-front-of-the-first-reque` | WinHttpAddRequestHeaders 跳过开头的空行（`\r\n` 等），和 Windows 一致 |
 | `wine/0011-explorer-Show-systray-icons-as-StatusNotifierItems` | 会话里有 StatusNotifierWatcher 时，通知区图标用 StatusNotifierItem（D-Bus）显示，面板上的点击转成和嵌入式图标相同的回调，气泡变成桌面通知 |
+| `wine/0012-qcap-Clear-pUnk-in-media-types-returned-to-32-bit-ca` | WoW64 下视频采集返回给 32 位程序的媒体类型把 `pUnk` 设成 NULL，和 64 位一致 |
 | `vkd3d-proton/0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
 
 每个补丁的现象、根因、Windows 实测、验证和排查过程见 `we/fixes/`。
@@ -43,9 +44,10 @@
 - `winhttp_crlf_probe`（0010）：请求头字符串开头或中间有空行时，WinHttpAddRequestHeaders 返回什么、实际加上了哪些头
 - `winhttp_hdr_probe`、`winhttp_state_probe`（0010 排查时的弯路）：Range 类请求头配各种长度和 flag，以及请求句柄处于各种状态时添加请求头的结果。没有找到 Windows 成功而 Wine 失败的情况，但有几处 Windows 比 Wine 更严格的差异，见 0010 报告
 - `tray_sni_probe`（0011）：通知区图标由 StatusNotifierItem 面板显示时，面板读到的属性、图标像素、提示和气泡，以及点击后程序收到的回调。用 `sni_host.py` 跑（`dbus-run-session -- env DISPLAY=:N WINEPREFIX=<新前缀> sni_host.py <runner>/files/bin/wine tray_sni_probe.exe [v0]`），它在私有的会话总线上扮演面板。explorer 启动时才找 watcher，所以前缀的 wineserver 不能已经在运行
+- `capture_mt_probe`（0012）：照列摄像头格式的程序那样枚举视频采集设备，打印 `GetStreamCaps`、`GetFormat`、`IEnumMediaTypes::Next` 返回的 `pUnk`；`--delete` 改用 `DeleteMediaType()` 释放。要接着摄像头。`build.sh` 另编一个 32 位的 `capture_mt_probe32.exe`，要在 `WINEARCH=wow64` 下跑
 - `dxil-spirv/run.sh`（vkd3d-proton 0001）：用 dxil-spirv 的 `structurize-test` 跑 `*.st` 控制流图，检查生成的 SPIR-V 能通过校验。源码取 `build/overlay/src-vkd3d-proton`（先跑 `overlay-build.sh`）；`--unpatched` 用未打补丁的子模块，应该失败
 
-Wine 自己的测试：用 `build/overlay/src-wine` 另配一个 `--enable-tests` 的构建目录，编 `dlls/kernel32/tests`、`dlls/ntdll/tests`、`dlls/user32/tests`（0008 是 `dlls/oleaut32/tests`、`dlls/rpcrt4/tests`，0009 是 `dlls/d3dcompiler_47/tests`、`dlls/d3dcompiler_43/tests`、`dlls/d3d10/tests`，0010 是 `dlls/winhttp/tests`（winhttp:winhttp），0011 是 `dlls/shell32/tests`（shell32:systray，有和没有 watcher 各跑一遍）），用新旧 runner 各跑一遍、逐条比对失败项（0005 起都这样验证）。
+Wine 自己的测试：用 `build/overlay/src-wine` 另配一个 `--enable-tests` 的构建目录，编 `dlls/kernel32/tests`、`dlls/ntdll/tests`、`dlls/user32/tests`（0008 是 `dlls/oleaut32/tests`、`dlls/rpcrt4/tests`，0009 是 `dlls/d3dcompiler_47/tests`、`dlls/d3dcompiler_43/tests`、`dlls/d3d10/tests`，0010 是 `dlls/winhttp/tests`（winhttp:winhttp），0011 是 `dlls/shell32/tests`（shell32:systray，有和没有 watcher 各跑一遍），0012 是 `dlls/qcap/tests`（i386 和 x86_64 都编，`WINEARCH=wow64`，要接着摄像头）），用新旧 runner 各跑一遍、逐条比对失败项（0005 起都这样验证）。
 
 ## 诊断
 

@@ -51,6 +51,7 @@ declare -A TARGETS=(
     [dlls/rpcrt4]="dlls/rpcrt4/x86_64-windows/rpcrt4.dll:x86_64-windows/rpcrt4.dll dlls/rpcrt4/i386-windows/rpcrt4.dll:i386-windows/rpcrt4.dll"
     [dlls/winhttp]="dlls/winhttp/x86_64-windows/winhttp.dll:x86_64-windows/winhttp.dll dlls/winhttp/i386-windows/winhttp.dll:i386-windows/winhttp.dll"
     [programs/explorer]="programs/explorer/x86_64-windows/explorer.exe:x86_64-windows/explorer.exe programs/explorer/i386-windows/explorer.exe:i386-windows/explorer.exe programs/explorer/explorer.so:x86_64-unix/explorer.so"
+    [dlls/qcap]="dlls/qcap/qcap.so:x86_64-unix/qcap.so"
 )
 # d3dcompiler_43's sources are built into d3d10 and every other d3dcompiler_*.
 for m in d3d10 d3dcompiler_{33..43} d3dcompiler_46 d3dcompiler_47; do

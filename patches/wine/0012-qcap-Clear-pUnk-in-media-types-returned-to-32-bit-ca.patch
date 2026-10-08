@@ -1,0 +1,62 @@
+From 3f01a379f197ae0a9aca41c42ed9f5caf2fc8363 Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Thu, 8 Oct 2026 20:59:38 +0900
+Subject: [PATCH] qcap: Clear pUnk in media types returned to 32-bit callers.
+
+put_media_type() converts the media types that get_format,
+get_media_type and get_caps return for wow64 callers, but it left pUnk
+alone. IAMStreamConfig::GetFormat(), GetStreamCaps() and the pin's
+media type enumerator return a block from CoTaskMemAlloc(), so in a
+32-bit process pUnk was whatever the heap had there, while 64-bit
+processes get NULL. Callers free these media types with
+DeleteMediaType(), which releases a non-NULL pUnk and crashes.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/qcap/tests/videocapture.c | 3 +++
+ dlls/qcap/v4l.c                | 1 +
+ 2 files changed, 4 insertions(+)
+
+diff --git a/dlls/qcap/tests/videocapture.c b/dlls/qcap/tests/videocapture.c
+index 13fd45b618c..973b7755527 100644
+--- a/dlls/qcap/tests/videocapture.c
++++ b/dlls/qcap/tests/videocapture.c
+@@ -119,6 +119,7 @@ static void test_stream_config(IPin *pin)
+     ok(hr == S_OK, "Got hr %#lx.\n", hr);
+     ok(IsEqualGUID(&format->majortype, &MEDIATYPE_Video), "Got wrong majortype: %s.\n",
+             debugstr_guid(&format->majortype));
++    ok(!format->pUnk, "Got pUnk %p.\n", format->pUnk);
+ 
+     hr = IAMStreamConfig_SetFormat(stream_config, format);
+     ok(hr == S_OK, "Got hr %#lx.\n", hr);
+@@ -219,6 +220,7 @@ static void test_stream_config(IPin *pin)
+         ok(hr == S_OK, "Got hr %#lx.\n", hr);
+         ok(IsEqualGUID(&format->majortype, &MEDIATYPE_Video), "Got wrong majortype: %s.\n",
+                 debugstr_guid(&MEDIATYPE_Video));
++        ok(!format->pUnk, "Got pUnk %p.\n", format->pUnk);
+         ok(IsEqualGUID(&vscc.guid, &FORMAT_VideoInfo)
+                 || IsEqualGUID(&vscc.guid, &FORMAT_VideoInfo2), "Got wrong guid: %s.\n",
+                 debugstr_guid(&vscc.guid));
+@@ -236,6 +238,7 @@ static void test_stream_config(IPin *pin)
+         hr = IEnumMediaTypes_Next(enum_media_types, 1, &format2, NULL);
+         ok(hr == S_OK, "Got hr %#lx.\n", hr);
+         ok(compare_media_types(format, format2), "Media types didn't match.\n");
++        ok(!format2->pUnk, "Got pUnk %p.\n", format2->pUnk);
+         DeleteMediaType(format2);
+         IEnumMediaTypes_Release(enum_media_types);
+ 
+diff --git a/dlls/qcap/v4l.c b/dlls/qcap/v4l.c
+index 44f643d68ab..f6e1b4ad02c 100644
+--- a/dlls/qcap/v4l.c
++++ b/dlls/qcap/v4l.c
+@@ -699,6 +699,7 @@ static void put_media_type( const AM_MEDIA_TYPE *mt, struct am_media_type32 *mt3
+     mt32->bTemporalCompression = mt->bTemporalCompression;
+     mt32->lSampleSize          = mt->lSampleSize;
+     mt32->formattype           = mt->formattype;
++    mt32->pUnk                 = 0;
+ }
+ 
+ static NTSTATUS wow64_v4l_device_create( void *args )
+-- 
+2.56.0
+
