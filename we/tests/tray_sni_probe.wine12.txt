@@ -1,0 +1,45 @@
+probe: add 1
+probe: set version 1
+host: registered org.kde.StatusNotifierItem-<pid>-<n>
+host: Category dbus.String('ApplicationStatus', variant_level=1)
+host: Id dbus.String('tray_sni_probe.exe', variant_level=1)
+host: Title dbus.String('probe tip 1', variant_level=1)
+host: Status dbus.String('Active', variant_level=1)
+host: WindowId dbus.Int32(0, variant_level=1)
+host: IconName dbus.String('', variant_level=1)
+host: ItemIsMenu dbus.Boolean(False, variant_level=1)
+host: ToolTip title 'probe tip 1' text ''
+host: Menu absent
+host: IconPixmap 16x16 24x24 32x32 48x48
+host:   16x16 ARGB: left ffff0000, right top 8000ff00, right bottom 00000000
+host:   24x24 ARGB: left ffff0000, right top 8000ff00, right bottom 00000000
+host:   32x32 ARGB: left ffff0000, right top 8000ff00, right bottom 00000000
+host:   48x48 ARGB: left ffff0000, right top 8000ff00, right bottom 00000000
+probe: modify tip 1
+probe: balloon 1
+host: notification app 'probe tip 2 中文' summary 'balloon title' body 'balloon text' timeout 10000
+host: signals NewIcon NewTitle NewToolTip
+host: ToolTip title now 'probe tip 2 中文', Title 'probe tip 2 中文'
+host: watcher restarted, item registered again
+host: Activate(100, 200)
+probe: callback WM_LBUTTONDOWN id 7 at (100,200), cursor (100,200)
+probe: callback WM_LBUTTONUP id 7 at (100,200), cursor (100,200)
+probe: callback NIN_SELECT id 7 at (100,200), cursor (100,200)
+host: ContextMenu(300, 400)
+probe: callback WM_RBUTTONDOWN id 7 at (300,400), cursor (300,400)
+probe: callback WM_RBUTTONUP id 7 at (300,400), cursor (300,400)
+probe: callback WM_CONTEXTMENU id 7 at (300,400), cursor (300,400)
+host: Activate(110, 210)
+probe: callback WM_LBUTTONDOWN id 7 at (110,210), cursor (110,210)
+probe: callback WM_LBUTTONUP id 7 at (110,210), cursor (110,210)
+probe: callback NIN_SELECT id 7 at (110,210), cursor (110,210)
+host: Activate(110, 210)
+host: Activate(110, 210)
+probe: callback WM_LBUTTONDBLCLK id 7 at (110,210), cursor (110,210)
+probe: callback WM_LBUTTONUP id 7 at (110,210), cursor (110,210)
+probe: callback NIN_SELECT id 7 at (110,210), cursor (110,210)
+host: SecondaryActivate(120, 220)
+probe: callback WM_MBUTTONDOWN id 7 at (120,220), cursor (120,220)
+probe: callback WM_MBUTTONUP id 7 at (120,220), cursor (120,220)
+probe: delete 1
+host: item gone

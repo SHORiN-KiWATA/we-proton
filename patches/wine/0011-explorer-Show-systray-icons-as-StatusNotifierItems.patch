@@ -1,0 +1,1285 @@
+From c2a1d397570de0ba1383a14b98e02221d97a975e Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Thu, 8 Oct 2026 20:43:24 +0900
+Subject: [PATCH] explorer: Show systray icons as StatusNotifierItems.
+
+Panels on Wayland compositors, and KDE and GNOME, only show tray icons
+through the StatusNotifierItem D-Bus protocol, not the XEmbed system tray.
+Applications that hide their window to the tray then cannot be brought
+back.
+
+Every icon gets its own connection and well-known name. Clicks reported
+by the host are turned into the mouse messages a docked icon gets, and
+balloons are shown as desktop notifications. Without a
+StatusNotifierWatcher on the session bus the icons are docked as before.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ programs/explorer/Makefile.in |   4 +
+ programs/explorer/sni.c       | 760 ++++++++++++++++++++++++++++++++++
+ programs/explorer/systray.c   | 274 +++++++++++-
+ programs/explorer/unixlib.h   |  79 ++++
+ 4 files changed, 1116 insertions(+), 1 deletion(-)
+ create mode 100644 programs/explorer/sni.c
+ create mode 100644 programs/explorer/unixlib.h
+
+diff --git a/programs/explorer/Makefile.in b/programs/explorer/Makefile.in
+index e6668da7e99..78bd5732fb4 100644
+--- a/programs/explorer/Makefile.in
++++ b/programs/explorer/Makefile.in
+@@ -1,13 +1,17 @@
+ MODULE    = explorer.exe
++UNIXLIB   = explorer.so
+ IMPORTS   = rpcrt4 user32 gdi32 advapi32 win32u
+ DELAYIMPORTS = comctl32 shell32 oleaut32 ole32 shlwapi
+ 
+ EXTRADLLFLAGS = -mwindows -municode
+ 
++UNIX_CFLAGS = $(DBUS_CFLAGS)
++
+ SOURCES = \
+ 	appbar.c \
+ 	desktop.c \
+ 	explorer.c \
+ 	explorer.rc \
++	sni.c \
+ 	startmenu.c \
+ 	systray.c
+diff --git a/programs/explorer/sni.c b/programs/explorer/sni.c
+new file mode 100644
+index 00000000000..3f72e66b542
+--- /dev/null
++++ b/programs/explorer/sni.c
+@@ -0,0 +1,760 @@
++/*
++ * Notification icons as StatusNotifierItems
++ *
++ * Copyright 2026 SHORiN-KiWATA
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
++ */
++
++#if 0
++#pragma makedep unix
++#endif
++
++#include "config.h"
++
++#include <dlfcn.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <poll.h>
++#include <pthread.h>
++#include <stdarg.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <unistd.h>
++#ifdef SONAME_LIBDBUS_1
++# include <dbus/dbus.h>
++#endif
++
++#include "ntstatus.h"
++#define WIN32_NO_STATUS
++#include "windef.h"
++#include "winternl.h"
++#include "wine/list.h"
++#include "wine/debug.h"
++
++#include "unixlib.h"
++
++WINE_DEFAULT_DEBUG_CHANNEL(systray);
++
++#ifdef SONAME_LIBDBUS_1
++
++#define DBUS_FUNCS \
++    DO_FUNC(dbus_bus_add_match); \
++    DO_FUNC(dbus_bus_get_private); \
++    DO_FUNC(dbus_bus_name_has_owner); \
++    DO_FUNC(dbus_bus_request_name); \
++    DO_FUNC(dbus_connection_close); \
++    DO_FUNC(dbus_connection_flush); \
++    DO_FUNC(dbus_connection_get_is_connected); \
++    DO_FUNC(dbus_connection_get_unix_fd); \
++    DO_FUNC(dbus_connection_pop_message); \
++    DO_FUNC(dbus_connection_read_write); \
++    DO_FUNC(dbus_connection_send); \
++    DO_FUNC(dbus_connection_set_exit_on_disconnect); \
++    DO_FUNC(dbus_connection_unref); \
++    DO_FUNC(dbus_error_free); \
++    DO_FUNC(dbus_error_init); \
++    DO_FUNC(dbus_message_append_args); \
++    DO_FUNC(dbus_message_get_args); \
++    DO_FUNC(dbus_message_get_interface); \
++    DO_FUNC(dbus_message_get_member); \
++    DO_FUNC(dbus_message_get_no_reply); \
++    DO_FUNC(dbus_message_get_path); \
++    DO_FUNC(dbus_message_get_type); \
++    DO_FUNC(dbus_message_is_method_call); \
++    DO_FUNC(dbus_message_is_signal); \
++    DO_FUNC(dbus_message_iter_append_basic); \
++    DO_FUNC(dbus_message_iter_append_fixed_array); \
++    DO_FUNC(dbus_message_iter_close_container); \
++    DO_FUNC(dbus_message_iter_init_append); \
++    DO_FUNC(dbus_message_iter_open_container); \
++    DO_FUNC(dbus_message_new_error); \
++    DO_FUNC(dbus_message_new_method_call); \
++    DO_FUNC(dbus_message_new_method_return); \
++    DO_FUNC(dbus_message_new_signal); \
++    DO_FUNC(dbus_message_set_no_reply); \
++    DO_FUNC(dbus_message_unref); \
++    DO_FUNC(dbus_threads_init_default)
++
++#define DO_FUNC(f) static typeof(f) * p_##f
++DBUS_FUNCS;
++#undef DO_FUNC
++
++static const char watcher_name[] = "org.kde.StatusNotifierWatcher";
++static const char watcher_path[] = "/StatusNotifierWatcher";
++static const char item_interface[] = "org.kde.StatusNotifierItem";
++static const char item_path[] = "/StatusNotifierItem";
++
++static const char introspection_xml[] =
++    DBUS_INTROSPECT_1_0_XML_DOCTYPE_DECL_NODE
++    "<node>\n"
++    " <interface name=\"org.kde.StatusNotifierItem\">\n"
++    "  <property name=\"Category\" type=\"s\" access=\"read\"/>\n"
++    "  <property name=\"Id\" type=\"s\" access=\"read\"/>\n"
++    "  <property name=\"Title\" type=\"s\" access=\"read\"/>\n"
++    "  <property name=\"Status\" type=\"s\" access=\"read\"/>\n"
++    "  <property name=\"WindowId\" type=\"i\" access=\"read\"/>\n"
++    "  <property name=\"IconName\" type=\"s\" access=\"read\"/>\n"
++    "  <property name=\"IconPixmap\" type=\"a(iiay)\" access=\"read\"/>\n"
++    "  <property name=\"OverlayIconName\" type=\"s\" access=\"read\"/>\n"
++    "  <property name=\"AttentionIconName\" type=\"s\" access=\"read\"/>\n"
++    "  <property name=\"ToolTip\" type=\"(sa(iiay)ss)\" access=\"read\"/>\n"
++    "  <property name=\"ItemIsMenu\" type=\"b\" access=\"read\"/>\n"
++    "  <method name=\"ContextMenu\"><arg name=\"x\" type=\"i\"/><arg name=\"y\" type=\"i\"/></method>\n"
++    "  <method name=\"Activate\"><arg name=\"x\" type=\"i\"/><arg name=\"y\" type=\"i\"/></method>\n"
++    "  <method name=\"SecondaryActivate\"><arg name=\"x\" type=\"i\"/><arg name=\"y\" type=\"i\"/></method>\n"
++    "  <method name=\"Scroll\"><arg name=\"delta\" type=\"i\"/><arg name=\"orientation\" type=\"s\"/></method>\n"
++    "  <signal name=\"NewTitle\"/>\n"
++    "  <signal name=\"NewIcon\"/>\n"
++    "  <signal name=\"NewToolTip\"/>\n"
++    " </interface>\n"
++    " <interface name=\"org.freedesktop.DBus.Properties\">\n"
++    "  <method name=\"Get\"><arg name=\"interface\" type=\"s\" direction=\"in\"/>"
++    "<arg name=\"name\" type=\"s\" direction=\"in\"/><arg name=\"value\" type=\"v\" direction=\"out\"/></method>\n"
++    "  <method name=\"GetAll\"><arg name=\"interface\" type=\"s\" direction=\"in\"/>"
++    "<arg name=\"values\" type=\"a{sv}\" direction=\"out\"/></method>\n"
++    " </interface>\n"
++    " <interface name=\"org.freedesktop.DBus.Introspectable\">\n"
++    "  <method name=\"Introspect\"><arg name=\"xml\" type=\"s\" direction=\"out\"/></method>\n"
++    " </interface>\n"
++    "</node>\n";
++
++static const char *const property_names[] =
++{
++    "Category", "Id", "Title", "Status", "WindowId", "IconName", "IconPixmap",
++    "OverlayIconName", "AttentionIconName", "ToolTip", "ItemIsMenu",
++};
++
++/* Every item has its own connection and well-known name, like other implementations
++ * of the protocol do: the host finds the item by that name, and the item goes away
++ * from the host when the connection is closed. */
++struct sni_item
++{
++    struct list     entry;
++    UINT64          hwnd;
++    DBusConnection *connection;
++    char            name[64];
++    char           *id;
++    char           *title;
++    char           *tooltip;
++    UINT           *pixels;
++    UINT            sizes[SNI_MAX_SIZES];
++};
++
++static inline const void *param_ptr( UINT64 ptr )
++{
++    return (const void *)(ULONG_PTR)ptr;
++}
++
++static struct list items = LIST_INIT( items );
++static pthread_mutex_t items_mutex = PTHREAD_MUTEX_INITIALIZER;
++static DBusConnection *control;  /* follows the watcher and sends notifications */
++static int wake_pipe[2] = { -1, -1 };
++static unsigned int item_serial;
++
++static BOOL load_dbus_functions(void)
++{
++    void *handle;
++
++    if (!(handle = dlopen( SONAME_LIBDBUS_1, RTLD_NOW )))
++        goto failed;
++
++#define DO_FUNC(f) if (!(p_##f = dlsym( handle, #f ))) goto failed
++    DBUS_FUNCS;
++#undef DO_FUNC
++    return TRUE;
++
++failed:
++    WARN( "failed to load DBUS support: %s\n", dlerror() );
++    return FALSE;
++}
++
++static DBusConnection *open_connection(void)
++{
++    DBusConnection *connection;
++    DBusError error;
++
++    p_dbus_error_init( &error );
++    if (!(connection = p_dbus_bus_get_private( DBUS_BUS_SESSION, &error )))
++    {
++        WARN( "failed to connect to the session bus: %s\n", debugstr_a(error.message) );
++        p_dbus_error_free( &error );
++        return NULL;
++    }
++    p_dbus_connection_set_exit_on_disconnect( connection, FALSE );
++    return connection;
++}
++
++static void close_connection( DBusConnection *connection )
++{
++    p_dbus_connection_close( connection );
++    p_dbus_connection_unref( connection );
++}
++
++static void wake_event_thread(void)
++{
++    while (write( wake_pipe[1], "", 1 ) == -1 && errno == EINTR);
++}
++
++static void free_item( struct sni_item *item )
++{
++    if (item->connection) close_connection( item->connection );
++    free( item->id );
++    free( item->title );
++    free( item->tooltip );
++    free( item->pixels );
++    free( item );
++}
++
++static struct sni_item *find_item( UINT64 hwnd )
++{
++    struct sni_item *item;
++
++    LIST_FOR_EACH_ENTRY( item, &items, struct sni_item, entry )
++        if (item->hwnd == hwnd) return item;
++    return NULL;
++}
++
++static BOOL set_item_data( struct sni_item *item, const struct sni_icon_params *params )
++{
++    const char *id = param_ptr( params->id ), *title = param_ptr( params->title );
++    const char *tooltip = param_ptr( params->tooltip );
++    unsigned int i, count = 0;
++    UINT *pixels = NULL;
++
++    for (i = 0; i < SNI_MAX_SIZES && params->sizes[i]; i++) count += params->sizes[i] * params->sizes[i];
++    if (count && !(pixels = malloc( count * sizeof(*pixels) ))) return FALSE;
++    if (count) memcpy( pixels, param_ptr( params->pixels ), count * sizeof(*pixels) );
++
++    free( item->id );
++    free( item->title );
++    free( item->tooltip );
++    free( item->pixels );
++    item->id = strdup( id ? id : "" );
++    item->title = strdup( title ? title : "" );
++    item->tooltip = strdup( tooltip ? tooltip : "" );
++    item->pixels = pixels;
++    memcpy( item->sizes, params->sizes, sizeof(item->sizes) );
++    return item->id && item->title && item->tooltip;
++}
++
++static void register_item( const struct sni_item *item )
++{
++    const char *name = item->name;
++    DBusMessage *msg;
++
++    if (!(msg = p_dbus_message_new_method_call( watcher_name, watcher_path, watcher_name,
++                                                "RegisterStatusNotifierItem" ))) return;
++    p_dbus_message_append_args( msg, DBUS_TYPE_STRING, &name, DBUS_TYPE_INVALID );
++    p_dbus_message_set_no_reply( msg, TRUE );
++    p_dbus_connection_send( item->connection, msg, NULL );
++    p_dbus_connection_flush( item->connection );
++    p_dbus_message_unref( msg );
++}
++
++static void send_item_signal( const struct sni_item *item, const char *name )
++{
++    DBusMessage *msg;
++
++    if (!(msg = p_dbus_message_new_signal( item_path, item_interface, name ))) return;
++    p_dbus_connection_send( item->connection, msg, NULL );
++    p_dbus_message_unref( msg );
++}
++
++static void append_string( DBusMessageIter *iter, const char *str )
++{
++    p_dbus_message_iter_append_basic( iter, DBUS_TYPE_STRING, &str );
++}
++
++static void append_pixmaps( DBusMessageIter *iter, const struct sni_item *item )
++{
++    DBusMessageIter array, image, bytes;
++    const UINT *pixels = item->pixels;
++    unsigned int i;
++
++    p_dbus_message_iter_open_container( iter, DBUS_TYPE_ARRAY, "(iiay)", &array );
++    for (i = 0; i < SNI_MAX_SIZES && item->sizes[i]; i++)
++    {
++        dbus_int32_t size = item->sizes[i];
++        const BYTE *data = (const BYTE *)pixels;
++
++        p_dbus_message_iter_open_container( &array, DBUS_TYPE_STRUCT, NULL, &image );
++        p_dbus_message_iter_append_basic( &image, DBUS_TYPE_INT32, &size );
++        p_dbus_message_iter_append_basic( &image, DBUS_TYPE_INT32, &size );
++        p_dbus_message_iter_open_container( &image, DBUS_TYPE_ARRAY, "y", &bytes );
++        p_dbus_message_iter_append_fixed_array( &bytes, DBUS_TYPE_BYTE, &data, size * size * 4 );
++        p_dbus_message_iter_close_container( &image, &bytes );
++        p_dbus_message_iter_close_container( &array, &image );
++        pixels += size * size;
++    }
++    p_dbus_message_iter_close_container( iter, &array );
++}
++
++static void append_tooltip( DBusMessageIter *iter, const struct sni_item *item )
++{
++    DBusMessageIter tooltip, pixmaps;
++
++    p_dbus_message_iter_open_container( iter, DBUS_TYPE_STRUCT, NULL, &tooltip );
++    append_string( &tooltip, "" );
++    p_dbus_message_iter_open_container( &tooltip, DBUS_TYPE_ARRAY, "(iiay)", &pixmaps );
++    p_dbus_message_iter_close_container( &tooltip, &pixmaps );
++    append_string( &tooltip, item->tooltip );
++    append_string( &tooltip, "" );
++    p_dbus_message_iter_close_container( iter, &tooltip );
++}
++
++static BOOL append_property( DBusMessageIter *iter, const struct sni_item *item, const char *name )
++{
++    DBusMessageIter variant;
++    dbus_int32_t window_id = 0;
++    dbus_bool_t is_menu = FALSE;
++    const char *str = NULL;
++
++    if (!strcmp( name, "Category" )) str = "ApplicationStatus";
++    else if (!strcmp( name, "Id" )) str = item->id;
++    else if (!strcmp( name, "Title" )) str = item->title;
++    else if (!strcmp( name, "Status" )) str = "Active";
++    else if (!strcmp( name, "IconName" ) || !strcmp( name, "OverlayIconName" ) ||
++             !strcmp( name, "AttentionIconName" )) str = "";
++
++    if (str)
++    {
++        p_dbus_message_iter_open_container( iter, DBUS_TYPE_VARIANT, "s", &variant );
++        append_string( &variant, str );
++    }
++    else if (!strcmp( name, "WindowId" ))
++    {
++        p_dbus_message_iter_open_container( iter, DBUS_TYPE_VARIANT, "i", &variant );
++        p_dbus_message_iter_append_basic( &variant, DBUS_TYPE_INT32, &window_id );
++    }
++    else if (!strcmp( name, "ItemIsMenu" ))
++    {
++        p_dbus_message_iter_open_container( iter, DBUS_TYPE_VARIANT, "b", &variant );
++        p_dbus_message_iter_append_basic( &variant, DBUS_TYPE_BOOLEAN, &is_menu );
++    }
++    else if (!strcmp( name, "IconPixmap" ))
++    {
++        p_dbus_message_iter_open_container( iter, DBUS_TYPE_VARIANT, "a(iiay)", &variant );
++        append_pixmaps( &variant, item );
++    }
++    else if (!strcmp( name, "ToolTip" ))
++    {
++        p_dbus_message_iter_open_container( iter, DBUS_TYPE_VARIANT, "(sa(iiay)ss)", &variant );
++        append_tooltip( &variant, item );
++    }
++    else return FALSE;  /* no Menu: hosts then call ContextMenu, and the application shows its own menu */
++
++    p_dbus_message_iter_close_container( iter, &variant );
++    return TRUE;
++}
++
++static DBusMessage *get_property( const struct sni_item *item, DBusMessage *msg )
++{
++    const char *interface, *name;
++    DBusMessageIter iter;
++    DBusMessage *reply;
++
++    if (!p_dbus_message_get_args( msg, NULL, DBUS_TYPE_STRING, &interface, DBUS_TYPE_STRING, &name,
++                                  DBUS_TYPE_INVALID ))
++        return p_dbus_message_new_error( msg, DBUS_ERROR_INVALID_ARGS, NULL );
++    if (!(reply = p_dbus_message_new_method_return( msg ))) return NULL;
++    p_dbus_message_iter_init_append( reply, &iter );
++    if (!strcmp( interface, item_interface ) && append_property( &iter, item, name )) return reply;
++    p_dbus_message_unref( reply );
++    return p_dbus_message_new_error( msg, DBUS_ERROR_UNKNOWN_PROPERTY, name );
++}
++
++static DBusMessage *get_all_properties( const struct sni_item *item, DBusMessage *msg )
++{
++    DBusMessageIter iter, array, entry;
++    const char *interface;
++    DBusMessage *reply;
++    unsigned int i;
++
++    if (!p_dbus_message_get_args( msg, NULL, DBUS_TYPE_STRING, &interface, DBUS_TYPE_INVALID ))
++        return p_dbus_message_new_error( msg, DBUS_ERROR_INVALID_ARGS, NULL );
++    if (!(reply = p_dbus_message_new_method_return( msg ))) return NULL;
++    p_dbus_message_iter_init_append( reply, &iter );
++    p_dbus_message_iter_open_container( &iter, DBUS_TYPE_ARRAY, "{sv}", &array );
++    for (i = 0; !strcmp( interface, item_interface ) && i < ARRAY_SIZE(property_names); i++)
++    {
++        p_dbus_message_iter_open_container( &array, DBUS_TYPE_DICT_ENTRY, NULL, &entry );
++        append_string( &entry, property_names[i] );
++        append_property( &entry, item, property_names[i] );
++        p_dbus_message_iter_close_container( &array, &entry );
++    }
++    p_dbus_message_iter_close_container( &iter, &array );
++    return reply;
++}
++
++/* answer a call from the host; returns TRUE when it is a click to pass on */
++static BOOL handle_item_message( const struct sni_item *item, DBusMessage *msg, struct sni_event_params *event )
++{
++    const char *path = p_dbus_message_get_path( msg );
++    DBusMessage *reply = NULL;
++    dbus_int32_t x = 0, y = 0;
++    BOOL ret = FALSE;
++    int type = -1;
++
++    if (p_dbus_message_get_type( msg ) != DBUS_MESSAGE_TYPE_METHOD_CALL) return FALSE;
++
++    TRACE( "%s %s.%s\n", item->name, debugstr_a(p_dbus_message_get_interface( msg )),
++           debugstr_a(p_dbus_message_get_member( msg )) );
++
++    if (!path || strcmp( path, item_path ))
++        reply = p_dbus_message_new_error( msg, DBUS_ERROR_UNKNOWN_OBJECT, path );
++    else if (p_dbus_message_is_method_call( msg, DBUS_INTERFACE_INTROSPECTABLE, "Introspect" ))
++    {
++        if ((reply = p_dbus_message_new_method_return( msg )))
++        {
++            const char *xml = introspection_xml;
++            p_dbus_message_append_args( reply, DBUS_TYPE_STRING, &xml, DBUS_TYPE_INVALID );
++        }
++    }
++    else if (p_dbus_message_is_method_call( msg, DBUS_INTERFACE_PROPERTIES, "Get" ))
++        reply = get_property( item, msg );
++    else if (p_dbus_message_is_method_call( msg, DBUS_INTERFACE_PROPERTIES, "GetAll" ))
++        reply = get_all_properties( item, msg );
++    else
++    {
++        if (p_dbus_message_is_method_call( msg, item_interface, "Activate" ))
++            type = SNI_EVENT_ACTIVATE;
++        else if (p_dbus_message_is_method_call( msg, item_interface, "SecondaryActivate" ))
++            type = SNI_EVENT_SECONDARY_ACTIVATE;
++        else if (p_dbus_message_is_method_call( msg, item_interface, "ContextMenu" ))
++            type = SNI_EVENT_CONTEXT_MENU;
++
++        if (type != -1)
++        {
++            p_dbus_message_get_args( msg, NULL, DBUS_TYPE_INT32, &x, DBUS_TYPE_INT32, &y, DBUS_TYPE_INVALID );
++            event->hwnd = item->hwnd;
++            event->type = type;
++            event->x = x;
++            event->y = y;
++            ret = TRUE;
++            reply = p_dbus_message_new_method_return( msg );
++        }
++        else if (p_dbus_message_is_method_call( msg, item_interface, "Scroll" ))
++            reply = p_dbus_message_new_method_return( msg );
++        else
++            reply = p_dbus_message_new_error( msg, DBUS_ERROR_UNKNOWN_METHOD, p_dbus_message_get_member( msg ) );
++    }
++
++    if (reply)
++    {
++        if (!p_dbus_message_get_no_reply( msg )) p_dbus_connection_send( item->connection, reply, NULL );
++        p_dbus_message_unref( reply );
++    }
++    return ret;
++}
++
++/* a new watcher, e.g. after the panel was restarted, does not know the items yet */
++static void handle_control_message( DBusMessage *msg )
++{
++    const char *name, *old_owner, *new_owner;
++    struct sni_item *item;
++
++    if (!p_dbus_message_is_signal( msg, DBUS_INTERFACE_DBUS, "NameOwnerChanged" )) return;
++    if (!p_dbus_message_get_args( msg, NULL, DBUS_TYPE_STRING, &name, DBUS_TYPE_STRING, &old_owner,
++                                  DBUS_TYPE_STRING, &new_owner, DBUS_TYPE_INVALID )) return;
++    if (strcmp( name, watcher_name ) || !new_owner[0]) return;
++
++    TRACE( "new watcher %s, registering the items again\n", debugstr_a(new_owner) );
++    LIST_FOR_EACH_ENTRY( item, &items, struct sni_item, entry ) register_item( item );
++}
++
++static NTSTATUS sni_init( void *args )
++{
++    DBusError error;
++    int i;
++
++    if (!load_dbus_functions()) return STATUS_NOT_SUPPORTED;
++    p_dbus_threads_init_default();
++    if (!(control = open_connection())) return STATUS_NOT_SUPPORTED;
++
++    p_dbus_error_init( &error );
++    if (!p_dbus_bus_name_has_owner( control, watcher_name, &error ))
++    {
++        TRACE( "no StatusNotifierWatcher on the session bus\n" );
++        p_dbus_error_free( &error );
++        close_connection( control );
++        control = NULL;
++        return STATUS_NOT_SUPPORTED;
++    }
++
++    if (pipe( wake_pipe ) == -1)
++    {
++        ERR( "failed to create a pipe: %s\n", strerror( errno ) );
++        close_connection( control );
++        control = NULL;
++        return STATUS_UNSUCCESSFUL;
++    }
++    for (i = 0; i < 2; i++)
++    {
++        fcntl( wake_pipe[i], F_SETFD, FD_CLOEXEC );
++        fcntl( wake_pipe[i], F_SETFL, O_NONBLOCK );
++    }
++
++    p_dbus_bus_add_match( control, "type='signal',sender='" DBUS_SERVICE_DBUS "',interface='" DBUS_INTERFACE_DBUS
++                          "',member='NameOwnerChanged',arg0='org.kde.StatusNotifierWatcher'", NULL );
++    return STATUS_SUCCESS;
++}
++
++static NTSTATUS sni_add_item( void *args )
++{
++    const struct sni_icon_params *params = args;
++    struct sni_item *item;
++    DBusError error;
++    int ret;
++
++    if (!(item = calloc( 1, sizeof(*item) ))) return STATUS_NO_MEMORY;
++    item->hwnd = params->hwnd;
++    if (!set_item_data( item, params ) || !(item->connection = open_connection()))
++    {
++        free_item( item );
++        return STATUS_UNSUCCESSFUL;
++    }
++
++    pthread_mutex_lock( &items_mutex );
++    snprintf( item->name, sizeof(item->name), "org.kde.StatusNotifierItem-%d-%u", getpid(), ++item_serial );
++    pthread_mutex_unlock( &items_mutex );
++
++    p_dbus_error_init( &error );
++    ret = p_dbus_bus_request_name( item->connection, item->name, DBUS_NAME_FLAG_DO_NOT_QUEUE, &error );
++    if (ret != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER)
++    {
++        WARN( "failed to own %s: %d %s\n", item->name, ret, debugstr_a(error.message) );
++        p_dbus_error_free( &error );
++        free_item( item );
++        return STATUS_UNSUCCESSFUL;
++    }
++
++    TRACE( "hwnd %s name %s title %s\n", wine_dbgstr_longlong( params->hwnd ), item->name,
++           debugstr_a(item->title) );
++
++    pthread_mutex_lock( &items_mutex );
++    list_add_tail( &items, &item->entry );
++    register_item( item );
++    pthread_mutex_unlock( &items_mutex );
++    wake_event_thread();
++    return STATUS_SUCCESS;
++}
++
++static NTSTATUS sni_update_item( void *args )
++{
++    const struct sni_icon_params *params = args;
++    NTSTATUS status = STATUS_NOT_FOUND;
++    struct sni_item *item;
++
++    pthread_mutex_lock( &items_mutex );
++    if ((item = find_item( params->hwnd )))
++    {
++        if (set_item_data( item, params ))
++        {
++            send_item_signal( item, "NewIcon" );
++            send_item_signal( item, "NewTitle" );
++            send_item_signal( item, "NewToolTip" );
++            p_dbus_connection_flush( item->connection );
++            status = STATUS_SUCCESS;
++        }
++        else status = STATUS_NO_MEMORY;
++    }
++    pthread_mutex_unlock( &items_mutex );
++    return status;
++}
++
++static NTSTATUS sni_remove_item( void *args )
++{
++    const struct sni_remove_params *params = args;
++    struct sni_item *item;
++
++    pthread_mutex_lock( &items_mutex );
++    if ((item = find_item( params->hwnd ))) list_remove( &item->entry );
++    pthread_mutex_unlock( &items_mutex );
++
++    if (!item) return STATUS_NOT_FOUND;
++    TRACE( "hwnd %s name %s\n", wine_dbgstr_longlong( params->hwnd ), item->name );
++    free_item( item );
++    wake_event_thread();
++    return STATUS_SUCCESS;
++}
++
++/* answer the host until it reports a click */
++static NTSTATUS sni_wait_event( void *args )
++{
++    struct sni_event_params *params = args;
++    struct pollfd fds[64];
++    struct sni_item *item;
++    unsigned int count;
++    DBusMessage *msg;
++    char buffer[16];
++
++    for (;;)
++    {
++        pthread_mutex_lock( &items_mutex );
++
++        if (!p_dbus_connection_get_is_connected( control ))
++        {
++            pthread_mutex_unlock( &items_mutex );
++            WARN( "lost the session bus\n" );
++            return STATUS_CONNECTION_DISCONNECTED;
++        }
++        p_dbus_connection_read_write( control, 0 );
++        while ((msg = p_dbus_connection_pop_message( control )))
++        {
++            handle_control_message( msg );
++            p_dbus_message_unref( msg );
++        }
++
++        LIST_FOR_EACH_ENTRY( item, &items, struct sni_item, entry )
++        {
++            p_dbus_connection_read_write( item->connection, 0 );
++            while ((msg = p_dbus_connection_pop_message( item->connection )))
++            {
++                BOOL event = handle_item_message( item, msg, params );
++
++                p_dbus_message_unref( msg );
++                if (!event) continue;
++                p_dbus_connection_flush( item->connection );
++                pthread_mutex_unlock( &items_mutex );
++                return STATUS_SUCCESS;
++            }
++            p_dbus_connection_flush( item->connection );
++        }
++
++        fds[0].fd = wake_pipe[0];
++        fds[0].events = POLLIN;
++        p_dbus_connection_get_unix_fd( control, &fds[1].fd );
++        fds[1].events = POLLIN;
++        count = 2;
++        LIST_FOR_EACH_ENTRY( item, &items, struct sni_item, entry )
++        {
++            if (count == ARRAY_SIZE(fds)) break;
++            if (!p_dbus_connection_get_is_connected( item->connection )) continue;
++            if (!p_dbus_connection_get_unix_fd( item->connection, &fds[count].fd )) continue;
++            fds[count++].events = POLLIN;
++        }
++
++        pthread_mutex_unlock( &items_mutex );
++
++        if (poll( fds, count, -1 ) == -1 && errno != EINTR)
++        {
++            ERR( "poll failed: %s\n", strerror( errno ) );
++            return STATUS_UNSUCCESSFUL;
++        }
++        if (fds[0].revents & POLLIN) while (read( wake_pipe[0], buffer, sizeof(buffer) ) > 0);
++    }
++}
++
++/* balloons are shown as desktop notifications */
++static NTSTATUS sni_notify( void *args )
++{
++    const struct sni_notify_params *params = args;
++    const char *app = param_ptr( params->app ), *title = param_ptr( params->title );
++    const char *text = param_ptr( params->text );
++    dbus_int32_t timeout = params->timeout;
++    DBusMessageIter iter, array;
++    dbus_uint32_t replaces = 0;
++    DBusMessage *msg;
++
++    if (!(msg = p_dbus_message_new_method_call( "org.freedesktop.Notifications", "/org/freedesktop/Notifications",
++                                                "org.freedesktop.Notifications", "Notify" )))
++        return STATUS_NO_MEMORY;
++
++    p_dbus_message_iter_init_append( msg, &iter );
++    append_string( &iter, app ? app : "" );
++    p_dbus_message_iter_append_basic( &iter, DBUS_TYPE_UINT32, &replaces );
++    append_string( &iter, "" );
++    append_string( &iter, title ? title : "" );
++    append_string( &iter, text ? text : "" );
++    p_dbus_message_iter_open_container( &iter, DBUS_TYPE_ARRAY, "s", &array );
++    p_dbus_message_iter_close_container( &iter, &array );
++    p_dbus_message_iter_open_container( &iter, DBUS_TYPE_ARRAY, "{sv}", &array );
++    p_dbus_message_iter_close_container( &iter, &array );
++    p_dbus_message_iter_append_basic( &iter, DBUS_TYPE_INT32, &timeout );
++    p_dbus_message_set_no_reply( msg, TRUE );
++
++    pthread_mutex_lock( &items_mutex );
++    p_dbus_connection_send( control, msg, NULL );
++    p_dbus_connection_flush( control );
++    pthread_mutex_unlock( &items_mutex );
++    p_dbus_message_unref( msg );
++    return STATUS_SUCCESS;
++}
++
++#else  /* SONAME_LIBDBUS_1 */
++
++static NTSTATUS sni_init( void *args )
++{
++    TRACE( "built without DBus support\n" );
++    return STATUS_NOT_SUPPORTED;
++}
++
++static NTSTATUS sni_add_item( void *args )
++{
++    return STATUS_NOT_SUPPORTED;
++}
++
++static NTSTATUS sni_update_item( void *args )
++{
++    return STATUS_NOT_SUPPORTED;
++}
++
++static NTSTATUS sni_remove_item( void *args )
++{
++    return STATUS_NOT_SUPPORTED;
++}
++
++static NTSTATUS sni_wait_event( void *args )
++{
++    return STATUS_NOT_SUPPORTED;
++}
++
++static NTSTATUS sni_notify( void *args )
++{
++    return STATUS_NOT_SUPPORTED;
++}
++
++#endif  /* SONAME_LIBDBUS_1 */
++
++const unixlib_entry_t __wine_unix_call_funcs[] =
++{
++    sni_init,
++    sni_add_item,
++    sni_update_item,
++    sni_remove_item,
++    sni_wait_event,
++    sni_notify,
++};
++
++C_ASSERT( ARRAYSIZE(__wine_unix_call_funcs) == unix_sni_funcs_count );
++
++#ifdef _WIN64
++
++/* the parameters only hold fixed-size types, so 32-bit callers use the same functions */
++const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
++{
++    sni_init,
++    sni_add_item,
++    sni_update_item,
++    sni_remove_item,
++    sni_wait_event,
++    sni_notify,
++};
++
++C_ASSERT( ARRAYSIZE(__wine_unix_call_wow64_funcs) == unix_sni_funcs_count );
++
++#endif  /* _WIN64 */
+diff --git a/programs/explorer/systray.c b/programs/explorer/systray.c
+index 02fe5078706..cf03e9c753b 100644
+--- a/programs/explorer/systray.c
++++ b/programs/explorer/systray.c
+@@ -30,6 +30,7 @@
+ 
+ #include "explorer_private.h"
+ #include "resource.h"
++#include "unixlib.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(systray);
+ 
+@@ -69,6 +70,9 @@ struct notify_data  /* platform-independent format for NOTIFYICONDATA */
+ 
+ #define ICON_DISPLAY_HIDDEN -1
+ #define ICON_DISPLAY_DOCKED -2
++#define ICON_DISPLAY_SNI    -3  /* shown by the StatusNotifierItem host */
++
++#define WM_TRAY_SNI_EVENT (WM_USER + 1)  /* click reported by the StatusNotifierItem host */
+ 
+ /* an individual systray icon, unpacked from the NOTIFYICONDATA and always in unicode */
+ struct icon
+@@ -90,6 +94,8 @@ struct icon
+     UINT           info_timeout;    /* timeout for info balloon */
+     HICON          info_icon;       /* info balloon icon */
+     UINT           version;         /* notify icon api version */
++    DWORD          last_click;      /* time of the last StatusNotifierItem activation */
++    BOOL           double_click;    /* the last activation was the second click of a double click */
+ };
+ 
+ static struct list icon_list = LIST_INIT( icon_list );
+@@ -112,6 +118,7 @@ static unsigned int nb_displayed;
+ static BOOL enable_taskbar; /* show full taskbar, with dedicated systray area */
+ static BOOL show_systray; /* show a standalone systray window */
+ static BOOL enable_dock; /* allow systray icons to be docked in the host systray */
++static BOOL enable_sni; /* show systray icons as StatusNotifierItems */
+ static BOOL no_tray_items; /* hide the systray and all systray icons */
+ 
+ static int icon_cx, icon_cy, tray_width, tray_height;
+@@ -459,6 +466,162 @@ done:
+     if (dib) DeleteObject( dib );
+ }
+ 
++static char *strdup_utf8( const WCHAR *str )
++{
++    int len = WideCharToMultiByte( CP_UTF8, 0, str, -1, NULL, 0, NULL, NULL );
++    char *ret;
++
++    if ((ret = malloc( len ))) WideCharToMultiByte( CP_UTF8, 0, str, -1, ret, len, NULL, NULL );
++    return ret;
++}
++
++/* render the icon as straight ARGB in network byte order, the format StatusNotifierItem uses */
++static BOOL get_icon_pixels( HICON image, int size, BYTE *pixels )
++{
++    unsigned int width_bytes = (size + 31) / 32 * 4;
++    BITMAPINFO *info;
++    HBITMAP dib = 0, mask = 0;
++    void *color_bits, *mask_bits;
++    BOOL has_alpha = FALSE, ret = FALSE;
++    HDC hdc;
++    int i, x, y;
++    DWORD *ptr;
++
++    if (!(info = calloc( 1, FIELD_OFFSET( BITMAPINFO, bmiColors[2] ) ))) return FALSE;
++    info->bmiHeader.biSize = sizeof(info->bmiHeader);
++    info->bmiHeader.biWidth = size;
++    info->bmiHeader.biHeight = -size;
++    info->bmiHeader.biBitCount = 32;
++    info->bmiHeader.biPlanes = 1;
++    info->bmiHeader.biCompression = BI_RGB;
++
++    hdc = CreateCompatibleDC( 0 );
++    if (!(dib = CreateDIBSection( 0, info, DIB_RGB_COLORS, &color_bits, NULL, 0 ))) goto done;
++    SelectObject( hdc, dib );
++    DrawIconEx( hdc, 0, 0, image, size, size, 0, 0, DI_NORMAL );
++
++    /* check if the icon was drawn with an alpha channel */
++    for (i = 0, ptr = color_bits; i < size * size; i++)
++        if ((has_alpha = (ptr[i] & 0xff000000) != 0)) break;
++
++    if (!has_alpha)
++    {
++        info->bmiHeader.biBitCount = 1;
++        info->bmiColors[1].rgbRed = 0xff;
++        info->bmiColors[1].rgbGreen = 0xff;
++        info->bmiColors[1].rgbBlue = 0xff;
++
++        if (!(mask = CreateDIBSection( 0, info, DIB_RGB_COLORS, &mask_bits, NULL, 0 ))) goto done;
++        memset( mask_bits, 0xff, width_bytes * size );
++        SelectObject( hdc, mask );
++        DrawIconEx( hdc, 0, 0, image, size, size, 0, 0, DI_MASK );
++
++        for (y = 0, ptr = color_bits; y < size; y++)
++            for (x = 0; x < size; x++, ptr++)
++                if (!((((BYTE *)mask_bits)[y * width_bytes + x / 8] << (x % 8)) & 0x80))
++                    *ptr |= 0xff000000;
++    }
++
++    /* the drawn colors are premultiplied by alpha */
++    for (i = 0, ptr = color_bits; i < size * size; i++, pixels += 4)
++    {
++        BYTE alpha = ptr[i] >> 24, red = ptr[i] >> 16, green = ptr[i] >> 8, blue = ptr[i];
++
++        if (alpha && alpha != 0xff)
++        {
++            red = min( 0xff, red * 0xff / alpha );
++            green = min( 0xff, green * 0xff / alpha );
++            blue = min( 0xff, blue * 0xff / alpha );
++        }
++        pixels[0] = alpha;
++        pixels[1] = red;
++        pixels[2] = green;
++        pixels[3] = blue;
++    }
++    ret = TRUE;
++
++done:
++    free( info );
++    DeleteDC( hdc );
++    if (dib) DeleteObject( dib );
++    if (mask) DeleteObject( mask );
++    return ret;
++}
++
++/* the file name of the application that owns the icon, which stays the same across runs */
++static char *get_icon_app_name( const struct icon *icon )
++{
++    WCHAR path[MAX_PATH], *name;
++    DWORD pid = 0, size = ARRAY_SIZE(path);
++    HANDLE process;
++
++    path[0] = 0;
++    GetWindowThreadProcessId( icon->owner, &pid );
++    if ((process = OpenProcess( PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid )))
++    {
++        if (!QueryFullProcessImageNameW( process, 0, path, &size )) path[0] = 0;
++        CloseHandle( process );
++    }
++    name = wcsrchr( path, '\\' );
++    return strdup_utf8( name ? name + 1 : path );
++}
++
++/* add or update the StatusNotifierItem of an icon */
++static NTSTATUS sni_set_item( struct icon *icon, unsigned int code )
++{
++    static const UINT sizes[SNI_MAX_SIZES] = { 16, 24, 32, 48 };
++    struct sni_icon_params params = {.hwnd = (ULONG_PTR)icon->window};
++    char *app = get_icon_app_name( icon ), *tooltip = strdup_utf8( icon->tiptext );
++    unsigned int i, total = 0;
++    NTSTATUS status;
++    BYTE *pixels;
++
++    for (i = 0; i < ARRAY_SIZE(sizes); i++) total += sizes[i] * sizes[i] * 4;
++    if ((pixels = malloc( total )))
++    {
++        for (i = 0, total = 0; icon->image && i < ARRAY_SIZE(sizes); i++)
++        {
++            if (!get_icon_pixels( icon->image, sizes[i], pixels + total )) break;
++            params.sizes[i] = sizes[i];
++            total += sizes[i] * sizes[i] * 4;
++        }
++    }
++
++    params.id = (ULONG_PTR)app;
++    params.title = (ULONG_PTR)(tooltip && tooltip[0] ? tooltip : app);
++    params.tooltip = (ULONG_PTR)tooltip;
++    params.pixels = (ULONG_PTR)pixels;
++    status = WINE_UNIX_CALL( code, &params );
++
++    free( app );
++    free( tooltip );
++    free( pixels );
++    return status;
++}
++
++/* StatusNotifierItem hosts have no balloons; show a desktop notification instead */
++static void show_sni_balloon( struct icon *icon )
++{
++    struct sni_notify_params params;
++    char *app, *title, *text;
++
++    if (!icon->info_text[0]) return;
++
++    app = strdup_utf8( icon->tiptext );
++    title = strdup_utf8( icon->info_title );
++    text = strdup_utf8( icon->info_text );
++    params.app = (ULONG_PTR)app;
++    params.title = (ULONG_PTR)title;
++    params.text = (ULONG_PTR)text;
++    params.timeout = icon->info_timeout;
++    WINE_UNIX_CALL( unix_sni_notify, &params );
++    free( app );
++    free( title );
++    free( text );
++
++    icon->info_text[0] = 0;  /* clear text now that balloon has been shown */
++}
++
+ static BOOL notify_owner( struct icon *icon, UINT msg, LPARAM lparam )
+ {
+     WPARAM wp = icon->id;
+@@ -483,6 +646,60 @@ static BOOL notify_owner( struct icon *icon, UINT msg, LPARAM lparam )
+     return TRUE;
+ }
+ 
++/* turn a click reported by the StatusNotifierItem host into the mouse messages a docked icon gets */
++static void handle_sni_event( struct icon *icon, UINT type, POINT pt )
++{
++    HWND hwnd = icon->window;
++    DWORD now = GetTickCount();
++    UINT down, up, buttons;
++    LPARAM lparam;
++
++    TRACE( "id=0x%x, hwnd=%p, type %u at %s\n", icon->id, icon->owner, type, wine_dbgstr_point( &pt ));
++
++    /* the click happened on the icon, so that is where the cursor is */
++    if (pt.x || pt.y) SetCursorPos( pt.x, pt.y );
++    else GetCursorPos( &pt );
++    ScreenToClient( hwnd, &pt );
++    lparam = MAKELPARAM( pt.x, pt.y );
++
++    switch (type)
++    {
++    case SNI_EVENT_ACTIVATE:
++        if (icon->last_click && now - icon->last_click <= GetDoubleClickTime())
++        {
++            /* some hosts report the second click of a double click twice, as a click and as a double click */
++            if (icon->double_click) return;
++            icon->double_click = TRUE;
++            icon->last_click = now;
++            SendMessageW( hwnd, WM_LBUTTONDBLCLK, MK_LBUTTON, lparam );
++            SendMessageW( hwnd, WM_LBUTTONUP, 0, lparam );
++            return;
++        }
++        icon->last_click = now;
++        icon->double_click = FALSE;
++        down = WM_LBUTTONDOWN;
++        up = WM_LBUTTONUP;
++        buttons = MK_LBUTTON;
++        break;
++    case SNI_EVENT_SECONDARY_ACTIVATE:
++        down = WM_MBUTTONDOWN;
++        up = WM_MBUTTONUP;
++        buttons = MK_MBUTTON;
++        break;
++    case SNI_EVENT_CONTEXT_MENU:
++        down = WM_RBUTTONDOWN;
++        up = WM_RBUTTONUP;
++        buttons = MK_RBUTTON;
++        break;
++    default:
++        return;
++    }
++
++    /* the icon is deleted if the owner window is gone, only use hwnd from here */
++    SendMessageW( hwnd, down, buttons, lparam );
++    SendMessageW( hwnd, up, 0, lparam );
++}
++
+ /* window procedure for the individual tray icon window */
+ static LRESULT WINAPI tray_icon_wndproc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam )
+ {
+@@ -582,6 +799,14 @@ static LRESULT WINAPI tray_icon_wndproc( HWND hwnd, UINT msg, WPARAM wparam, LPA
+         case BALLOON_SHOW_TIMER: balloon_timer( icon ); break;
+         }
+         return 0;
++
++    case WM_TRAY_SNI_EVENT:
++        if (icon->display == ICON_DISPLAY_SNI)
++        {
++            POINT pt = {.x = (short)LOWORD(lparam), .y = (short)HIWORD(lparam)};
++            handle_sni_event( icon, wparam, pt );
++        }
++        return 0;
+     }
+ 
+     return DefWindowProcW( hwnd, msg, wparam, lparam );
+@@ -640,6 +865,13 @@ static void show_icon(struct icon *icon)
+ 
+     if (icon->display != ICON_DISPLAY_HIDDEN) return;  /* already displayed */
+ 
++    if (enable_sni && !sni_set_item( icon, unix_sni_add_item ))
++    {
++        icon->display = ICON_DISPLAY_SNI;
++        show_sni_balloon( icon );
++        return;
++    }
++
+     if (enable_dock)
+     {
+         DWORD old_exstyle = GetWindowLongW( icon->window, GWL_EXSTYLE );
+@@ -671,6 +903,15 @@ static void hide_icon(struct icon *icon)
+ 
+     if (icon->display == ICON_DISPLAY_HIDDEN) return;  /* already hidden */
+ 
++    if (icon->display == ICON_DISPLAY_SNI)
++    {
++        struct sni_remove_params params = {.hwnd = (ULONG_PTR)icon->window};
++
++        WINE_UNIX_CALL( unix_sni_remove_item, &params );
++        icon->display = ICON_DISPLAY_HIDDEN;
++        return;
++    }
++
+     if (enable_dock && NtUserMessageCall( icon->window, WINE_SYSTRAY_DOCK_REMOVE, 0, 0,
+                                           NULL, NtUserSystemTrayCall, FALSE ))
+     {
+@@ -688,6 +929,8 @@ static void hide_icon(struct icon *icon)
+ /* Modifies an existing icon record */
+ static BOOL modify_icon( struct icon *icon, NOTIFYICONDATAW *nid )
+ {
++    BOOL sni_update = FALSE;
++
+     TRACE( "id=0x%x, hwnd=%p\n", nid->uID, nid->hWnd );
+ 
+     /* demarshal the request from the NID */
+@@ -709,6 +952,8 @@ static BOOL modify_icon( struct icon *icon, NOTIFYICONDATAW *nid )
+ 
+         if (icon->display >= 0)
+             InvalidateRect( icon->window, NULL, TRUE );
++        else if (icon->display == ICON_DISPLAY_SNI)
++            sni_update = TRUE;
+         else if (icon->layered)
+             paint_layered_icon( icon );
+         else if (enable_dock)
+@@ -724,6 +969,7 @@ static BOOL modify_icon( struct icon *icon, NOTIFYICONDATAW *nid )
+     {
+         lstrcpynW( icon->tiptext, nid->szTip, ARRAY_SIZE( icon->tiptext ));
+         update_tooltip_text( icon );
++        if (icon->display == ICON_DISPLAY_SNI) sni_update = TRUE;
+     }
+     if (nid->uFlags & NIF_INFO && nid->cbSize >= NOTIFYICONDATAA_V2_SIZE)
+     {
+@@ -735,8 +981,10 @@ static BOOL modify_icon( struct icon *icon, NOTIFYICONDATAW *nid )
+         if (icon->info_icon) DestroyIcon( icon->info_icon );
+         icon->info_icon = CopyIcon( nid->hBalloonIcon );
+ 
+-        update_balloon( icon );
++        if (icon->display == ICON_DISPLAY_SNI) show_sni_balloon( icon );
++        else update_balloon( icon );
+     }
++    if (sni_update) sni_set_item( icon, unix_sni_update_item );
+     if (icon->state & NIS_HIDDEN) hide_icon( icon );
+     else show_icon( icon );
+     return TRUE;
+@@ -1200,6 +1448,29 @@ void handle_parent_notify( HWND hwnd, WPARAM wp )
+     sync_taskbar_buttons();
+ }
+ 
++static DWORD WINAPI sni_event_thread( void *arg )
++{
++    struct sni_event_params event;
++
++    SetThreadDescription( GetCurrentThread(), L"wine_explorer_sni" );
++
++    while (!WINE_UNIX_CALL( unix_sni_wait_event, &event ))
++        PostMessageW( (HWND)(ULONG_PTR)event.hwnd, WM_TRAY_SNI_EVENT, event.type, MAKELPARAM( event.x, event.y ));
++    return 0;
++}
++
++/* use StatusNotifierItems when the session has a host for them */
++static BOOL init_sni(void)
++{
++    HANDLE thread;
++
++    if (__wine_init_unix_call() || WINE_UNIX_CALL( unix_sni_init, NULL )) return FALSE;
++    if (!(thread = CreateThread( NULL, 0, sni_event_thread, NULL, 0, NULL ))) return FALSE;
++    CloseHandle( thread );
++    TRACE( "showing systray icons as StatusNotifierItems\n" );
++    return TRUE;
++}
++
+ /* this function creates the listener window */
+ void initialize_systray( BOOL arg_using_root, BOOL arg_enable_shell, BOOL arg_show_systray, BOOL arg_no_tray_items )
+ {
+@@ -1218,6 +1489,7 @@ void initialize_systray( BOOL arg_using_root, BOOL arg_enable_shell, BOOL arg_sh
+         show_systray = arg_show_systray;
+         enable_taskbar = FALSE;
+         enable_dock = TRUE;
++        enable_sni = init_sni();
+     }
+     else
+     {
+diff --git a/programs/explorer/unixlib.h b/programs/explorer/unixlib.h
+new file mode 100644
+index 00000000000..5ded10e7a19
+--- /dev/null
++++ b/programs/explorer/unixlib.h
+@@ -0,0 +1,79 @@
++/*
++ * Explorer Unix interface definitions
++ *
++ * Copyright 2026 SHORiN-KiWATA
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
++ */
++
++#ifndef __WINE_EXPLORER_UNIXLIB_H
++#define __WINE_EXPLORER_UNIXLIB_H
++
++#include "wine/unixlib.h"
++
++/* Pointers are passed as UINT64, so 32-bit and 64-bit callers use the same layout. */
++
++#define SNI_MAX_SIZES 4
++
++struct sni_icon_params
++{
++    UINT64 hwnd;     /* the icon window, identifies the item */
++    UINT64 id;       /* const char *, UTF-8: the application, the same across runs */
++    UINT64 title;    /* const char *, UTF-8 */
++    UINT64 tooltip;  /* const char *, UTF-8 */
++    UINT64 pixels;   /* const UINT *: ARGB in network byte order, the images one after another */
++    UINT   sizes[SNI_MAX_SIZES];  /* width (and height) of each image, 0 ends the list */
++};
++
++struct sni_remove_params
++{
++    UINT64 hwnd;
++};
++
++enum sni_event_type
++{
++    SNI_EVENT_ACTIVATE,
++    SNI_EVENT_SECONDARY_ACTIVATE,
++    SNI_EVENT_CONTEXT_MENU,
++};
++
++struct sni_event_params
++{
++    UINT64 hwnd;     /* out: the icon window */
++    UINT   type;     /* out: enum sni_event_type */
++    INT    x;        /* out: where the host says the item was clicked */
++    INT    y;
++};
++
++struct sni_notify_params
++{
++    UINT64 app;      /* const char *, UTF-8 */
++    UINT64 title;    /* const char *, UTF-8 */
++    UINT64 text;     /* const char *, UTF-8 */
++    INT    timeout;  /* in milliseconds */
++};
++
++enum sni_funcs
++{
++    unix_sni_init,
++    unix_sni_add_item,
++    unix_sni_update_item,
++    unix_sni_remove_item,
++    unix_sni_wait_event,
++    unix_sni_notify,
++    unix_sni_funcs_count,
++};
++
++#endif /* __WINE_EXPLORER_UNIXLIB_H */
+-- 
+2.56.0
+

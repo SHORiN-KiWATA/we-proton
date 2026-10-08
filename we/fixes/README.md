@@ -14,6 +14,7 @@
 | wine 0008 | 类型库封送把没有方向的参数只当输入，进程外 COM 服务器通过这类参数返回的结果全部丢失 | `0008-typelib-param-direction/` |
 | wine 0009 | d3dcompiler 的反射读不出最低精度签名（ISG1/OSG1/PSG1），按反射结果拼输入布局的程序得到空布局，创建管线失败 | `0009-d3dcompiler-min-precision-signatures/` |
 | wine 0010 | WinHttpAddRequestHeaders 遇到开头的空行就返回 ERROR_WINHTTP_INVALID_HEADER，自定义请求头加不上，请求发不出去 | `0010-winhttp-leading-empty-lines/` |
+| wine 0011 | 通知区图标只能嵌进 XEmbed 系统托盘，在只支持 StatusNotifierItem 的面板（waybar 等 Wayland 面板）上看不到，隐藏到托盘的程序叫不回来 | `0011-explorer-status-notifier-items/` |
 | vkd3d-proton 0001 | dxil-spirv 生成非法的结构化控制流，RADV 拒绝后崩溃 | `vkd3d-0001-dxil-spirv-loop-breaks/` |
 
 ## 已知、没修的问题
