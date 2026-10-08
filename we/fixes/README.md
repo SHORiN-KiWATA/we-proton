@@ -22,6 +22,7 @@
 | wine 0016 | 用 wintun 接口创建虚拟网卡的程序（VPN、游戏加速器等）在 Wine 里没有实现，建网卡一步失败 | `0016-wintun-dll/` |
 | wine 0017 | 用 `IP_UNICAST_IF` 指定出口网卡的程序（TUN 模式的加速器/VPN）在 Wine 里 TCP 仍按路由表走，“直连”流量被自己的虚拟网卡吃掉，表现为整个会话断网 | `0017-ip-unicast-if-tcp/` |
 | wine 0018 | 撤回 0001：带上 0001 时有程序报运行环境异常，官方包不报 | `0001-ntoskrnl-driver-functions/` |
+| wine 0019 | 撤回 0001 后《王者万象棋》闪退：驱动调用的 `InbvAcquireDisplayOwnership`/`InbvResetDisplay` 在 Wine 里是会 abort 的 stub，只把这两个空操作加回来 | `0019-ntoskrnl-inbv-display-functions/` |
 | vkd3d-proton 0001 | dxil-spirv 生成非法的结构化控制流，RADV 拒绝后崩溃 | `vkd3d-0001-dxil-spirv-loop-breaks/` |
 
 ## 已知、没修的问题

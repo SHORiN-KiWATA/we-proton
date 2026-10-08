@@ -1,0 +1,62 @@
+From cdc5bac3e2cc4688e65a1439a9d3f38b41328536 Mon Sep 17 00:00:00 2001
+From: SHORiN-KIWATA <shorin@users.noreply.github.com>
+Date: Fri, 9 Oct 2026 02:21:21 +0900
+Subject: [PATCH] ntoskrnl: Implement InbvAcquireDisplayOwnership and
+ InbvResetDisplay.
+
+---
+ dlls/ntoskrnl.exe/ntoskrnl.c        | 15 +++++++++++++++
+ dlls/ntoskrnl.exe/ntoskrnl.exe.spec |  4 ++--
+ 2 files changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.c b/dlls/ntoskrnl.exe/ntoskrnl.c
+index 95d7e74964d..59c29a61a72 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.c
++++ b/dlls/ntoskrnl.exe/ntoskrnl.c
+@@ -3193,6 +3193,21 @@ BOOLEAN WINAPI MmIsAddressValid(PVOID VirtualAddress)
+     return !IsBadReadPtr(VirtualAddress, 1);
+ }
+ 
++/***********************************************************************
++ *           InbvAcquireDisplayOwnership   (NTOSKRNL.EXE.@)
++ *
++ * Boot video no-op, for drivers that resolve this and InbvResetDisplay
++ * via MmGetSystemRoutineAddress.
++ */
++void WINAPI InbvAcquireDisplayOwnership( void ) { }
++
++/***********************************************************************
++ *           InbvResetDisplay   (NTOSKRNL.EXE.@)
++ *
++ * Boot video no-op; see InbvAcquireDisplayOwnership.
++ */
++void WINAPI InbvResetDisplay( void ) { }
++
+ /***********************************************************************
+  *           MmGetPhysicalAddress   (NTOSKRNL.EXE.@)
+  */
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+index b1c8582086b..9c0216e37c6 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
++++ b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+@@ -314,7 +314,7 @@
+ @ stub HalDispatchTable
+ @ stub HalPrivateDispatchTable
+ @ stub HeadlessDispatch
+-@ stub InbvAcquireDisplayOwnership
++@ stdcall InbvAcquireDisplayOwnership()
+ @ stub InbvCheckDisplayOwnership
+ @ stub InbvDisplayString
+ @ stub InbvEnableBootDriver
+@@ -322,7 +322,7 @@
+ @ stub InbvInstallDisplayStringFilter
+ @ stub InbvIsBootDriverInstalled
+ @ stub InbvNotifyDisplayOwnershipLost
+-@ stub InbvResetDisplay
++@ stdcall InbvResetDisplay()
+ @ stub InbvSetScrollRegion
+ @ stub InbvSetTextColor
+ @ stub InbvSolidColorFill
+-- 
+2.56.0
+

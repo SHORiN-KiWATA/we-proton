@@ -5,7 +5,7 @@
 - 官方 `dwproton-11.0-14`：不报
 - 官方包只加这个补丁（只有 `ntoskrnl.exe` 不同，在 SDK 里用同一套源码编译）：报，问题复现
 
-据此撤回：`patches/wine/0018-Revert-ntoskrnl-Implement-a-few-functions-needed-by-.patch` 把这个补丁的改动反过来，补丁文件本身保留。打完全部补丁后 `dlls/ntoskrnl.exe` 和上游一样，`we/overlay-build.sh` 就不再重编它，runner 里用的是官方的 `ntoskrnl.exe`。
+据此撤回：`patches/wine/0018-Revert-ntoskrnl-Implement-a-few-functions-needed-by-.patch` 把这个补丁的改动反过来，补丁文件本身保留。之后 0019 又只把其中两个空操作函数（`InbvAcquireDisplayOwnership`、`InbvResetDisplay`）加了回来，见 `0019-ntoskrnl-inbv-display-functions/`。
 
 没有验证的：
 

@@ -30,6 +30,7 @@
 | `wine/0016-wintun-Implement-the-Wintun-userspace-tunnel-driver-` | 用 wintun 接口建虚拟网卡的程序在 Wine 里建不了网卡；内置 wintun.dll 把接口接到 Linux 的 `/dev/net/tun`，出口、LUID 和会话语义按 Windows 实测对齐 |
 | `wine/0017-ntdll-Make-IP_UNICAST_IF-work-for-TCP-sockets-as-wel` | 程序用 `IP_UNICAST_IF` 指定出口网卡时，TCP 也真的从该网卡出去（Linux 的选项只管 UDP）；TUN 类程序“直连”的连接不再被自己的隧道吃掉 |
 | `wine/0018-Revert-ntoskrnl-Implement-a-few-functions-needed-by-` | 撤回 0001：带上它时有程序报运行环境异常，见 0001 的报告 |
+| `wine/0019-ntoskrnl-Implement-InbvAcquireDisplayOwnership-and-Inbv` | 把 0018 一起撤掉的 `InbvAcquireDisplayOwnership`/`InbvResetDisplay` 加回来（空操作）：驱动调用它们时不再 abort |
 | `vkd3d-proton/0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
 
 每个补丁的现象、根因、Windows 实测、验证和排查过程见 `we/fixes/`。
@@ -52,6 +53,7 @@
 - `tray_sni_probe`（0011）：通知区图标由 StatusNotifierItem 面板显示时，面板读到的属性、图标像素、提示和气泡，以及点击后程序收到的回调。用 `sni_host.py` 跑（`dbus-run-session -- env DISPLAY=:N WINEPREFIX=<新前缀> sni_host.py <runner>/files/bin/wine tray_sni_probe.exe [v0]`），它在私有的会话总线上扮演面板。explorer 启动时才找 watcher，所以前缀的 wineserver 不能已经在运行
 - `capture_mt_probe`（0012）：照列摄像头格式的程序那样枚举视频采集设备，打印 `GetStreamCaps`、`GetFormat`、`IEnumMediaTypes::Next` 返回的 `pUnk`；`--delete` 改用 `DeleteMediaType()` 释放。要接着摄像头。`build.sh` 另编一个 32 位的 `capture_mt_probe32.exe`，要在 `WINEARCH=wow64` 下跑
 - `ime_edit_probe`（0014）：用输入法往输入框里打字时，窗口收到哪些 IME 消息和字符消息、最后得到什么文字；参数 `disable` 先调 `ImmDisableIME(0)`。用 `ime_type.sh` 跑（`WINEPREFIX=<新前缀> ime_type.sh ime_edit_probe ctrl+space TYPE:nihao space -- <runner>/files/bin/wine ime_edit_probe.exe 20 disable`），它起私有的 Xvfb、会话总线和 fcitx5（XIM 前端 + rime），用 xdotool 打拼音，不碰桌面的输入法。需要 fcitx5、fcitx5-rime、xdotool
+- `inbv_probe`（0019）：从 `ntoskrnl.exe` 取 `InbvAcquireDisplayOwnership`、`InbvResetDisplay` 并调用；是 stub 时进程被 abort，实现了就打印 `called ok`
 - `dxil-spirv/run.sh`（vkd3d-proton 0001）：用 dxil-spirv 的 `structurize-test` 跑 `*.st` 控制流图，检查生成的 SPIR-V 能通过校验。源码取 `build/overlay/src-vkd3d-proton`（先跑 `overlay-build.sh`）；`--unpatched` 用未打补丁的子模块，应该失败
 
 Wine 自己的测试：用 `build/overlay/src-wine` 另配一个 `--enable-tests` 的构建目录，编 `dlls/kernel32/tests`、`dlls/ntdll/tests`、`dlls/user32/tests`（0008 是 `dlls/oleaut32/tests`、`dlls/rpcrt4/tests`，0009 是 `dlls/d3dcompiler_47/tests`、`dlls/d3dcompiler_43/tests`、`dlls/d3d10/tests`，0010 是 `dlls/winhttp/tests`（winhttp:winhttp），0011 是 `dlls/shell32/tests`（shell32:systray，有和没有 watcher 各跑一遍），0012 是 `dlls/qcap/tests`（i386 和 x86_64 都编，`WINEARCH=wow64`，要接着摄像头），0014 是 `dlls/imm32/tests`（imm32:imm32）），用新旧 runner 各跑一遍、逐条比对失败项（0005 起都这样验证）。
