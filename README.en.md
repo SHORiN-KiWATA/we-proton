@@ -22,24 +22,6 @@ The patches added by this project were written and debugged with the help of AI.
 
 https://github.com/user-attachments/assets/42438b93-5a36-4557-8a0f-4b65b53d5e07
 
-## What is fixed
-
-Based on DWProton's official release, with only these files replaced:
-
-- Wine: `files/bin/wineserver`, `files/lib/wine/x86_64-unix/ntdll.so`, `files/lib/wine/x86_64-unix/win32u.so`, `files/lib/wine/x86_64-windows/ntoskrnl.exe`
-- vkd3d-proton (D3D12): `d3d12.dll` and `d3d12core.dll` under `files/lib/wine/vkd3d-proton/{x86_64,i386}-windows/`
-
-| Patch             | Before the fix                                                                                                                                                                                                                   | Report                                                    |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| wine 0001         | Some third-party kernel drivers fail to load, or are terminated after a while for calling unimplemented functions                                                                                                                | [0001](we/fixes/0001-ntoskrnl-driver-functions/)          |
-| wine 0002         | wineserver crashes and takes every program in the prefix with it, leaving stray processes that hold the display connection                                                                                                       | [0002](we/fixes/0002-wineserver-thread-input-uaf/)        |
-| wine 0003         | Code that executes the `syscall` instruction directly and keeps data below the stack pointer finds that data corrupted on return, and crashes                                                                                    | [0003](we/fixes/0003-native-syscall-red-zone/)            |
-| wine 0004         | Programs that wake `select()` with a UDP `connect(0.0.0.0)` wait for the full timeout every time, making network requests extremely slow                                                                                         | [0004](we/fixes/0004-udp-connect-unspecified/)            |
-| wine 0005         | Write-copy pages still report `PAGE_WRITECOPY` after being written, so CEF-based programs crash as soon as their renderer process starts                                                                                         | [0005](we/fixes/0005-write-copy-tracking/)                |
-| wine 0006         | When the active window goes away, an overlay window that should never be activated (`WS_EX_NOACTIVATE`) becomes the foreground window, and a fullscreen program keeps minimizing itself after losing focus                       | [0006](we/fixes/0006-noactivate-activation/)              |
-| wine 0007         | A child window drawn with `UpdateLayeredWindow` (`WS_CHILD` + `WS_EX_LAYERED`) becomes a separate window, shown at the top-left of the screen or treated as another window by the window manager, and does not follow its parent | [0007](we/fixes/0007-layered-child-windows/)              |
-| vkd3d-proton 0001 | Some D3D12 shaders are translated into invalid SPIR-V and crash on AMD GPUs (Mesa RADV)                                                                                                                                          | [vkd3d-0001](we/fixes/vkd3d-0001-dxil-spirv-loop-breaks/) |
-
 ## Installation
 
 1. Download `we-proton-<version>.tar.xz` from [Releases](https://github.com/SHORiN-KiWATA/we-proton/releases)

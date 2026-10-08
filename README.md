@@ -22,23 +22,31 @@ WeGame 客户端在 Linux（Wine / Proton）上会出现无法正常下载游戏
 
 https://github.com/user-attachments/assets/42438b93-5a36-4557-8a0f-4b65b53d5e07
 
-## 修了什么
+## 实际试玩过的游戏
 
-在 DWProton 官方发布包的基础上，只替换了这些文件：
+> 仅供参考，版本可能导致结果变化。
 
-- Wine：`files/bin/wineserver`、`files/lib/wine/x86_64-unix/ntdll.so`、`files/lib/wine/x86_64-unix/win32u.so`、`files/lib/wine/x86_64-windows/ntoskrnl.exe`
-- vkd3d-proton（D3D12）：`files/lib/wine/vkd3d-proton/{x86_64,i386}-windows/` 下的 `d3d12.dll`、`d3d12core.dll`
+> 实际使用时建议开启纯净模式，避免wegame的小助手覆盖层导致窗口异常。
 
-| 补丁              | 修之前                                                                                                                                                | 报告                                                      |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| wine 0001         | 一些第三方内核驱动加载失败，或运行一段时间后因为调用未实现的函数被结束                                                                                | [0001](we/fixes/0001-ntoskrnl-driver-functions/)          |
-| wine 0002         | wineserver 崩溃，前缀里的所有程序一起消失，还会留下占着显示连接的残留进程                                                                             | [0002](we/fixes/0002-wineserver-thread-input-uaf/)        |
-| wine 0003         | 直接执行 `syscall` 指令、并在栈指针下方存数据的代码，返回后数据被改坏而崩溃                                                                           | [0003](we/fixes/0003-native-syscall-red-zone/)            |
-| wine 0004         | 靠 UDP `connect(0.0.0.0)` 唤醒 `select()` 的程序，每次都要等满超时，网络请求极慢                                                                      | [0004](we/fixes/0004-udp-connect-unspecified/)            |
-| wine 0005         | 写时复制页被写过之后仍报告 `PAGE_WRITECOPY`，基于 CEF 的程序渲染进程一启动就崩                                                                        | [0005](we/fixes/0005-write-copy-tracking/)                |
-| wine 0006         | 活动窗口消失后，不该被激活的覆盖层窗口（`WS_EX_NOACTIVATE`）被设成前台，全屏程序因失去焦点而反复最小化                                                | [0006](we/fixes/0006-noactivate-activation/)              |
-| wine 0007         | 用 `UpdateLayeredWindow` 绘制的子窗口（`WS_CHILD` + `WS_EX_LAYERED`）变成一个单独的窗口，出现在屏幕左上角或被窗口管理器当成另一个窗口，不跟着主窗口走 | [0007](we/fixes/0007-layered-child-windows/)              |
-| vkd3d-proton 0001 | 部分 D3D12 着色器被翻译成非法的 SPIR-V，AMD 显卡（Mesa RADV）上直接崩溃                                                                               | [vkd3d-0001](we/fixes/vkd3d-0001-dxil-spirv-loop-breaks/) |
+| 游戏名         | 游玩结果 | 备注                                                         |
+| -------------- | -------- | ------------------------------------------------------------ |
+| 雷神加速器     | ✅        | 不是广告。安装`passt`这个包后在设置里开启独立网络命名空间，开启加速器加速时选择`模式三`的节点就可以正常使用加速器。 |
+| 王者万象棋     | ✅        |                                                              |
+| 三国杀         | ✅        |                                                              |
+| 洛克王国世界   | ✅        |                                                              |
+| 伊莫           | ✅        |                                                              |
+| 最终幻想14     | ✅        |                                                              |
+| 地下城与勇士   | ✅        |                                                              |
+| 古剑奇谭网络版 | ✅        |                                                              |
+| 天涯明月刀     | ✅        | 首次启动会在0%卡一会，是在编译着色器不是真的卡了             |
+| 黑色沙漠       | ✅        | 首次启动会黑屏一会，也是在编译着色器，不是卡了               |
+| 命运方舟       | ✅        |                                                              |
+| 激战2          | ✅        |                                                              |
+| 英雄联盟       | ⚠️反作弊  |                                                              |
+| 无畏契约       | ⚠️ 反作弊 |                                                              |
+| 三角洲行动     | ⚠️ 反作弊 |                                                              |
+| 穿越火线       | ⚠️ 反作弊 |                                                              |
+| 使命召唤手游   | ⚠️ 反作弊 |                                                              |
 
 ## 安装
 
