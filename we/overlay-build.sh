@@ -226,8 +226,17 @@ fi
 sed -e "s/@NAME@/$NAME/g" -e "s/@BASE@/$BASE/g" -e "s/@WINE@/$(git -C "$ROOT/wine" rev-parse HEAD)/g" \
     -e "s/@VKD3D@/$(git -C "$ROOT/vkd3d-proton" rev-parse HEAD 2>/dev/null)/g" \
     "$ROOT/we/dist-README.md" > "$DIST/README-WE-Proton.md"
+export XZ_OPT=-T0
 tar -C "$ROOT/build" -cJf "$ROOT/build/$NAME.tar.xz" "$NAME"
-log "done: build/$NAME and build/$NAME.tar.xz"
+(cd "$ROOT/build" && sha512sum "$NAME.tar.xz" > "$NAME.sha512sum")
+# The complete corresponding source of the rebuilt binaries: the patched Wine and
+# vkd3d-proton trees they were built from, for the release next to the runner.
+log "packing $NAME-source.tar.xz"
+src_args=(--transform "s,^src-wine,$NAME-source/wine," src-wine)
+[ -z "$VKD3D_PATCHES" ] || src_args+=(--transform "s,^src-vkd3d-proton,$NAME-source/vkd3d-proton," src-vkd3d-proton)
+tar -C "$OBJ" -cJf "$ROOT/build/$NAME-source.tar.xz" "${src_args[@]}" \
+    -C "$DIST" --transform "s,^we-proton-build-info,$NAME-source/we-proton-build-info," we-proton-build-info
+log "done: build/$NAME, build/$NAME.tar.xz, build/$NAME.sha512sum, build/$NAME-source.tar.xz"
 
 if [ "$INSTALL" = 1 ]; then
     rm -rf "$RUNNERS/WE-Proton"

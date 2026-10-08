@@ -66,12 +66,23 @@ we/overlay-build.sh --install
 2. 从 `wine/` 导出源码，打 `patches/wine/*.patch`，生成 configure 和 vulkan 头文件
 3. 只编补丁动到的东西：`dlls/ntdll/unix` → `ntdll.so`，`server` → `wineserver`，`dlls/ntoskrnl.exe` → `ntoskrnl.exe`，`dlls/win32u` → `win32u.so`。补丁动到别的目录时脚本会报错，要先在 `TARGETS` 里加映射（`*/tests/*` 不发布，跳过）
 4. `patches/vkd3d-proton/` 有补丁时：同步 `vkd3d-proton/` 源码到 `build/overlay/src-vkd3d-proton`，打补丁，用 meson 交叉编译 x86_64 和 i386 的 `d3d12.dll`、`d3d12core.dll`，编译参数照抄 `Makefile.in`（`-march=nocona`、禁用 AVX、`-O3`、静态 libstdc++）。需要 `git submodule update --init --recursive vkd3d-proton`；widl 用 overlay 里 wine 编出来的
-5. 替换进发布包，改名为 `we-proton-11.0-14-<N>`，输出到 `build/` 并打包 `.tar.xz`
+5. 替换进发布包，改名为 `we-proton-11.0-14-<N>`，输出到 `build/`，再生成三个发布文件：`<名字>.tar.xz`（runner）、`<名字>.sha512sum`、`<名字>-source.tar.xz`（构建用的、打好补丁的 Wine 和 vkd3d-proton 源码，满足 LGPL 提供源码的要求）
 6. `--install` 时复制到 `~/.local/share/proton/runners/WE-Proton`
 
 `--release N` 改发布号，`--jobs N` 改并行数。
 
 完整构建走上游的容器流程（`make redist`，几个小时），结果应该一样，没试过。
+
+## 发布
+
+tag 和 Release 名都用 runner 的名字（`we-proton-11.0-14-<N>`），tag 打在构建用的那个提交上（`we-proton-build-info` 里的 `we-proton:` 一行），三个文件原样上传：
+
+```
+gh release create we-proton-11.0-14-<N> --target <提交> --title we-proton-11.0-14-<N> --notes-file <说明> \
+    build/we-proton-11.0-14-<N>.tar.xz build/we-proton-11.0-14-<N>.sha512sum build/we-proton-11.0-14-<N>-source.tar.xz
+```
+
+[wegame-launcher](https://github.com/SHORiN-KiWATA/wegame-launcher) 从最新的 Release 下载 `<tag>.tar.xz`，用 `<tag>.sha512sum` 校验，所以这两个文件名不能改。
 
 ## 用法
 
