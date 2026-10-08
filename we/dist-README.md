@@ -17,6 +17,7 @@ WE-Proton 是 DW-Proton 的一个个人修改版，补了几个 Wine 和 vkd3d-p
 | wine 0004 | 靠 UDP `connect(0.0.0.0)` 唤醒 `select()` 的程序，每次都要等满超时，网络请求极慢 |
 | wine 0005 | 写时复制页被写过之后仍报告 `PAGE_WRITECOPY`，基于 CEF 的程序渲染进程一启动就崩 |
 | wine 0006 | 活动窗口消失后，不该被激活的覆盖层窗口（`WS_EX_NOACTIVATE`）被设成前台，全屏程序因失去焦点而反复最小化 |
+| wine 0007 | 用 `UpdateLayeredWindow` 绘制的子窗口（`WS_CHILD` + `WS_EX_LAYERED`）变成一个单独的窗口，出现在屏幕左上角或被窗口管理器当成另一个窗口，不跟着主窗口走 |
 | vkd3d-proton 0001 | 部分 D3D12 着色器被翻译成非法的 SPIR-V，AMD 显卡（Mesa RADV）上直接崩溃 |
 
 补丁源码在 `we-proton-patches/` 的 `wine/` 和 `vkd3d-proton/` 下。
