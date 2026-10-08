@@ -1,0 +1,832 @@
+From a913459d4d934b42b2af99f010b4e13389eeda5e Mon Sep 17 00:00:00 2001
+From: SHORiN-KiWATA <feng13862095732@gmail.com>
+Date: Thu, 8 Oct 2026 22:18:35 +0900
+Subject: [PATCH] kernelbase: Implement private namespaces.
+
+---
+ dlls/kernel32/kernel32.spec     |  16 +-
+ dlls/kernel32/kernel_main.c     |  63 ++++++-
+ dlls/kernel32/kernel_private.h  |   1 +
+ dlls/kernel32/sync.c            |   2 +
+ dlls/kernelbase/kernelbase.spec |  12 +-
+ dlls/kernelbase/security.c      |  26 ++-
+ dlls/kernelbase/sync.c          | 304 ++++++++++++++++++++++++++++++++
+ dlls/ntdll/ntdll.spec           |   4 +
+ dlls/ntdll/sec.c                |  81 +++++++++
+ include/winbase.h               |   7 +
+ include/winternl.h              |  26 +++
+ 11 files changed, 524 insertions(+), 18 deletions(-)
+
+diff --git a/dlls/kernel32/kernel32.spec b/dlls/kernel32/kernel32.spec
+index 1a3f5576f6d..177d251b0a6 100644
+--- a/dlls/kernel32/kernel32.spec
++++ b/dlls/kernel32/kernel32.spec
+@@ -141,11 +141,11 @@
+ @ stdcall -import AddConsoleAliasA(str str str)
+ @ stdcall -import AddConsoleAliasW(wstr wstr wstr)
+ @ stdcall -import AddDllDirectory(wstr)
+-# @ stub AddIntegrityLabelToBoundaryDescriptor
++@ stdcall AddIntegrityLabelToBoundaryDescriptor(ptr ptr)
+ # @ stub AddLocalAlternateComputerNameA
+ # @ stub AddLocalAlternateComputerNameW
+ @ stdcall -import AddRefActCtx(ptr)
+-# @ stub AddSIDToBoundaryDescriptor
++@ stdcall -import AddSIDToBoundaryDescriptor(ptr ptr)
+ # @ stub AddSecureMemoryCacheCallback
+ @ stdcall AddVectoredContinueHandler(long ptr) NTDLL.RtlAddVectoredContinueHandler
+ @ stdcall AddVectoredExceptionHandler(long ptr) NTDLL.RtlAddVectoredExceptionHandler
+@@ -225,7 +225,7 @@
+ @ stdcall -import ClearCommError(long ptr ptr)
+ @ stdcall CloseConsoleHandle(long)
+ @ stdcall -import CloseHandle(long)
+-# @ stub ClosePrivateNamespace
++@ stdcall -import ClosePrivateNamespace(long long)
+ @ stdcall CloseProfileUserMapping()
+ @ stdcall -import ClosePseudoConsole(ptr)
+ @ stub CloseSystemHandle
+@@ -313,8 +313,8 @@
+ @ stdcall -import CreateNamedPipeW(wstr long long long long long long ptr)
+ # @ stub CreateNlsSecurityDescriptor
+ @ stdcall -import CreatePipe(ptr ptr ptr long)
+-# @ stub CreatePrivateNamespaceA
+-# @ stub CreatePrivateNamespaceW
++@ stdcall CreatePrivateNamespaceA(ptr ptr str)
++@ stdcall -import CreatePrivateNamespaceW(ptr ptr wstr)
+ @ stdcall -import CreateProcessA(str str ptr ptr long long ptr str ptr ptr)
+ @ stdcall -import CreateProcessAsUserA(long str str ptr ptr long long ptr str ptr ptr)
+ @ stdcall -import CreateProcessAsUserW(long wstr wstr ptr ptr long long ptr wstr ptr ptr)
+@@ -365,7 +365,7 @@
+ @ stdcall -import DefineDosDeviceW(long wstr wstr)
+ @ stdcall -import DelayLoadFailureHook(str str)
+ @ stdcall DeleteAtom(long)
+-# @ stub DeleteBoundaryDescriptor
++@ stdcall -import DeleteBoundaryDescriptor(ptr)
+ @ stdcall DeleteCriticalSection(ptr) NTDLL.RtlDeleteCriticalSection
+ @ stdcall -import DeleteFiber(ptr)
+ @ stdcall -import DeleteFileA(str)
+@@ -1157,8 +1157,8 @@
+ @ stdcall OpenJobObjectW(long long wstr)
+ @ stdcall OpenMutexA(long long str)
+ @ stdcall -import OpenMutexW(long long wstr)
+-# @ stub OpenPrivateNamespaceA
+-# @ stub OpenPrivateNamespaceW
++@ stdcall OpenPrivateNamespaceA(ptr str)
++@ stdcall -import OpenPrivateNamespaceW(ptr wstr)
+ @ stdcall -import OpenProcess(long long long)
+ @ stdcall -import OpenProcessToken(long long ptr)
+ @ stdcall OpenProfileUserMapping()
+diff --git a/dlls/kernel32/kernel_main.c b/dlls/kernel32/kernel_main.c
+index edf54e84b72..08426a32ceb 100644
+--- a/dlls/kernel32/kernel_main.c
++++ b/dlls/kernel32/kernel_main.c
+@@ -220,6 +220,65 @@ BOOL WINAPI GetSystemRegistryQuota(PDWORD pdwQuotaAllowed, PDWORD pdwQuotaUsed)
+  */
+ HANDLE WINAPI CreateBoundaryDescriptorA(LPCSTR name, ULONG flags)
+ {
+-    FIXME("%s, %#lx - stub\n", debugstr_a(name), flags);
+-    return NULL;
++    UNICODE_STRING nameW;
++    HANDLE ret;
++
++    if (!name) return CreateBoundaryDescriptorW( NULL, flags );
++    if (!RtlCreateUnicodeStringFromAsciiz( &nameW, name ))
++    {
++        SetLastError( ERROR_NOT_ENOUGH_MEMORY );
++        return NULL;
++    }
++    ret = CreateBoundaryDescriptorW( nameW.Buffer, flags );
++    RtlFreeUnicodeString( &nameW );
++    return ret;
++}
++
++/******************************************************************************
++ *          AddIntegrityLabelToBoundaryDescriptor    (KERNEL32.@)
++ */
++BOOL WINAPI AddIntegrityLabelToBoundaryDescriptor( HANDLE *desc, PSID label )
++{
++    NTSTATUS status = RtlAddIntegrityLabelToBoundaryDescriptor( (OBJECT_BOUNDARY_DESCRIPTOR **)desc, label );
++
++    if (status) SetLastError( RtlNtStatusToDosError( status ));
++    return !status;
++}
++
++/******************************************************************************
++ *          CreatePrivateNamespaceA    (KERNEL32.@)
++ */
++HANDLE WINAPI CreatePrivateNamespaceA( SECURITY_ATTRIBUTES *sa, void *desc, const char *alias )
++{
++    UNICODE_STRING aliasW;
++    HANDLE ret;
++
++    if (!alias) return CreatePrivateNamespaceW( sa, desc, NULL );
++    if (!RtlCreateUnicodeStringFromAsciiz( &aliasW, alias ))
++    {
++        SetLastError( ERROR_NOT_ENOUGH_MEMORY );
++        return NULL;
++    }
++    ret = CreatePrivateNamespaceW( sa, desc, aliasW.Buffer );
++    RtlFreeUnicodeString( &aliasW );
++    return ret;
++}
++
++/******************************************************************************
++ *          OpenPrivateNamespaceA    (KERNEL32.@)
++ */
++HANDLE WINAPI OpenPrivateNamespaceA( void *desc, const char *alias )
++{
++    UNICODE_STRING aliasW;
++    HANDLE ret;
++
++    if (!alias) return OpenPrivateNamespaceW( desc, NULL );
++    if (!RtlCreateUnicodeStringFromAsciiz( &aliasW, alias ))
++    {
++        SetLastError( ERROR_NOT_ENOUGH_MEMORY );
++        return NULL;
++    }
++    ret = OpenPrivateNamespaceW( desc, aliasW.Buffer );
++    RtlFreeUnicodeString( &aliasW );
++    return ret;
+ }
+diff --git a/dlls/kernel32/kernel_private.h b/dlls/kernel32/kernel_private.h
+index 3c35a4b1bba..76773ac2f57 100644
+--- a/dlls/kernel32/kernel_private.h
++++ b/dlls/kernel32/kernel_private.h
+@@ -33,6 +33,7 @@ void *WINAPI KernelBaseGetGlobalData(void);
+ extern struct kernelbase_global_data *kernelbase_global_data;
+ 
+ NTSTATUS WINAPI BaseGetNamedObjectDirectory( HANDLE *dir );
++void WINAPI BasepAdjustObjectAttributesForPrivateNamespace( OBJECT_ATTRIBUTES *attr );
+ 
+ static inline BOOL set_ntstatus( NTSTATUS status )
+ {
+diff --git a/dlls/kernel32/sync.c b/dlls/kernel32/sync.c
+index b354b1c5653..33ab2458b71 100644
+--- a/dlls/kernel32/sync.c
++++ b/dlls/kernel32/sync.c
+@@ -60,6 +60,7 @@ static void get_create_object_attributes( OBJECT_ATTRIBUTES *attr, UNICODE_STRIN
+         RtlInitUnicodeString( nameW, name );
+         attr->ObjectName = nameW;
+         BaseGetNamedObjectDirectory( &attr->RootDirectory );
++        BasepAdjustObjectAttributesForPrivateNamespace( attr );
+     }
+ }
+ 
+@@ -76,6 +77,7 @@ static BOOL get_open_object_attributes( OBJECT_ATTRIBUTES *attr, UNICODE_STRING
+     RtlInitUnicodeString( nameW, name );
+     BaseGetNamedObjectDirectory( &dir );
+     InitializeObjectAttributes( attr, nameW, inherit ? OBJ_INHERIT : 0, dir, NULL );
++    BasepAdjustObjectAttributesForPrivateNamespace( attr );
+     return TRUE;
+ }
+ 
+diff --git a/dlls/kernelbase/kernelbase.spec b/dlls/kernelbase/kernelbase.spec
+index 2f924ee47e7..6f42667a5ae 100644
+--- a/dlls/kernelbase/kernelbase.spec
++++ b/dlls/kernelbase/kernelbase.spec
+@@ -25,7 +25,7 @@
+ @ stdcall AddMandatoryAce(ptr long long long ptr)
+ @ stdcall AddRefActCtx(ptr)
+ # @ stub AddResourceAttributeAce
+-# @ stub AddSIDToBoundaryDescriptor
++@ stdcall AddSIDToBoundaryDescriptor(ptr ptr)
+ # @ stub AddScopedPolicyIDAce
+ @ stdcall AddVectoredContinueHandler(long ptr) ntdll.RtlAddVectoredContinueHandler
+ @ stdcall AddVectoredExceptionHandler(long ptr) ntdll.RtlAddVectoredExceptionHandler
+@@ -91,7 +91,7 @@
+ @ stub BaseReleaseProcessDllPath
+ @ stub BaseReleaseProcessExePath
+ @ stub BaseUpdateAppcompatCache
+-# @ stub BasepAdjustObjectAttributesForPrivateNamespace
++@ stdcall BasepAdjustObjectAttributesForPrivateNamespace(ptr)
+ # @ stub BasepCopyFileCallback
+ # @ stub BasepCopyFileExW
+ # @ stub BasepNotifyTrackingService
+@@ -139,7 +139,7 @@
+ # @ stub CloseGlobalizationUserSettingsKey
+ @ stdcall CloseHandle(long)
+ # @ stub ClosePackageInfo
+-# @ stub ClosePrivateNamespace
++@ stdcall ClosePrivateNamespace(long long)
+ @ stdcall ClosePseudoConsole(ptr)
+ # @ stub CloseState
+ # @ stub CloseStateAtom
+@@ -207,7 +207,7 @@
+ @ stdcall CreateMutexW(ptr long wstr)
+ @ stdcall CreateNamedPipeW(wstr long long long long long long ptr)
+ @ stdcall CreatePipe(ptr ptr ptr long)
+-# @ stub CreatePrivateNamespaceW
++@ stdcall CreatePrivateNamespaceW(ptr ptr wstr)
+ @ stdcall CreatePrivateObjectSecurity(ptr ptr ptr long long ptr)
+ @ stdcall CreatePrivateObjectSecurityEx(ptr ptr ptr ptr long long long ptr)
+ @ stdcall CreatePrivateObjectSecurityWithMultipleInheritance(ptr ptr ptr ptr long long long long ptr)
+@@ -255,7 +255,7 @@
+ @ stdcall DelayLoadFailureHook(str str)
+ # @ stub DelayLoadFailureHookLookup
+ @ stdcall DeleteAce(ptr long)
+-# @ stub DeleteBoundaryDescriptor
++@ stdcall DeleteBoundaryDescriptor(ptr)
+ @ stdcall DeleteCriticalSection(ptr) ntdll.RtlDeleteCriticalSection
+ @ stdcall DeleteFiber(ptr)
+ @ stdcall DeleteFileA(str)
+@@ -1033,7 +1033,7 @@
+ @ stdcall OpenMutexW(long long wstr)
+ # @ stub OpenPackageInfoByFullName
+ # @ stub OpenPackageInfoByFullNameForUser
+-# @ stub OpenPrivateNamespaceW
++@ stdcall OpenPrivateNamespaceW(ptr wstr)
+ @ stdcall OpenProcess(long long long)
+ @ stdcall OpenProcessToken(long long ptr)
+ @ stub OpenRegKey
+diff --git a/dlls/kernelbase/security.c b/dlls/kernelbase/security.c
+index d2d3eff47ba..a21cefcd17c 100644
+--- a/dlls/kernelbase/security.c
++++ b/dlls/kernelbase/security.c
+@@ -913,13 +913,35 @@ BOOL WINAPI ConvertToAutoInheritPrivateObjectSecurity( PSECURITY_DESCRIPTOR pare
+     return set_ntstatus( RtlConvertToAutoInheritSecurityObject( parent, current, descr, type, is_dir, mapping ));
+ }
+ 
++/******************************************************************************
++ * AddSIDToBoundaryDescriptor    (kernelbase.@)
++ */
++BOOL WINAPI AddSIDToBoundaryDescriptor( HANDLE *desc, PSID sid )
++{
++    return set_ntstatus( RtlAddSIDToBoundaryDescriptor( (OBJECT_BOUNDARY_DESCRIPTOR **)desc, sid ));
++}
++
+ /******************************************************************************
+  * CreateBoundaryDescriptorW    (kernelbase.@)
+  */
+ HANDLE WINAPI CreateBoundaryDescriptorW( LPCWSTR name, ULONG flags )
+ {
+-    FIXME("%s %lu - stub\n", debugstr_w(name), flags);
+-    return NULL;
++    UNICODE_STRING nameW;
++    HANDLE ret;
++
++    TRACE( "%s %#lx\n", debugstr_w(name), flags );
++
++    RtlInitUnicodeString( &nameW, name );
++    if (!(ret = RtlCreateBoundaryDescriptor( &nameW, flags ))) SetLastError( ERROR_INVALID_PARAMETER );
++    return ret;
++}
++
++/******************************************************************************
++ * DeleteBoundaryDescriptor    (kernelbase.@)
++ */
++void WINAPI DeleteBoundaryDescriptor( HANDLE desc )
++{
++    RtlDeleteBoundaryDescriptor( desc );
+ }
+ 
+ /******************************************************************************
+diff --git a/dlls/kernelbase/sync.c b/dlls/kernelbase/sync.c
+index ad9c769410b..461651384fb 100644
+--- a/dlls/kernelbase/sync.c
++++ b/dlls/kernelbase/sync.c
+@@ -36,6 +36,7 @@
+ #include "kernelbase.h"
+ #include "wine/asm.h"
+ #include "wine/exception.h"
++#include "wine/list.h"
+ #include "wine/debug.h"
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(sync);
+@@ -87,6 +88,307 @@ NTSTATUS WINAPI BaseGetNamedObjectDirectory( HANDLE *dir )
+     return status;
+ }
+ 
++/***********************************************************************
++ * Private namespaces
++ *
++ * A private namespace is a directory object identified by a boundary descriptor: the
++ * boundary name (case sensitive) and its set of SIDs and integrity labels (in any order).
++ * We keep them as directories under \PrivateNamespaces, named after the boundary. The alias
++ * prefix is local to the process: "<alias>\<name>" in the object functions refers to <name>
++ * in the namespace that was created or opened with that alias.
++ ***********************************************************************/
++
++struct private_namespace
++{
++    struct list entry;
++    HANDLE      handle;
++    WCHAR       alias[1];
++};
++
++static struct list private_namespaces = LIST_INIT( private_namespaces );
++static RTL_SRWLOCK private_namespace_lock = RTL_SRWLOCK_INIT;
++
++static void append_escaped( WCHAR *dst, SIZE_T *pos, const WCHAR *src, SIZE_T len )
++{
++    SIZE_T i;
++
++    for (i = 0; i < len; i++)
++    {
++        if (src[i] == '\\' || src[i] == '%' || src[i] == ';')
++        {
++            if (dst) swprintf( dst + *pos, 4, L"%%%02X", src[i] );
++            *pos += 3;
++        }
++        else
++        {
++            if (dst) dst[*pos] = src[i];
++            (*pos)++;
++        }
++    }
++}
++
++/* build "\PrivateNamespaces\<name>;<sid>;...;IL:<sid>" with the SIDs sorted */
++static NTSTATUS get_private_namespace_name( const OBJECT_BOUNDARY_DESCRIPTOR *desc, UNICODE_STRING *ret )
++{
++    static const WCHAR prefix[] = L"\\PrivateNamespaces\\";
++    const OBJECT_BOUNDARY_ENTRY *entry;
++    WCHAR **sids = NULL, *buffer = NULL;
++    const WCHAR *name = NULL;
++    SIZE_T name_len = 0, count = 0, pos, i, len;
++    ULONG offset;
++    NTSTATUS status = STATUS_INVALID_PARAMETER;
++
++    if (!desc || desc->Version != 1 || desc->TotalSize < sizeof(*desc)) return STATUS_INVALID_PARAMETER;
++    if (!(sids = HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, desc->Items * sizeof(*sids) ))) return STATUS_NO_MEMORY;
++
++    for (i = 0, offset = sizeof(*desc); i < desc->Items; i++, offset = (offset + entry->EntrySize + 7) & ~7)
++    {
++        UNICODE_STRING str;
++
++        if (offset + sizeof(*entry) > desc->TotalSize) goto done;
++        entry = (const OBJECT_BOUNDARY_ENTRY *)((const char *)desc + offset);
++        if (entry->EntrySize < sizeof(*entry) || offset + entry->EntrySize > desc->TotalSize) goto done;
++
++        switch (entry->EntryType)
++        {
++        case OBNS_Name:
++            name = (const WCHAR *)(entry + 1);
++            name_len = (entry->EntrySize - sizeof(*entry)) / sizeof(WCHAR);
++            break;
++        case OBNS_SID:
++        case OBNS_IL:
++            if (!RtlValidSid( (PSID)(entry + 1) )) goto done;
++            if ((status = RtlConvertSidToUnicodeString( &str, (PSID)(entry + 1), TRUE ))) goto done;
++            status = STATUS_INVALID_PARAMETER;
++            if (!(sids[count] = HeapAlloc( GetProcessHeap(), 0, str.Length + 4 * sizeof(WCHAR) )))
++            {
++                RtlFreeUnicodeString( &str );
++                status = STATUS_NO_MEMORY;
++                goto done;
++            }
++            swprintf( sids[count++], str.Length / sizeof(WCHAR) + 4, L"%s%.*s",
++                      entry->EntryType == OBNS_IL ? L"IL:" : L"", (int)(str.Length / sizeof(WCHAR)), str.Buffer );
++            RtlFreeUnicodeString( &str );
++            break;
++        default:
++            goto done;
++        }
++    }
++    if (!name || !name_len) goto done;
++
++    /* the order of the SIDs doesn't matter */
++    for (i = 1; i < count; i++)
++    {
++        WCHAR *sid = sids[i];
++        for (len = i; len > 0 && wcscmp( sids[len - 1], sid ) > 0; len--) sids[len] = sids[len - 1];
++        sids[len] = sid;
++    }
++
++    pos = wcslen( prefix );
++    append_escaped( NULL, &pos, name, name_len );
++    for (i = 0; i < count; i++) pos += 1 + wcslen( sids[i] );
++    if (pos * sizeof(WCHAR) > 0xfffe)
++    {
++        status = STATUS_NAME_TOO_LONG;
++        goto done;
++    }
++    if (!(buffer = HeapAlloc( GetProcessHeap(), 0, (pos + 1) * sizeof(WCHAR) )))
++    {
++        status = STATUS_NO_MEMORY;
++        goto done;
++    }
++    wcscpy( buffer, prefix );
++    pos = wcslen( prefix );
++    append_escaped( buffer, &pos, name, name_len );
++    for (i = 0; i < count; i++)
++    {
++        buffer[pos++] = ';';
++        len = wcslen( sids[i] );
++        memcpy( buffer + pos, sids[i], len * sizeof(WCHAR) );
++        pos += len;
++    }
++    buffer[pos] = 0;
++    ret->Buffer = buffer;
++    ret->Length = pos * sizeof(WCHAR);
++    ret->MaximumLength = ret->Length + sizeof(WCHAR);
++    buffer = NULL;
++    status = STATUS_SUCCESS;
++
++done:
++    for (i = 0; i < count; i++) HeapFree( GetProcessHeap(), 0, sids[i] );
++    HeapFree( GetProcessHeap(), 0, sids );
++    HeapFree( GetProcessHeap(), 0, buffer );
++    return status;
++}
++
++static struct private_namespace *find_private_namespace_alias( const WCHAR *alias )
++{
++    struct private_namespace *ns;
++
++    LIST_FOR_EACH_ENTRY( ns, &private_namespaces, struct private_namespace, entry )
++        if (!wcsicmp( ns->alias, alias )) return ns;
++    return NULL;
++}
++
++static HANDLE create_or_open_private_namespace( SECURITY_ATTRIBUTES *sa, void *desc, const WCHAR *alias,
++                                                BOOL create )
++{
++    struct private_namespace *ns;
++    OBJECT_ATTRIBUTES attr;
++    UNICODE_STRING name;
++    HANDLE root = 0, ret = 0;
++    NTSTATUS status;
++
++    if (!alias) alias = L"";
++
++    if ((status = get_private_namespace_name( desc, &name )))
++    {
++        SetLastError( RtlNtStatusToDosError( status ));
++        return 0;
++    }
++    if (!(ns = HeapAlloc( GetProcessHeap(), 0, offsetof( struct private_namespace, alias[wcslen( alias ) + 1] ))))
++    {
++        HeapFree( GetProcessHeap(), 0, name.Buffer );
++        SetLastError( ERROR_NOT_ENOUGH_MEMORY );
++        return 0;
++    }
++    wcscpy( ns->alias, alias );
++
++    RtlAcquireSRWLockExclusive( &private_namespace_lock );
++
++    if (create)
++    {
++        UNICODE_STRING root_name;
++
++        /* the parent directory goes away by itself when the last namespace does */
++        root_name.Buffer = name.Buffer;
++        root_name.Length = root_name.MaximumLength = wcslen( L"\\PrivateNamespaces" ) * sizeof(WCHAR);
++        InitializeObjectAttributes( &attr, &root_name, OBJ_OPENIF, 0, NULL );
++        status = NtCreateDirectoryObject( &root, DIRECTORY_CREATE_OBJECT | DIRECTORY_TRAVERSE, &attr );
++        if (NT_SUCCESS( status ))
++        {
++            InitializeObjectAttributes( &attr, &name, (sa && sa->bInheritHandle) ? OBJ_INHERIT : 0, 0,
++                                        sa ? sa->lpSecurityDescriptor : NULL );
++            status = NtCreateDirectoryObject( &ret, DIRECTORY_ALL_ACCESS, &attr );
++            NtClose( root );
++        }
++    }
++    else
++    {
++        InitializeObjectAttributes( &attr, &name, 0, 0, NULL );
++        status = NtOpenDirectoryObject( &ret, DIRECTORY_ALL_ACCESS, &attr );
++        if (status == STATUS_OBJECT_NAME_NOT_FOUND) status = STATUS_OBJECT_PATH_NOT_FOUND;
++    }
++
++    /* the namespace has to exist before the alias is checked */
++    if (!status && find_private_namespace_alias( alias ))
++    {
++        NtClose( ret );
++        ret = 0;
++        status = STATUS_DUPLICATE_NAME;
++    }
++    if (!status)
++    {
++        ns->handle = ret;
++        list_add_tail( &private_namespaces, &ns->entry );
++        ns = NULL;
++    }
++
++    RtlReleaseSRWLockExclusive( &private_namespace_lock );
++
++    TRACE( "%s %s alias %s -> %p, status %#lx\n", create ? "create" : "open", debugstr_wn( name.Buffer, name.Length / sizeof(WCHAR) ),
++           debugstr_w(alias), ret, status );
++    HeapFree( GetProcessHeap(), 0, ns );
++    HeapFree( GetProcessHeap(), 0, name.Buffer );
++    if (status)
++    {
++        SetLastError( RtlNtStatusToDosError( status ));
++        return 0;
++    }
++    return ret;
++}
++
++
++/***********************************************************************
++ *           CreatePrivateNamespaceW   (kernelbase.@)
++ */
++HANDLE WINAPI CreatePrivateNamespaceW( SECURITY_ATTRIBUTES *sa, void *desc, const WCHAR *alias )
++{
++    TRACE( "%p, %p, %s\n", sa, desc, debugstr_w(alias) );
++    return create_or_open_private_namespace( sa, desc, alias, TRUE );
++}
++
++
++/***********************************************************************
++ *           OpenPrivateNamespaceW   (kernelbase.@)
++ */
++HANDLE WINAPI OpenPrivateNamespaceW( void *desc, const WCHAR *alias )
++{
++    TRACE( "%p, %s\n", desc, debugstr_w(alias) );
++    return create_or_open_private_namespace( NULL, desc, alias, FALSE );
++}
++
++
++/***********************************************************************
++ *           ClosePrivateNamespace   (kernelbase.@)
++ */
++BOOLEAN WINAPI ClosePrivateNamespace( HANDLE handle, ULONG flags )
++{
++    struct private_namespace *ns, *next;
++
++    TRACE( "%p, %#lx\n", handle, flags );
++
++    if (flags & PRIVATE_NAMESPACE_FLAG_DESTROY) FIXME( "ignoring PRIVATE_NAMESPACE_FLAG_DESTROY\n" );
++
++    RtlAcquireSRWLockExclusive( &private_namespace_lock );
++    LIST_FOR_EACH_ENTRY_SAFE( ns, next, &private_namespaces, struct private_namespace, entry )
++    {
++        if (ns->handle != handle) continue;
++        list_remove( &ns->entry );
++        HeapFree( GetProcessHeap(), 0, ns );
++    }
++    RtlReleaseSRWLockExclusive( &private_namespace_lock );
++
++    return set_ntstatus( NtClose( handle ));
++}
++
++
++/***********************************************************************
++ *           BasepAdjustObjectAttributesForPrivateNamespace   (kernelbase.@)
++ *
++ * Turn "<alias>\<name>" into <name> relative to the namespace with that alias.
++ */
++void WINAPI BasepAdjustObjectAttributesForPrivateNamespace( OBJECT_ATTRIBUTES *attr )
++{
++    UNICODE_STRING *name = attr->ObjectName;
++    struct private_namespace *ns, *found = NULL;
++    SIZE_T len, found_len = 0;
++
++    if (!name || !name->Length) return;
++
++    RtlAcquireSRWLockShared( &private_namespace_lock );
++    LIST_FOR_EACH_ENTRY( ns, &private_namespaces, struct private_namespace, entry )
++    {
++        len = wcslen( ns->alias );
++        if (len >= name->Length / sizeof(WCHAR) || name->Buffer[len] != '\\') continue;
++        if (wcsnicmp( name->Buffer, ns->alias, len )) continue;
++        if (!found || len > found_len)
++        {
++            found = ns;
++            found_len = len;
++        }
++    }
++    if (found)
++    {
++        attr->RootDirectory = found->handle;
++        name->Buffer += found_len + 1;
++        name->Length -= (found_len + 1) * sizeof(WCHAR);
++        name->MaximumLength -= (found_len + 1) * sizeof(WCHAR);
++    }
++    RtlReleaseSRWLockShared( &private_namespace_lock );
++}
++
++
+ static void get_create_object_attributes( OBJECT_ATTRIBUTES *attr, UNICODE_STRING *nameW,
+                                           SECURITY_ATTRIBUTES *sa, const WCHAR *name )
+ {
+@@ -101,6 +403,7 @@ static void get_create_object_attributes( OBJECT_ATTRIBUTES *attr, UNICODE_STRIN
+         RtlInitUnicodeString( nameW, name );
+         attr->ObjectName = nameW;
+         BaseGetNamedObjectDirectory( &attr->RootDirectory );
++        BasepAdjustObjectAttributesForPrivateNamespace( attr );
+     }
+ }
+ 
+@@ -117,6 +420,7 @@ static BOOL get_open_object_attributes( OBJECT_ATTRIBUTES *attr, UNICODE_STRING
+     RtlInitUnicodeString( nameW, name );
+     BaseGetNamedObjectDirectory( &dir );
+     InitializeObjectAttributes( attr, nameW, inherit ? OBJ_INHERIT : 0, dir, NULL );
++    BasepAdjustObjectAttributesForPrivateNamespace( attr );
+     return TRUE;
+ }
+ 
+diff --git a/dlls/ntdll/ntdll.spec b/dlls/ntdll/ntdll.spec
+index e08174d90b2..04b3f948ba9 100644
+--- a/dlls/ntdll/ntdll.spec
++++ b/dlls/ntdll/ntdll.spec
+@@ -497,10 +497,12 @@
+ # @ stub RtlAddCompoundAce
+ @ cdecl -arch=!i386 RtlAddFunctionTable(ptr long long)
+ @ stdcall -arch=!i386 RtlAddGrowableFunctionTable(ptr ptr long long long long)
++@ stdcall RtlAddIntegrityLabelToBoundaryDescriptor(ptr ptr)
+ @ stdcall RtlAddMandatoryAce(ptr long long long long ptr)
+ @ stdcall RtlAddProcessTrustLabelAce(ptr long long ptr long long)
+ # @ stub RtlAddRange
+ @ stdcall RtlAddRefActivationContext(ptr)
++@ stdcall RtlAddSIDToBoundaryDescriptor(ptr ptr)
+ # @ stub RtlAddRefMemoryStream
+ @ stdcall RtlAddVectoredContinueHandler(long ptr)
+ @ stdcall RtlAddVectoredExceptionHandler(long ptr)
+@@ -580,6 +582,7 @@
+ @ stdcall RtlCreateActivationContext(ptr ptr)
+ @ stub RtlCreateAndSetSD
+ @ stdcall RtlCreateAtomTable(long ptr)
++@ stdcall RtlCreateBoundaryDescriptor(ptr long)
+ # @ stub RtlCreateBootStatusDataFile
+ @ stdcall RtlCreateEnvironment(long ptr)
+ @ stdcall RtlCreateHeap(long ptr long long ptr ptr)
+@@ -615,6 +618,7 @@
+ @ stdcall RtlDeleteAce(ptr long)
+ @ stdcall RtlDeleteAtomFromAtomTable(ptr long)
+ @ stdcall RtlDeleteBarrier(ptr)
++@ stdcall RtlDeleteBoundaryDescriptor(ptr)
+ @ stdcall RtlDeleteCriticalSection(ptr)
+ @ stdcall -arch=!i386 RtlDeleteGrowableFunctionTable(ptr)
+ @ stdcall RtlDeleteElementGenericTable(ptr ptr)
+diff --git a/dlls/ntdll/sec.c b/dlls/ntdll/sec.c
+index f25436387c9..47a8b5df04f 100644
+--- a/dlls/ntdll/sec.c
++++ b/dlls/ntdll/sec.c
+@@ -1946,3 +1946,84 @@ NTSTATUS WINAPI RtlDeriveCapabilitySidsFromName( UNICODE_STRING *cap_name, PSID
+ 
+     return STATUS_SUCCESS;
+ }
++
++/* Boundary descriptors: a header followed by a name entry, then SID and integrity label
++ * entries. Each entry starts at an 8-byte aligned offset; the name entry's size is not
++ * rounded up, a SID entry's size is. */
++
++/******************************************************************************
++ * RtlCreateBoundaryDescriptor (NTDLL.@)
++ */
++OBJECT_BOUNDARY_DESCRIPTOR * WINAPI RtlCreateBoundaryDescriptor( UNICODE_STRING *name, ULONG flags )
++{
++    OBJECT_BOUNDARY_DESCRIPTOR *desc;
++    OBJECT_BOUNDARY_ENTRY *entry;
++    ULONG size;
++
++    TRACE( "%s, %#lx\n", debugstr_us(name), flags );
++
++    if (!name || !name->Length) return NULL;
++
++    size = sizeof(*desc) + ((sizeof(*entry) + name->Length + 7) & ~7);
++    if (!(desc = RtlAllocateHeap( GetProcessHeap(), HEAP_ZERO_MEMORY, size ))) return NULL;
++    desc->Version = 1;
++    desc->Items = 1;
++    desc->TotalSize = size;
++    desc->Flags = flags;
++    entry = (OBJECT_BOUNDARY_ENTRY *)(desc + 1);
++    entry->EntryType = OBNS_Name;
++    entry->EntrySize = sizeof(*entry) + name->Length;
++    memcpy( entry + 1, name->Buffer, name->Length );
++    return desc;
++}
++
++static NTSTATUS add_boundary_entry( OBJECT_BOUNDARY_DESCRIPTOR **desc, BOUNDARY_ENTRY_TYPE type, PSID sid )
++{
++    OBJECT_BOUNDARY_DESCRIPTOR *new_desc;
++    OBJECT_BOUNDARY_ENTRY *entry;
++    ULONG sid_len, entry_size;
++
++    if (!desc || !*desc || !sid || !RtlValidSid( sid )) return STATUS_INVALID_PARAMETER;
++
++    sid_len = RtlLengthSid( sid );
++    entry_size = sizeof(*entry) + ((sid_len + 7) & ~7);
++    if (!(new_desc = RtlAllocateHeap( GetProcessHeap(), HEAP_ZERO_MEMORY, (*desc)->TotalSize + entry_size )))
++        return STATUS_NO_MEMORY;
++    memcpy( new_desc, *desc, (*desc)->TotalSize );
++    entry = (OBJECT_BOUNDARY_ENTRY *)((char *)new_desc + new_desc->TotalSize);
++    entry->EntryType = type;
++    entry->EntrySize = entry_size;
++    memcpy( entry + 1, sid, sid_len );
++    new_desc->Items++;
++    new_desc->TotalSize += entry_size;
++    RtlFreeHeap( GetProcessHeap(), 0, *desc );
++    *desc = new_desc;
++    return STATUS_SUCCESS;
++}
++
++/******************************************************************************
++ * RtlAddSIDToBoundaryDescriptor (NTDLL.@)
++ */
++NTSTATUS WINAPI RtlAddSIDToBoundaryDescriptor( OBJECT_BOUNDARY_DESCRIPTOR **desc, PSID sid )
++{
++    TRACE( "%p, %p\n", desc, sid );
++    return add_boundary_entry( desc, OBNS_SID, sid );
++}
++
++/******************************************************************************
++ * RtlAddIntegrityLabelToBoundaryDescriptor (NTDLL.@)
++ */
++NTSTATUS WINAPI RtlAddIntegrityLabelToBoundaryDescriptor( OBJECT_BOUNDARY_DESCRIPTOR **desc, PSID sid )
++{
++    TRACE( "%p, %p\n", desc, sid );
++    return add_boundary_entry( desc, OBNS_IL, sid );
++}
++
++/******************************************************************************
++ * RtlDeleteBoundaryDescriptor (NTDLL.@)
++ */
++void WINAPI RtlDeleteBoundaryDescriptor( OBJECT_BOUNDARY_DESCRIPTOR *desc )
++{
++    TRACE( "%p\n", desc );
++    RtlFreeHeap( GetProcessHeap(), 0, desc );
++}
+diff --git a/include/winbase.h b/include/winbase.h
+index 483afbc625d..0219ed842dc 100644
+--- a/include/winbase.h
++++ b/include/winbase.h
+@@ -1483,6 +1483,7 @@ WINADVAPI  BOOL        WINAPI AddAccessAllowedAceEx(PACL,DWORD,DWORD,DWORD,PSID)
+ WINADVAPI  BOOL        WINAPI AddAccessDeniedAce(PACL,DWORD,DWORD,PSID);
+ WINADVAPI  BOOL        WINAPI AddAccessDeniedAceEx(PACL,DWORD,DWORD,DWORD,PSID);
+ WINADVAPI  BOOL        WINAPI AddAce(PACL,DWORD,DWORD,LPVOID,DWORD);
++WINBASEAPI BOOL        WINAPI AddIntegrityLabelToBoundaryDescriptor(HANDLE*,PSID);
+ WINBASEAPI ATOM        WINAPI AddAtomA(LPCSTR);
+ WINBASEAPI ATOM        WINAPI AddAtomW(LPCWSTR);
+ #define                       AddAtom WINELIB_NAME_AW(AddAtom)
+@@ -1616,6 +1617,9 @@ WINBASEAPI HANDLE      WINAPI CreateNamedPipeA(LPCSTR,DWORD,DWORD,DWORD,DWORD,DW
+ WINBASEAPI HANDLE      WINAPI CreateNamedPipeW(LPCWSTR,DWORD,DWORD,DWORD,DWORD,DWORD,DWORD,LPSECURITY_ATTRIBUTES);
+ #define                       CreateNamedPipe WINELIB_NAME_AW(CreateNamedPipe)
+ WINBASEAPI BOOL        WINAPI CreatePipe(PHANDLE,PHANDLE,LPSECURITY_ATTRIBUTES,DWORD);
++WINBASEAPI HANDLE      WINAPI CreatePrivateNamespaceA(LPSECURITY_ATTRIBUTES,LPVOID,LPCSTR);
++                           /* CreatePrivateNamespaceW is in namespaceapi.h */
++#define                       CreatePrivateNamespace WINELIB_NAME_AW(CreatePrivateNamespace)
+ WINADVAPI  BOOL        WINAPI CreatePrivateObjectSecurity(PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR*,BOOL,HANDLE,PGENERIC_MAPPING);
+ WINADVAPI  BOOL        WINAPI CreatePrivateObjectSecurityEx(PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR*,GUID*,BOOL,ULONG,HANDLE,PGENERIC_MAPPING);
+ WINADVAPI  BOOL        WINAPI CreatePrivateObjectSecurityWithMultipleInheritance(PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR*,GUID**,ULONG,BOOL,ULONG,HANDLE,PGENERIC_MAPPING);
+@@ -2261,6 +2265,9 @@ WINBASEAPI HANDLE      WINAPI OpenJobObjectW(DWORD,BOOL,LPCWSTR);
+ WINBASEAPI HANDLE      WINAPI OpenMutexA(DWORD,BOOL,LPCSTR);
+ WINBASEAPI HANDLE      WINAPI OpenMutexW(DWORD,BOOL,LPCWSTR);
+ #define                       OpenMutex WINELIB_NAME_AW(OpenMutex)
++WINBASEAPI HANDLE      WINAPI OpenPrivateNamespaceA(LPVOID,LPCSTR);
++                           /* OpenPrivateNamespaceW is in namespaceapi.h */
++#define                       OpenPrivateNamespace WINELIB_NAME_AW(OpenPrivateNamespace)
+ WINBASEAPI HANDLE      WINAPI OpenProcess(DWORD,BOOL,DWORD);
+ WINADVAPI  BOOL        WINAPI OpenProcessToken(HANDLE,DWORD,PHANDLE);
+ WINBASEAPI HANDLE      WINAPI OpenSemaphoreA(DWORD,BOOL,LPCSTR);
+diff --git a/include/winternl.h b/include/winternl.h
+index 9a794b0157d..62f43588691 100644
+--- a/include/winternl.h
++++ b/include/winternl.h
+@@ -3820,6 +3820,28 @@ typedef struct _DIRECTORY_BASIC_INFORMATION {
+   UNICODE_STRING ObjectTypeName;
+ } DIRECTORY_BASIC_INFORMATION, *PDIRECTORY_BASIC_INFORMATION;
+ 
++typedef enum _BOUNDARY_ENTRY_TYPE
++{
++    OBNS_Invalid,
++    OBNS_Name,
++    OBNS_SID,
++    OBNS_IL
++} BOUNDARY_ENTRY_TYPE;
++
++typedef struct _OBJECT_BOUNDARY_ENTRY
++{
++    BOUNDARY_ENTRY_TYPE EntryType;
++    ULONG EntrySize;
++} OBJECT_BOUNDARY_ENTRY, *POBJECT_BOUNDARY_ENTRY;
++
++typedef struct _OBJECT_BOUNDARY_DESCRIPTOR
++{
++    ULONG Version;
++    ULONG Items;
++    ULONG TotalSize;
++    ULONG Flags;
++} OBJECT_BOUNDARY_DESCRIPTOR, *POBJECT_BOUNDARY_DESCRIPTOR;
++
+ typedef struct _INITIAL_TEB {
+     void *OldStackBase;
+     void *OldStackLimit;
+@@ -4937,9 +4959,11 @@ NTSYSAPI NTSTATUS  WINAPI RtlAddAtomToAtomTable(RTL_ATOM_TABLE,const WCHAR*,RTL_
+ NTSYSAPI NTSTATUS  WINAPI RtlAddAuditAccessAce(PACL,DWORD,DWORD,PSID,BOOL,BOOL);
+ NTSYSAPI NTSTATUS  WINAPI RtlAddAuditAccessAceEx(PACL,DWORD,DWORD,DWORD,PSID,BOOL,BOOL);
+ NTSYSAPI NTSTATUS  WINAPI RtlAddAuditAccessObjectAce(PACL,DWORD,DWORD,DWORD,GUID*,GUID*,PSID,BOOL,BOOL);
++NTSYSAPI NTSTATUS  WINAPI RtlAddIntegrityLabelToBoundaryDescriptor(OBJECT_BOUNDARY_DESCRIPTOR**,PSID);
+ NTSYSAPI NTSTATUS  WINAPI RtlAddMandatoryAce(PACL,DWORD,DWORD,DWORD,DWORD,PSID);
+ NTSYSAPI NTSTATUS  WINAPI RtlAddProcessTrustLabelAce(PACL,DWORD,DWORD,PSID,DWORD,DWORD);
+ NTSYSAPI void      WINAPI RtlAddRefActivationContext(struct _ACTIVATION_CONTEXT *);
++NTSYSAPI NTSTATUS  WINAPI RtlAddSIDToBoundaryDescriptor(OBJECT_BOUNDARY_DESCRIPTOR**,PSID);
+ NTSYSAPI PVOID     WINAPI RtlAddVectoredContinueHandler(ULONG,PVECTORED_EXCEPTION_HANDLER);
+ NTSYSAPI PVOID     WINAPI RtlAddVectoredExceptionHandler(ULONG,PVECTORED_EXCEPTION_HANDLER);
+ NTSYSAPI PVOID     WINAPI RtlAddressInSectionTable(const IMAGE_NT_HEADERS*,HMODULE,DWORD);
+@@ -4981,6 +5005,7 @@ NTSYSAPI void      WINAPI RtlCopyUnicodeString(UNICODE_STRING*,const UNICODE_STR
+ NTSYSAPI NTSTATUS  WINAPI RtlCreateAcl(PACL,DWORD,DWORD);
+ NTSYSAPI NTSTATUS  WINAPI RtlCreateActivationContext(struct _ACTIVATION_CONTEXT **,const void*);
+ NTSYSAPI NTSTATUS  WINAPI RtlCreateAtomTable(ULONG,RTL_ATOM_TABLE*);
++NTSYSAPI OBJECT_BOUNDARY_DESCRIPTOR * WINAPI RtlCreateBoundaryDescriptor(UNICODE_STRING*,ULONG);
+ NTSYSAPI NTSTATUS  WINAPI RtlCreateEnvironment(BOOLEAN, PWSTR*);
+ NTSYSAPI HANDLE    WINAPI RtlCreateHeap(ULONG,PVOID,SIZE_T,SIZE_T,PVOID,PRTL_HEAP_PARAMETERS);
+ NTSYSAPI NTSTATUS  WINAPI RtlCreateProcessParameters(RTL_USER_PROCESS_PARAMETERS**,const UNICODE_STRING*,const UNICODE_STRING*,const UNICODE_STRING*,const UNICODE_STRING*,PWSTR,const UNICODE_STRING*,const UNICODE_STRING*,const UNICODE_STRING*,const UNICODE_STRING*);
+@@ -5006,6 +5031,7 @@ NTSYSAPI NTSTATUS  WINAPI RtlDefaultNpAcl(PACL*);
+ NTSYSAPI NTSTATUS  WINAPI RtlDeleteAce(PACL,DWORD);
+ NTSYSAPI NTSTATUS  WINAPI RtlDeleteAtomFromAtomTable(RTL_ATOM_TABLE,RTL_ATOM);
+ NTSYSAPI void      WINAPI RtlDeleteBarrier(RTL_BARRIER*);
++NTSYSAPI void      WINAPI RtlDeleteBoundaryDescriptor(OBJECT_BOUNDARY_DESCRIPTOR*);
+ NTSYSAPI NTSTATUS  WINAPI RtlDeleteCriticalSection(RTL_CRITICAL_SECTION *);
+ NTSYSAPI NTSTATUS  WINAPI RtlDeleteRegistryValue(ULONG, PCWSTR, PCWSTR);
+ NTSYSAPI void      WINAPI RtlDeleteResource(LPRTL_RWLOCK);

@@ -1,0 +1,1214 @@
+From 7a3e41cfdd911f2eeb359a9c8a52ebc17c6d5e39 Mon Sep 17 00:00:00 2001
+From: SHORiN-KiWATA <feng13862095732@gmail.com>
+Date: Thu, 8 Oct 2026 22:26:37 +0900
+Subject: [PATCH] iphlpapi: Implement setting interfaces, unicast addresses and
+ routes.
+
+The NSI layer only supported reading so far. Add the write path down to
+the unix side (netlink) for SetIpInterfaceEntry, the unicast address and
+route entry functions, and the Initialize* helpers they are used with.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/iphlpapi/iphlpapi.spec      |  22 +-
+ dlls/iphlpapi/iphlpapi_main.c    | 318 ++++++++++++++++++++++++
+ dlls/nsi/nsi.c                   |  47 ++++
+ dlls/nsi/nsi.spec                |   4 +-
+ dlls/nsiproxy.sys/device.c       |  31 +++
+ dlls/nsiproxy.sys/ip.c           | 410 ++++++++++++++++++++++++++++++-
+ dlls/nsiproxy.sys/nsi.c          |  25 ++
+ dlls/nsiproxy.sys/unix_private.h |   2 +
+ include/netioapi.h               |  10 +
+ include/wine/nsi.h               |  35 +++
+ 10 files changed, 888 insertions(+), 16 deletions(-)
+
+diff --git a/dlls/iphlpapi/iphlpapi.spec b/dlls/iphlpapi/iphlpapi.spec
+index 9da2a26f29f..84ab44c0ae6 100644
+--- a/dlls/iphlpapi/iphlpapi.spec
++++ b/dlls/iphlpapi/iphlpapi.spec
+@@ -40,7 +40,7 @@
+ #@ stub CPNatfwtIndicateReceivedBuffers
+ #@ stub CPNatfwtRegisterProviderInstance
+ #@ stub CreateAnycastIpAddressEntry
+-#@ stub CreateIpForwardEntry2
++@ stdcall CreateIpForwardEntry2( ptr )
+ @ stdcall CreateIpForwardEntry( ptr )
+ #@ stub CreateIpNetEntry2
+ @ stdcall CreateIpNetEntry( ptr )
+@@ -48,17 +48,17 @@
+ #@ stub CreatePersistentUdpPortReservation
+ @ stdcall CreateProxyArpEntry( long long long )
+ @ stdcall CreateSortedAddressPairs( ptr long ptr long long ptr ptr )
+-#@ stub CreateUnicastIpAddressEntry
++@ stdcall CreateUnicastIpAddressEntry( ptr )
+ #@ stub DeleteAnycastIpAddressEntry
+ @ stdcall DeleteIPAddress( long )
+-#@ stub DeleteIpForwardEntry2
++@ stdcall DeleteIpForwardEntry2( ptr )
+ @ stdcall DeleteIpForwardEntry( ptr )
+ #@ stub DeleteIpNetEntry2
+ @ stdcall DeleteIpNetEntry( ptr )
+ #@ stub DeletePersistentTcpPortReservation
+ #@ stub DeletePersistentUdpPortReservation
+ @ stdcall DeleteProxyArpEntry( long long long )
+-#@ stub DeleteUnicastIpAddressEntry
++@ stdcall DeleteUnicastIpAddressEntry( ptr )
+ #@ stub DisableMediaSense
+ #@ stub do_echo_rep
+ #@ stub do_echo_req
+@@ -102,7 +102,7 @@
+ @ stdcall GetIpAddrTable( ptr ptr long )
+ @ stub GetIpAddrTableFromStack
+ #@ stub GetIpErrorString
+-#@ stub GetIpForwardEntry2
++@ stdcall GetIpForwardEntry2( ptr )
+ @ stdcall GetIpForwardTable( ptr ptr long )
+ @ stdcall GetIpForwardTable2( long ptr )
+ @ stub GetIpForwardTableFromStack
+@@ -163,9 +163,9 @@
+ @ stdcall IcmpSendEcho(ptr long ptr long ptr ptr long long)
+ @ stdcall if_indextoname(long ptr) IPHLP_if_indextoname
+ @ stdcall if_nametoindex(str) IPHLP_if_nametoindex
+-#@ stub InitializeIpForwardEntry
+-#@ stub InitializeIpInterfaceEntry
+-#@ stub InitializeUnicastIpAddressEntry
++@ stdcall InitializeIpForwardEntry( ptr )
++@ stdcall InitializeIpInterfaceEntry( ptr )
++@ stdcall InitializeUnicastIpAddressEntry( ptr )
+ #@ stub InternalCleanupPersistentStore
+ #@ stub InternalCreateAnycastIpAddressEntry
+ @ stub InternalCreateIpForwardEntry
+@@ -271,10 +271,10 @@
+ @ stdcall SetCurrentThreadCompartmentId( long )
+ @ stdcall SetIfEntry( ptr )
+ @ stub SetIfEntryToStack
+-#@ stub SetIpForwardEntry2
++@ stdcall SetIpForwardEntry2( ptr )
+ @ stdcall SetIpForwardEntry( ptr )
+ @ stub SetIpForwardEntryToStack
+-#@ stub SetIpInterfaceEntry
++@ stdcall SetIpInterfaceEntry( ptr )
+ @ stub SetIpMultihopRouteEntryToStack
+ #@ stub SetIpNetEntry2
+ @ stdcall SetIpNetEntry( ptr )
+@@ -294,5 +294,5 @@
+ #@ stub SetSessionCompartmentId
+ @ stdcall SetTcpEntry( ptr )
+ @ stub SetTcpEntryToStack
+-#@ stub SetUnicastIpAddressEntry
++@ stdcall SetUnicastIpAddressEntry( ptr )
+ @ stdcall UnenableRouter( ptr ptr )
+diff --git a/dlls/iphlpapi/iphlpapi_main.c b/dlls/iphlpapi/iphlpapi_main.c
+index 03b43b16d3e..13682134a3d 100644
+--- a/dlls/iphlpapi/iphlpapi_main.c
++++ b/dlls/iphlpapi/iphlpapi_main.c
+@@ -2330,6 +2330,56 @@ err:
+     return err;
+ }
+ 
++/******************************************************************
++ *    GetIpForwardEntry2 (IPHLPAPI.@)
++ */
++DWORD WINAPI GetIpForwardEntry2( MIB_IPFORWARD_ROW2 *row )
++{
++    MIB_IPFORWARD_TABLE2 *table;
++    const MIB_IPFORWARD_ROW2 *entry;
++    USHORT fam;
++    NET_LUID luid;
++    DWORD err, i;
++
++    TRACE( "%p.\n", row );
++
++    if (!row) return ERROR_INVALID_PARAMETER;
++    fam = row->DestinationPrefix.Prefix.si_family;
++    if (fam != AF_INET && fam != AF_INET6) return ERROR_INVALID_PARAMETER;
++    luid = row->InterfaceLuid;
++    if (!luid.Value && (!row->InterfaceIndex || ConvertInterfaceIndexToLuid( row->InterfaceIndex, &luid )))
++        return ERROR_FILE_NOT_FOUND;
++
++    if ((err = GetIpForwardTable2( fam, &table ))) return err;
++    err = ERROR_NOT_FOUND;
++    for (i = 0; i < table->NumEntries; i++)
++    {
++        entry = table->Table + i;
++        if (entry->InterfaceLuid.Value != luid.Value) continue;
++        if (entry->DestinationPrefix.PrefixLength != row->DestinationPrefix.PrefixLength) continue;
++        if (fam == AF_INET)
++        {
++            if (entry->DestinationPrefix.Prefix.Ipv4.sin_addr.s_addr != row->DestinationPrefix.Prefix.Ipv4.sin_addr.s_addr)
++                continue;
++            if (entry->NextHop.Ipv4.sin_addr.s_addr !=
++                (row->NextHop.si_family ? row->NextHop.Ipv4.sin_addr.s_addr : 0)) continue;
++        }
++        else
++        {
++            static const IN6_ADDR zero;
++            if (memcmp( &entry->DestinationPrefix.Prefix.Ipv6.sin6_addr, &row->DestinationPrefix.Prefix.Ipv6.sin6_addr,
++                        sizeof(IN6_ADDR) )) continue;
++            if (memcmp( &entry->NextHop.Ipv6.sin6_addr,
++                        row->NextHop.si_family ? &row->NextHop.Ipv6.sin6_addr : &zero, sizeof(IN6_ADDR) )) continue;
++        }
++        *row = *entry;
++        err = ERROR_SUCCESS;
++        break;
++    }
++    FreeMibTable( table );
++    return err;
++}
++
+ static int ipnetrow_cmp( const void *a, const void *b )
+ {
+     const MIB_IPNETROW *rowA = a, *rowB = b;
+@@ -4743,6 +4793,274 @@ DWORD WINAPI GetIpInterfaceEntry( MIB_IPINTERFACE_ROW *row )
+     return ERROR_SUCCESS;
+ }
+ 
++/******************************************************************
++ *    InitializeIpInterfaceEntry (IPHLPAPI.@)
++ */
++void WINAPI InitializeIpInterfaceEntry( MIB_IPINTERFACE_ROW *row )
++{
++    TRACE( "%p.\n", row );
++
++    memset( row, 0, sizeof(*row) );
++    row->MaxReassemblySize = ~0u;
++    row->InterfaceIdentifier = ~(ULONG64)0;
++    row->MinRouterAdvertisementInterval = ~0u;
++    row->MaxRouterAdvertisementInterval = ~0u;
++    row->AdvertisingEnabled = row->ForwardingEnabled = row->WeakHostSend = row->WeakHostReceive = 0xff;
++    row->UseAutomaticMetric = row->UseNeighborUnreachabilityDetection = 0xff;
++    row->ManagedAddressConfigurationSupported = row->OtherStatefulConfigurationSupported = 0xff;
++    row->AdvertiseDefaultRoute = 0xff;
++    row->RouterDiscoveryBehavior = ~0u;
++    row->DadTransmits = ~0u;
++    row->LinkLocalAddressBehavior = ~0u;
++    row->LinkLocalAddressTimeout = ~0u;
++    memset( row->ZoneIndices, 0xff, sizeof(row->ZoneIndices) );
++    row->SitePrefixLength = ~0u;
++    row->Metric = ~0u;
++    row->Connected = row->SupportsWakeUpPatterns = row->SupportsNeighborDiscovery = row->SupportsRouterDiscovery = 0xff;
++    row->ReachableTime = ~0u;
++    row->DisableDefaultRoutes = 0xff;
++}
++
++/******************************************************************
++ *    InitializeUnicastIpAddressEntry (IPHLPAPI.@)
++ */
++void WINAPI InitializeUnicastIpAddressEntry( MIB_UNICASTIPADDRESS_ROW *row )
++{
++    TRACE( "%p.\n", row );
++
++    memset( row, 0, sizeof(*row) );
++    row->PrefixOrigin = IpPrefixOriginUnchanged;
++    row->SuffixOrigin = IpSuffixOriginUnchanged;
++    row->ValidLifetime = ~0u;
++    row->PreferredLifetime = ~0u;
++    row->OnLinkPrefixLength = 0xff;
++}
++
++/******************************************************************
++ *    InitializeIpForwardEntry (IPHLPAPI.@)
++ */
++void WINAPI InitializeIpForwardEntry( MIB_IPFORWARD_ROW2 *row )
++{
++    TRACE( "%p.\n", row );
++
++    memset( row, 0, sizeof(*row) );
++    row->SitePrefixLength = 0xff;
++    row->ValidLifetime = ~0u;
++    row->PreferredLifetime = ~0u;
++    row->Metric = ~0u;
++    row->Protocol = ~0u;
++    row->Loopback = row->AutoconfigureAddress = row->Publish = row->Immortal = 0xff;
++}
++
++static DWORD get_row_luid( NET_LUID *luid, NET_IFINDEX index )
++{
++    if (luid->Value) return ERROR_SUCCESS;
++    if (!index || ConvertInterfaceIndexToLuid( index, luid )) return ERROR_FILE_NOT_FOUND;
++    return ERROR_SUCCESS;
++}
++
++/******************************************************************
++ *    SetIpInterfaceEntry (IPHLPAPI.@)
++ */
++DWORD WINAPI SetIpInterfaceEntry( MIB_IPINTERFACE_ROW *row )
++{
++    struct nsi_ip_interface_key key;
++    struct nsi_ip_interface_rw rw;
++
++    TRACE( "%p.\n", row );
++
++    if (!row) return ERROR_INVALID_PARAMETER;
++    if (row->Family != AF_INET && row->Family != AF_INET6) return ERROR_INVALID_PARAMETER;
++    key.luid = row->InterfaceLuid;
++    if (!key.luid.Value && (!row->InterfaceIndex || ConvertInterfaceIndexToLuid( row->InterfaceIndex, &key.luid )))
++        return ERROR_INVALID_PARAMETER;
++    if (row->SitePrefixLength != ~0u && row->SitePrefixLength > (row->Family == AF_INET ? 32 : 128))
++        return ERROR_INVALID_PARAMETER;
++
++    memset( &rw, 0, sizeof(rw) );
++    rw.metric = row->UseAutomaticMetric == TRUE ? ~0u : row->Metric;
++    rw.mtu = row->NlMtu;
++    rw.site_prefix_len = row->SitePrefixLength;
++    return NsiSetAllParameters( 1, NSI_SET_DEFAULT, ip_module_id( row->Family ), NSI_IP_INTERFACE_TABLE,
++                                &key, sizeof(key), &rw, sizeof(rw) );
++}
++
++static DWORD set_unicast_entry( const MIB_UNICASTIPADDRESS_ROW *row, DWORD action )
++{
++    struct nsi_ipv4_unicast_key key4;
++    struct nsi_ipv6_unicast_key key6;
++    struct nsi_ip_unicast_rw rw;
++    NET_LUID luid;
++    DWORD err, key_size;
++    void *key;
++
++    if (!row) return ERROR_INVALID_PARAMETER;
++    if (row->Address.si_family != AF_INET && row->Address.si_family != AF_INET6) return ERROR_INVALID_PARAMETER;
++    luid = row->InterfaceLuid;
++    if ((err = get_row_luid( &luid, row->InterfaceIndex ))) return err;
++    if (row->OnLinkPrefixLength != 0xff && row->OnLinkPrefixLength > (row->Address.si_family == AF_INET ? 32 : 128))
++        return ERROR_INVALID_PARAMETER;
++
++    if (row->Address.si_family == AF_INET)
++    {
++        key4.luid = luid;
++        key4.addr = row->Address.Ipv4.sin_addr;
++        key4.pad = 0;
++        key = &key4;
++        key_size = sizeof(key4);
++    }
++    else
++    {
++        key6.luid = luid;
++        key6.addr = row->Address.Ipv6.sin6_addr;
++        key = &key6;
++        key_size = sizeof(key6);
++    }
++
++    memset( &rw, 0, sizeof(rw) );
++    rw.preferred_lifetime = row->PreferredLifetime;
++    rw.valid_lifetime = row->ValidLifetime;
++    rw.prefix_origin = row->PrefixOrigin == IpPrefixOriginUnchanged ? IpPrefixOriginManual : row->PrefixOrigin;
++    rw.suffix_origin = row->SuffixOrigin == IpSuffixOriginUnchanged ? IpSuffixOriginManual : row->SuffixOrigin;
++    rw.on_link_prefix = row->OnLinkPrefixLength;
++    return NsiSetAllParameters( 1, action, ip_module_id( row->Address.si_family ), NSI_IP_UNICAST_TABLE,
++                                key, key_size, &rw, sizeof(rw) );
++}
++
++/******************************************************************
++ *    CreateUnicastIpAddressEntry (IPHLPAPI.@)
++ */
++DWORD WINAPI CreateUnicastIpAddressEntry( const MIB_UNICASTIPADDRESS_ROW *row )
++{
++    TRACE( "%p.\n", row );
++    return set_unicast_entry( row, NSI_SET_CREATE_ONLY );
++}
++
++/******************************************************************
++ *    SetUnicastIpAddressEntry (IPHLPAPI.@)
++ */
++DWORD WINAPI SetUnicastIpAddressEntry( const MIB_UNICASTIPADDRESS_ROW *row )
++{
++    TRACE( "%p.\n", row );
++    return set_unicast_entry( row, NSI_SET_DEFAULT );
++}
++
++/******************************************************************
++ *    DeleteUnicastIpAddressEntry (IPHLPAPI.@)
++ */
++DWORD WINAPI DeleteUnicastIpAddressEntry( const MIB_UNICASTIPADDRESS_ROW *row )
++{
++    TRACE( "%p.\n", row );
++    return set_unicast_entry( row, NSI_SET_DELETE );
++}
++
++static BOOL prefix_has_host_bits( const SOCKADDR_INET *prefix, UINT len )
++{
++    const BYTE *addr;
++    UINT i, size;
++
++    if (prefix->si_family == AF_INET)
++    {
++        addr = (const BYTE *)&prefix->Ipv4.sin_addr;
++        size = 4;
++    }
++    else
++    {
++        addr = (const BYTE *)&prefix->Ipv6.sin6_addr;
++        size = 16;
++    }
++    for (i = len / 8; i < size; i++)
++    {
++        BYTE mask = (i == len / 8 && len % 8) ? (0xff >> (len % 8)) : 0xff;
++        if (addr[i] & mask) return TRUE;
++    }
++    return FALSE;
++}
++
++static DWORD set_forward_entry( const MIB_IPFORWARD_ROW2 *row, DWORD action )
++{
++    struct nsi_ipv4_forward_key key4;
++    struct nsi_ipv6_forward_key key6;
++    struct nsi_ip_forward_rw rw;
++    USHORT fam;
++    NET_LUID luid;
++    DWORD err, key_size;
++    void *key;
++
++    if (!row) return ERROR_INVALID_PARAMETER;
++    fam = row->DestinationPrefix.Prefix.si_family;
++    if (fam != AF_INET && fam != AF_INET6) return ERROR_INVALID_PARAMETER;
++    if (row->NextHop.si_family && row->NextHop.si_family != fam) return ERROR_INVALID_PARAMETER;
++    if (row->DestinationPrefix.PrefixLength > (fam == AF_INET ? 32 : 128)) return ERROR_INVALID_PARAMETER;
++    if (prefix_has_host_bits( &row->DestinationPrefix.Prefix, row->DestinationPrefix.PrefixLength ))
++        return ERROR_INVALID_PARAMETER;
++    luid = row->InterfaceLuid;
++    if ((err = get_row_luid( &luid, row->InterfaceIndex ))) return err;
++
++    if (fam == AF_INET)
++    {
++        memset( &key4, 0, sizeof(key4) );
++        key4.prefix = row->DestinationPrefix.Prefix.Ipv4.sin_addr;
++        key4.prefix_len = row->DestinationPrefix.PrefixLength;
++        key4.luid = luid;
++        key4.luid2 = luid;
++        if (row->NextHop.si_family) key4.next_hop = row->NextHop.Ipv4.sin_addr;
++        key = &key4;
++        key_size = sizeof(key4);
++    }
++    else
++    {
++        memset( &key6, 0, sizeof(key6) );
++        key6.prefix = row->DestinationPrefix.Prefix.Ipv6.sin6_addr;
++        key6.prefix_len = row->DestinationPrefix.PrefixLength;
++        key6.luid = luid;
++        key6.luid2 = luid;
++        if (row->NextHop.si_family) key6.next_hop = row->NextHop.Ipv6.sin6_addr;
++        key = &key6;
++        key_size = sizeof(key6);
++    }
++
++    memset( &rw, 0, sizeof(rw) );
++    rw.site_prefix_len = row->SitePrefixLength;
++    rw.valid_lifetime = row->ValidLifetime;
++    rw.preferred_lifetime = row->PreferredLifetime;
++    rw.metric = row->Metric;
++    rw.protocol = row->Protocol;
++    rw.loopback = row->Loopback;
++    rw.autoconf = row->AutoconfigureAddress;
++    rw.publish = row->Publish;
++    rw.immortal = row->Immortal;
++    return NsiSetAllParameters( 1, action, ip_module_id( fam ), NSI_IP_FORWARD_TABLE,
++                                key, key_size, &rw, sizeof(rw) );
++}
++
++/******************************************************************
++ *    CreateIpForwardEntry2 (IPHLPAPI.@)
++ */
++DWORD WINAPI CreateIpForwardEntry2( const MIB_IPFORWARD_ROW2 *row )
++{
++    TRACE( "%p.\n", row );
++    return set_forward_entry( row, NSI_SET_CREATE_ONLY );
++}
++
++/******************************************************************
++ *    SetIpForwardEntry2 (IPHLPAPI.@)
++ */
++DWORD WINAPI SetIpForwardEntry2( const MIB_IPFORWARD_ROW2 *row )
++{
++    TRACE( "%p.\n", row );
++    return set_forward_entry( row, NSI_SET_DEFAULT );
++}
++
++/******************************************************************
++ *    DeleteIpForwardEntry2 (IPHLPAPI.@)
++ */
++DWORD WINAPI DeleteIpForwardEntry2( const MIB_IPFORWARD_ROW2 *row )
++{
++    TRACE( "%p.\n", row );
++    return set_forward_entry( row, NSI_SET_DELETE );
++}
++
+ static BOOL match_ip_address_with_prefix( const SOCKADDR_INET *addr, const IP_ADDRESS_PREFIX *pfx )
+ {
+     const BYTE *p1, *p2;
+diff --git a/dlls/nsi/nsi.c b/dlls/nsi/nsi.c
+index 14be842871a..e74fdb9a2b6 100644
+--- a/dlls/nsi/nsi.c
++++ b/dlls/nsi/nsi.c
+@@ -391,3 +391,50 @@ DWORD WINAPI NsiRequestChangeNotificationEx( struct nsi_request_change_notificat
+     free( in );
+     return err;
+ }
++
++DWORD WINAPI NsiSetAllParameters( DWORD unk, DWORD action, const NPI_MODULEID *module, DWORD table,
++                                  const void *key, DWORD key_size, const void *rw_data, DWORD rw_size )
++{
++    struct nsi_set_all_parameters_ex params;
++
++    TRACE( "%ld %ld %p %ld %p %ld %p %ld\n", unk, action, module, table, key, key_size, rw_data, rw_size );
++
++    params.unknown[0] = 0;
++    params.unknown[1] = 0;
++    params.module = module;
++    params.table = table;
++    params.first_arg = unk;
++    params.action = action;
++    params.key = key;
++    params.key_size = key_size;
++    params.rw_data = rw_data;
++    params.rw_size = rw_size;
++
++    return NsiSetAllParametersEx( &params );
++}
++
++DWORD WINAPI NsiSetAllParametersEx( struct nsi_set_all_parameters_ex *params )
++{
++    HANDLE device = get_nsi_device( FALSE );
++    struct nsiproxy_set_all_parameters *in;
++    ULONG in_size = FIELD_OFFSET( struct nsiproxy_set_all_parameters, data[params->key_size + params->rw_size] );
++    DWORD err = ERROR_SUCCESS, received;
++
++    if (device == INVALID_HANDLE_VALUE) return GetLastError();
++
++    if (!(in = malloc( in_size ))) return ERROR_OUTOFMEMORY;
++    in->module = *params->module;
++    in->first_arg = params->first_arg;
++    in->action = params->action;
++    in->table = params->table;
++    in->key_size = params->key_size;
++    in->rw_size = params->rw_size;
++    memcpy( in->data, params->key, params->key_size );
++    if (params->rw_size) memcpy( in->data + params->key_size, params->rw_data, params->rw_size );
++
++    if (!DeviceIoControl( device, IOCTL_NSIPROXY_WINE_SET_ALL_PARAMETERS, in, in_size, NULL, 0, &received, NULL ))
++        err = GetLastError();
++
++    free( in );
++    return err;
++}
+diff --git a/dlls/nsi/nsi.spec b/dlls/nsi/nsi.spec
+index 9f1a2472362..d5a2e31f529 100644
+--- a/dlls/nsi/nsi.spec
++++ b/dlls/nsi/nsi.spec
+@@ -18,8 +18,8 @@
+ @ stub NsiRegisterChangeNotificationEx
+ @ stdcall NsiRequestChangeNotification(long ptr long ptr ptr)
+ @ stdcall NsiRequestChangeNotificationEx(ptr)
+-@ stub NsiSetAllParameters
+-@ stub NsiSetAllParametersEx
++@ stdcall NsiSetAllParameters(long long ptr long ptr long ptr long)
++@ stdcall NsiSetAllParametersEx(ptr)
+ @ stub NsiSetAllPersistentParametersWithMask
+ @ stub NsiSetObjectSecurity
+ @ stub NsiSetParameter
+diff --git a/dlls/nsiproxy.sys/device.c b/dlls/nsiproxy.sys/device.c
+index 28e69978250..3ec7e3bdfee 100644
+--- a/dlls/nsiproxy.sys/device.c
++++ b/dlls/nsiproxy.sys/device.c
+@@ -70,6 +70,7 @@ enum unix_calls
+     nsi_get_all_parameters_ex,
+     nsi_get_parameter_ex,
+     nsi_get_notification,
++    nsi_set_all_parameters_ex,
+ };
+ 
+ static NTSTATUS nsiproxy_enumerate_all( IRP *irp )
+@@ -152,6 +153,32 @@ static NTSTATUS nsiproxy_get_all_parameters( IRP *irp )
+     return status;
+ }
+ 
++static NTSTATUS nsiproxy_set_all_parameters( IRP *irp )
++{
++    IO_STACK_LOCATION *irpsp = IoGetCurrentIrpStackLocation( irp );
++    struct nsiproxy_set_all_parameters *in = (struct nsiproxy_set_all_parameters *)irp->AssociatedIrp.SystemBuffer;
++    DWORD in_len = irpsp->Parameters.DeviceIoControl.InputBufferLength;
++    struct nsi_set_all_parameters_ex set_all;
++
++    if (in_len < offsetof(struct nsiproxy_set_all_parameters, data[0]) ||
++        in_len < offsetof(struct nsiproxy_set_all_parameters, data[in->key_size + in->rw_size]))
++        return STATUS_INVALID_PARAMETER;
++
++    set_all.unknown[0] = 0;
++    set_all.unknown[1] = 0;
++    set_all.first_arg = in->first_arg;
++    set_all.action = in->action;
++    set_all.module = &in->module;
++    set_all.table = in->table;
++    set_all.key = in->data;
++    set_all.key_size = in->key_size;
++    set_all.rw_data = in->rw_size ? in->data + in->key_size : NULL;
++    set_all.rw_size = in->rw_size;
++
++    irp->IoStatus.Information = 0;
++    return nsiproxy_call( nsi_set_all_parameters_ex, &set_all );
++}
++
+ static NTSTATUS nsiproxy_get_parameter( IRP *irp )
+ {
+     IO_STACK_LOCATION *irpsp = IoGetCurrentIrpStackLocation( irp );
+@@ -445,6 +472,10 @@ static NTSTATUS WINAPI nsi_ioctl( DEVICE_OBJECT *device, IRP *irp )
+         status = nsiproxy_change_notification( irp );
+         break;
+ 
++    case IOCTL_NSIPROXY_WINE_SET_ALL_PARAMETERS:
++        status = nsiproxy_set_all_parameters( irp );
++        break;
++
+     default:
+         FIXME( "ioctl %lx not supported\n", irpsp->Parameters.DeviceIoControl.IoControlCode );
+         status = STATUS_NOT_SUPPORTED;
+diff --git a/dlls/nsiproxy.sys/ip.c b/dlls/nsiproxy.sys/ip.c
+index 002d2b48f5d..6092854489a 100644
+--- a/dlls/nsiproxy.sys/ip.c
++++ b/dlls/nsiproxy.sys/ip.c
+@@ -63,6 +63,14 @@
+ # include <net/if.h>
+ #endif
+ 
++#ifdef HAVE_LINUX_RTNETLINK_H
++# include <linux/rtnetlink.h>
++#endif
++
++#include <errno.h>
++#include <pthread.h>
++#include <unistd.h>
++
+ #ifdef __APPLE__
+ /* For reasons unknown, Mac OS doesn't export <netinet6/ip6_var.h> to user-
+  * space. We'll have to define the needed struct ourselves.
+@@ -814,6 +822,8 @@ static NTSTATUS ipv6_ipstats_get_all_parameters( const void *key, UINT key_size,
+ #endif
+ }
+ 
++static BOOL get_interface_metric( UINT fam, const NET_LUID *luid, ULONG *metric );
++
+ static NTSTATUS ip_interface_fill( UINT fam, const char *unix_name, void *key_data, UINT key_size,
+                                    void *rw_data, UINT rw_size, void *dynamic_data, UINT dynamic_size,
+                                    void *static_data, UINT static_size, UINT_PTR *count )
+@@ -914,6 +924,7 @@ static NTSTATUS ip_interface_fill( UINT fam, const char *unix_name, void *key_da
+                     site_prefix_len = mask_v6_to_prefix( &((struct sockaddr_in6 *)entry->ifa_netmask)->sin6_addr );
+                 }
+                 memset( rw, 0, sizeof(*rw) );
++                get_interface_metric( fam, &luid, &rw->metric );
+                 rw->mtu = iface_dynamic.mtu;
+                 rw->site_prefix_len = site_prefix_len;
+                 rw->base_reachable_time = base_reachable_time;
+@@ -1558,9 +1569,9 @@ static NTSTATUS ipv4_forward_enumerate_all( void *key_data, UINT key_size, void
+             entry.prefix.s_addr = strtoul( ptr, &ptr, 16 );
+             entry.next_hop.s_addr = strtoul( ptr + 1, &ptr, 16 );
+             rtf_flags = strtoul( ptr + 1, &ptr, 16 );
+-            strtoul( ptr + 1, &ptr, 16 ); /* refcount, skip */
+-            strtoul( ptr + 1, &ptr, 16 ); /* use, skip */
+-            entry.metric = strtoul( ptr + 1, &ptr, 16 );
++            strtoul( ptr + 1, &ptr, 10 ); /* refcount, skip */
++            strtoul( ptr + 1, &ptr, 10 ); /* use, skip */
++            entry.metric = strtoul( ptr + 1, &ptr, 10 );
+             mask.s_addr = strtoul( ptr + 1, &ptr, 16 );
+             entry.prefix_len = mask_v4_to_prefix( &mask );
+             entry.protocol = (rtf_flags & RTF_GATEWAY) ? MIB_IPPROTO_NETMGMT : MIB_IPPROTO_LOCAL;
+@@ -1853,6 +1864,385 @@ static NTSTATUS ipv6_forward_enumerate_all( void *key_data, UINT key_size, void
+     return status;
+ }
+ 
++/* Changing interfaces, addresses and routes. */
++
++#define IP_MAX_PREFIX_LEN(fam) ((fam) == AF_INET ? 32 : 128)
++
++/* Linux has no interface metric; remember the one that was set so that it can be read back. */
++static struct
++{
++    NET_LUID luid;
++    UINT fam;
++    ULONG metric;
++} interface_metrics[64];
++static unsigned int interface_metric_count;
++static pthread_mutex_t interface_metric_lock = PTHREAD_MUTEX_INITIALIZER;
++
++static BOOL get_interface_metric( UINT fam, const NET_LUID *luid, ULONG *metric )
++{
++    unsigned int i;
++    BOOL ret = FALSE;
++
++    pthread_mutex_lock( &interface_metric_lock );
++    for (i = 0; i < interface_metric_count; i++)
++    {
++        if (interface_metrics[i].fam != fam || interface_metrics[i].luid.Value != luid->Value) continue;
++        *metric = interface_metrics[i].metric;
++        ret = TRUE;
++        break;
++    }
++    pthread_mutex_unlock( &interface_metric_lock );
++    return ret;
++}
++
++static void set_interface_metric( UINT fam, const NET_LUID *luid, ULONG metric )
++{
++    unsigned int i;
++
++    pthread_mutex_lock( &interface_metric_lock );
++    for (i = 0; i < interface_metric_count; i++)
++        if (interface_metrics[i].fam == fam && interface_metrics[i].luid.Value == luid->Value) break;
++    if (i < ARRAY_SIZE(interface_metrics))
++    {
++        interface_metrics[i].luid = *luid;
++        interface_metrics[i].fam = fam;
++        interface_metrics[i].metric = metric;
++        if (i == interface_metric_count) interface_metric_count++;
++    }
++    pthread_mutex_unlock( &interface_metric_lock );
++}
++
++static NTSTATUS luid_to_unix_index( const NET_LUID *luid, unsigned int *index )
++{
++    const char *unix_name;
++
++    if (!convert_luid_to_unix_name( luid, &unix_name )) return STATUS_NOT_FOUND;
++    if (!(*index = if_nametoindex( unix_name ))) return STATUS_NOT_FOUND;
++    return STATUS_SUCCESS;
++}
++
++#ifdef HAVE_LINUX_RTNETLINK_H
++
++struct netlink_request
++{
++    struct nlmsghdr hdr;
++    union
++    {
++        struct ifinfomsg link;
++        struct ifaddrmsg addr;
++        struct rtmsg route;
++    } u;
++    char attrs[256];
++};
++
++static void netlink_init( struct netlink_request *req, unsigned short type, unsigned short flags, size_t len )
++{
++    memset( req, 0, sizeof(*req) );
++    req->hdr.nlmsg_len = NLMSG_LENGTH( len );
++    req->hdr.nlmsg_type = type;
++    req->hdr.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK | flags;
++}
++
++static void netlink_add_attr( struct netlink_request *req, unsigned short type, const void *data, unsigned short len )
++{
++    struct rtattr *rta = (struct rtattr *)((char *)req + NLMSG_ALIGN( req->hdr.nlmsg_len ));
++
++    rta->rta_type = type;
++    rta->rta_len = RTA_LENGTH( len );
++    memcpy( RTA_DATA( rta ), data, len );
++    req->hdr.nlmsg_len = NLMSG_ALIGN( req->hdr.nlmsg_len ) + RTA_ALIGN( rta->rta_len );
++}
++
++/* send a request and wait for its acknowledgement; returns 0 or an errno value */
++static int netlink_send( struct netlink_request *req )
++{
++    static unsigned int seq;
++    struct sockaddr_nl addr;
++    char buffer[4096];
++    struct nlmsghdr *nlh;
++    int fd, len, ret = EIO;
++
++    if ((fd = socket( PF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, NETLINK_ROUTE )) == -1) return errno;
++
++    memset( &addr, 0, sizeof(addr) );
++    addr.nl_family = AF_NETLINK;
++    req->hdr.nlmsg_seq = __atomic_add_fetch( &seq, 1, __ATOMIC_RELAXED );
++    if (sendto( fd, &req->hdr, req->hdr.nlmsg_len, 0, (struct sockaddr *)&addr, sizeof(addr) ) == -1)
++    {
++        ret = errno;
++        goto done;
++    }
++
++    for (;;)
++    {
++        if ((len = recv( fd, buffer, sizeof(buffer), 0 )) == -1)
++        {
++            if (errno == EINTR) continue;
++            ret = errno;
++            goto done;
++        }
++        for (nlh = (struct nlmsghdr *)buffer; NLMSG_OK( nlh, len ); nlh = NLMSG_NEXT( nlh, len ))
++        {
++            if (nlh->nlmsg_seq != req->hdr.nlmsg_seq || nlh->nlmsg_type != NLMSG_ERROR) continue;
++            ret = -((struct nlmsgerr *)NLMSG_DATA( nlh ))->error;
++            goto done;
++        }
++    }
++
++done:
++    close( fd );
++    return ret;
++}
++
++static NTSTATUS netlink_status( int err )
++{
++    switch (err)
++    {
++    case 0:             return STATUS_SUCCESS;
++    case EPERM:
++    case EACCES:        return STATUS_ACCESS_DENIED;
++    case EEXIST:        return STATUS_DUPLICATE_OBJECTID;
++    case ENODEV:
++    case ESRCH:
++    case ENOENT:        return STATUS_NOT_FOUND;
++    case ENETUNREACH:   return STATUS_NETWORK_UNREACHABLE;
++    case ENOMEM:
++    case ENOBUFS:       return STATUS_NO_MEMORY;
++    default:            return STATUS_INVALID_PARAMETER;
++    }
++}
++
++static NTSTATUS ip_interface_set( UINT fam, UINT action, const void *key, const void *rw_data )
++{
++    const struct nsi_ip_interface_key *ip_key = key;
++    const struct nsi_ip_interface_rw *rw = rw_data;
++    struct nsi_ndis_ifinfo_dynamic iface_dynamic;
++    struct netlink_request req;
++    unsigned int index;
++    NTSTATUS status;
++
++    if (action != NSI_SET_DEFAULT) return STATUS_NOT_SUPPORTED;
++    if ((status = luid_to_unix_index( &ip_key->luid, &index ))) return status;
++
++    if (rw->mtu && rw->mtu != ~0u &&
++        nsi_get_all_parameters( &NPI_MS_NDIS_MODULEID, NSI_NDIS_IFINFO_TABLE, (void *)&ip_key->luid,
++                                sizeof(ip_key->luid), NULL, 0, &iface_dynamic, sizeof(iface_dynamic), NULL, 0 ) &&
++        iface_dynamic.mtu != rw->mtu)
++    {
++        netlink_init( &req, RTM_NEWLINK, 0, sizeof(req.u.link) );
++        req.u.link.ifi_family = AF_UNSPEC;
++        req.u.link.ifi_index = index;
++        netlink_add_attr( &req, IFLA_MTU, &rw->mtu, sizeof(rw->mtu) );
++        if ((status = netlink_status( netlink_send( &req ) ))) return status;
++    }
++    if (rw->metric != ~0u) set_interface_metric( fam, &ip_key->luid, rw->metric );
++    return STATUS_SUCCESS;
++}
++
++static NTSTATUS ip_unicast_set( UINT fam, UINT action, const void *key, const void *rw_data )
++{
++    const struct nsi_ipv4_unicast_key *key4 = key;
++    const struct nsi_ipv6_unicast_key *key6 = key;
++    const struct nsi_ip_unicast_rw *rw = rw_data;
++    const NET_LUID *luid = fam == AF_INET ? &key4->luid : &key6->luid;
++    const void *addr = fam == AF_INET ? (const void *)&key4->addr : (const void *)&key6->addr;
++    unsigned short addr_len = fam == AF_INET ? sizeof(key4->addr) : sizeof(key6->addr);
++    struct ifa_cacheinfo cache;
++    struct netlink_request req;
++    unsigned int index, prefix_len;
++    unsigned short flags;
++    NTSTATUS status;
++
++    if ((status = luid_to_unix_index( luid, &index ))) return status;
++
++    if (action == NSI_SET_DELETE || action == NSI_SET_DEFAULT)
++    {
++        netlink_init( &req, RTM_DELADDR, 0, sizeof(req.u.addr) );
++        req.u.addr.ifa_family = fam;
++        req.u.addr.ifa_index = index;
++        netlink_add_attr( &req, IFA_LOCAL, addr, addr_len );
++        if (fam == AF_INET6) netlink_add_attr( &req, IFA_ADDRESS, addr, addr_len );
++        status = netlink_status( netlink_send( &req ) );
++        if (status == STATUS_NOT_FOUND) status = STATUS_INVALID_PARAMETER;
++        if (status || action == NSI_SET_DELETE) return status;
++        flags = NLM_F_CREATE | NLM_F_EXCL;
++    }
++    else if (action == NSI_SET_CREATE_ONLY) flags = NLM_F_CREATE | NLM_F_EXCL;
++    else if (action == NSI_SET_CREATE_OR_SET) flags = NLM_F_CREATE | NLM_F_REPLACE;
++    else return STATUS_NOT_SUPPORTED;
++
++    prefix_len = rw->on_link_prefix;
++    if (prefix_len == 0xff || prefix_len == ~0u) prefix_len = IP_MAX_PREFIX_LEN( fam );
++    if (prefix_len > IP_MAX_PREFIX_LEN( fam )) return STATUS_INVALID_PARAMETER;
++
++    netlink_init( &req, RTM_NEWADDR, flags, sizeof(req.u.addr) );
++    req.u.addr.ifa_family = fam;
++    req.u.addr.ifa_prefixlen = prefix_len;
++    req.u.addr.ifa_scope = RT_SCOPE_UNIVERSE;
++    req.u.addr.ifa_index = index;
++    if (fam == AF_INET6) req.u.addr.ifa_flags = IFA_F_NODAD;
++    netlink_add_attr( &req, IFA_LOCAL, addr, addr_len );
++    netlink_add_attr( &req, IFA_ADDRESS, addr, addr_len );
++    if (rw->valid_lifetime != ~0u || rw->preferred_lifetime != ~0u)
++    {
++        memset( &cache, 0, sizeof(cache) );
++        cache.ifa_valid = rw->valid_lifetime;
++        cache.ifa_prefered = min( rw->preferred_lifetime, rw->valid_lifetime );
++        netlink_add_attr( &req, IFA_CACHEINFO, &cache, sizeof(cache) );
++    }
++    return netlink_status( netlink_send( &req ) );
++}
++
++static BOOL ip_forward_key_equal( UINT fam, const void *key1, const void *key2 )
++{
++    if (fam == AF_INET)
++    {
++        const struct nsi_ipv4_forward_key *a = key1, *b = key2;
++        return a->prefix.WS_s_addr == b->prefix.WS_s_addr && a->prefix_len == b->prefix_len &&
++               a->luid.Value == b->luid.Value && a->next_hop.WS_s_addr == b->next_hop.WS_s_addr;
++    }
++    else
++    {
++        const struct nsi_ipv6_forward_key *a = key1, *b = key2;
++        return !memcmp( &a->prefix, &b->prefix, sizeof(a->prefix) ) && a->prefix_len == b->prefix_len &&
++               a->luid.Value == b->luid.Value && !memcmp( &a->next_hop, &b->next_hop, sizeof(a->next_hop) );
++    }
++}
++
++static BOOL ip_forward_exists( UINT fam, const void *key )
++{
++    UINT key_size = fam == AF_INET ? sizeof(struct nsi_ipv4_forward_key) : sizeof(struct nsi_ipv6_forward_key);
++    const NPI_MODULEID *module = fam == AF_INET ? &NPI_MS_IPV4_MODULEID : &NPI_MS_IPV6_MODULEID;
++    UINT count = 0, i;
++    BOOL ret = FALSE;
++    char *keys;
++
++    if (nsi_enumerate_all( 1, 0, module, NSI_IP_FORWARD_TABLE, NULL, 0, NULL, 0, NULL, 0, NULL, 0, &count ))
++        return FALSE;
++    if (!count || !(keys = malloc( count * key_size ))) return FALSE;
++    if (!nsi_enumerate_all( 1, 0, module, NSI_IP_FORWARD_TABLE, keys, key_size, NULL, 0, NULL, 0, NULL, 0, &count ))
++        for (i = 0; i < count && !ret; i++) ret = ip_forward_key_equal( fam, keys + i * key_size, key );
++    free( keys );
++    return ret;
++}
++
++static NTSTATUS ip_forward_set( UINT fam, UINT action, const void *key, const void *rw_data )
++{
++    const struct nsi_ipv4_forward_key *key4 = key;
++    const struct nsi_ipv6_forward_key *key6 = key;
++    const struct nsi_ip_forward_rw *rw = rw_data;
++    const NET_LUID *luid = fam == AF_INET ? &key4->luid : &key6->luid;
++    const void *prefix = fam == AF_INET ? (const void *)&key4->prefix : (const void *)&key6->prefix;
++    const void *next_hop = fam == AF_INET ? (const void *)&key4->next_hop : (const void *)&key6->next_hop;
++    unsigned short addr_len = fam == AF_INET ? sizeof(key4->prefix) : sizeof(key6->prefix);
++    unsigned int prefix_len = fam == AF_INET ? key4->prefix_len : key6->prefix_len;
++    static const BYTE zero[16];
++    BOOL has_next_hop = !!memcmp( next_hop, zero, addr_len );
++    struct netlink_request req;
++    unsigned int index, metric;
++    NTSTATUS status;
++    BOOL exists;
++
++    if (prefix_len > IP_MAX_PREFIX_LEN( fam )) return STATUS_INVALID_PARAMETER;
++    if ((status = luid_to_unix_index( luid, &index ))) return status;
++
++    exists = ip_forward_exists( fam, key );
++    if (action == NSI_SET_CREATE_ONLY && exists) return STATUS_DUPLICATE_OBJECTID;
++    if ((action == NSI_SET_DELETE || action == NSI_SET_DEFAULT) && !exists) return STATUS_NOT_FOUND;
++    if (action > NSI_SET_DELETE) return STATUS_NOT_SUPPORTED;
++
++    if (exists && action != NSI_SET_CREATE_ONLY)
++    {
++        netlink_init( &req, RTM_DELROUTE, 0, sizeof(req.u.route) );
++        req.u.route.rtm_family = fam;
++        req.u.route.rtm_dst_len = prefix_len;
++        req.u.route.rtm_table = RT_TABLE_MAIN;
++        req.u.route.rtm_scope = RT_SCOPE_NOWHERE;
++        if (prefix_len) netlink_add_attr( &req, RTA_DST, prefix, addr_len );
++        netlink_add_attr( &req, RTA_OIF, &index, sizeof(index) );
++        if (has_next_hop) netlink_add_attr( &req, RTA_GATEWAY, next_hop, addr_len );
++        if ((status = netlink_status( netlink_send( &req ) )) || action == NSI_SET_DELETE) return status;
++    }
++
++    netlink_init( &req, RTM_NEWROUTE, NLM_F_CREATE | NLM_F_EXCL, sizeof(req.u.route) );
++    req.u.route.rtm_family = fam;
++    req.u.route.rtm_dst_len = prefix_len;
++    req.u.route.rtm_table = RT_TABLE_MAIN;
++    req.u.route.rtm_protocol = RTPROT_STATIC;
++    req.u.route.rtm_scope = has_next_hop ? RT_SCOPE_UNIVERSE : RT_SCOPE_LINK;
++    req.u.route.rtm_type = RTN_UNICAST;
++    if (prefix_len) netlink_add_attr( &req, RTA_DST, prefix, addr_len );
++    netlink_add_attr( &req, RTA_OIF, &index, sizeof(index) );
++    if (has_next_hop) netlink_add_attr( &req, RTA_GATEWAY, next_hop, addr_len );
++    metric = rw->metric == ~0u ? 0 : rw->metric;
++    if (metric) netlink_add_attr( &req, RTA_PRIORITY, &metric, sizeof(metric) );
++    return netlink_status( netlink_send( &req ) );
++}
++
++#else  /* HAVE_LINUX_RTNETLINK_H */
++
++static NTSTATUS ip_interface_set( UINT fam, UINT action, const void *key, const void *rw_data )
++{
++    FIXME( "not supported on this platform\n" );
++    return STATUS_NOT_SUPPORTED;
++}
++
++static NTSTATUS ip_unicast_set( UINT fam, UINT action, const void *key, const void *rw_data )
++{
++    FIXME( "not supported on this platform\n" );
++    return STATUS_NOT_SUPPORTED;
++}
++
++static NTSTATUS ip_forward_set( UINT fam, UINT action, const void *key, const void *rw_data )
++{
++    FIXME( "not supported on this platform\n" );
++    return STATUS_NOT_SUPPORTED;
++}
++
++#endif  /* HAVE_LINUX_RTNETLINK_H */
++
++static NTSTATUS ipv4_interface_set_all_parameters( UINT action, const void *key, UINT key_size,
++                                                   const void *rw_data, UINT rw_size )
++{
++    TRACE( "action %u\n", action );
++    return ip_interface_set( AF_INET, action, key, rw_data );
++}
++
++static NTSTATUS ipv6_interface_set_all_parameters( UINT action, const void *key, UINT key_size,
++                                                   const void *rw_data, UINT rw_size )
++{
++    TRACE( "action %u\n", action );
++    return ip_interface_set( AF_INET6, action, key, rw_data );
++}
++
++static NTSTATUS ipv4_unicast_set_all_parameters( UINT action, const void *key, UINT key_size,
++                                                 const void *rw_data, UINT rw_size )
++{
++    TRACE( "action %u\n", action );
++    return ip_unicast_set( AF_INET, action, key, rw_data );
++}
++
++static NTSTATUS ipv6_unicast_set_all_parameters( UINT action, const void *key, UINT key_size,
++                                                 const void *rw_data, UINT rw_size )
++{
++    TRACE( "action %u\n", action );
++    return ip_unicast_set( AF_INET6, action, key, rw_data );
++}
++
++static NTSTATUS ipv4_forward_set_all_parameters( UINT action, const void *key, UINT key_size,
++                                                 const void *rw_data, UINT rw_size )
++{
++    TRACE( "action %u\n", action );
++    return ip_forward_set( AF_INET, action, key, rw_data );
++}
++
++static NTSTATUS ipv6_forward_set_all_parameters( UINT action, const void *key, UINT key_size,
++                                                 const void *rw_data, UINT rw_size )
++{
++    TRACE( "action %u\n", action );
++    return ip_forward_set( AF_INET6, action, key, rw_data );
++}
++
+ static struct module_table ipv4_tables[] =
+ {
+     {
+@@ -1890,6 +2280,8 @@ static struct module_table ipv4_tables[] =
+         },
+         ipv4_interface_enumerate_all,
+         ipv4_interface_get_all_parameters,
++        NULL,
++        ipv4_interface_set_all_parameters,
+     },
+     {
+         NSI_IP_UNICAST_TABLE,
+@@ -1899,6 +2291,8 @@ static struct module_table ipv4_tables[] =
+         },
+         ipv4_unicast_enumerate_all,
+         ip_unicast_get_all_parameters,
++        NULL,
++        ipv4_unicast_set_all_parameters,
+     },
+     {
+         NSI_IP_NEIGHBOUR_TABLE,
+@@ -1915,6 +2309,9 @@ static struct module_table ipv4_tables[] =
+             sizeof(struct nsi_ipv4_forward_dynamic), sizeof(struct nsi_ip_forward_static)
+         },
+         ipv4_forward_enumerate_all,
++        NULL,
++        NULL,
++        ipv4_forward_set_all_parameters,
+     },
+     {
+         ~0u
+@@ -1964,6 +2361,8 @@ static struct module_table ipv6_tables[] =
+         },
+         ipv6_interface_enumerate_all,
+         ipv6_interface_get_all_parameters,
++        NULL,
++        ipv6_interface_set_all_parameters,
+     },
+     {
+         NSI_IP_UNICAST_TABLE,
+@@ -1973,6 +2372,8 @@ static struct module_table ipv6_tables[] =
+         },
+         ipv6_unicast_enumerate_all,
+         ip_unicast_get_all_parameters,
++        NULL,
++        ipv6_unicast_set_all_parameters,
+     },
+     {
+         NSI_IP_NEIGHBOUR_TABLE,
+@@ -1989,6 +2390,9 @@ static struct module_table ipv6_tables[] =
+             sizeof(struct nsi_ipv6_forward_dynamic), sizeof(struct nsi_ip_forward_static)
+         },
+         ipv6_forward_enumerate_all,
++        NULL,
++        NULL,
++        ipv6_forward_set_all_parameters,
+     },
+     {
+         ~0u
+diff --git a/dlls/nsiproxy.sys/nsi.c b/dlls/nsiproxy.sys/nsi.c
+index 9e88a673610..dd7924bbb20 100644
+--- a/dlls/nsiproxy.sys/nsi.c
++++ b/dlls/nsiproxy.sys/nsi.c
+@@ -142,6 +142,24 @@ NTSTATUS nsi_get_parameter_ex( struct nsi_get_parameter_ex *params )
+                                  params->data, params->data_size, params->data_offset );
+ }
+ 
++NTSTATUS nsi_set_all_parameters_ex( struct nsi_set_all_parameters_ex *params )
++{
++    const struct module_table *entry = get_module_table( params->module, params->table );
++
++    if (!entry || !entry->set_all_parameters)
++    {
++        FIXME( "table %u not supported\n", (UINT)params->table );
++        return STATUS_NOT_SUPPORTED;
++    }
++
++    if (params->key_size != entry->sizes[0]) return STATUS_INVALID_PARAMETER;
++    if (params->rw_size && params->rw_size != entry->sizes[1]) return STATUS_INVALID_PARAMETER;
++    if (!params->rw_size && params->action != NSI_SET_DELETE) return STATUS_INVALID_PARAMETER;
++
++    return entry->set_all_parameters( params->action, params->key, params->key_size,
++                                      params->rw_size ? params->rw_data : NULL, params->rw_size );
++}
++
+ static NTSTATUS unix_nsi_enumerate_all_ex( void *args )
+ {
+     struct nsi_enumerate_all_ex *params = (struct nsi_enumerate_all_ex *)args;
+@@ -160,6 +178,12 @@ static NTSTATUS unix_nsi_get_parameter_ex( void *args )
+     return nsi_get_parameter_ex( params );
+ }
+ 
++static NTSTATUS unix_nsi_set_all_parameters_ex( void *args )
++{
++    struct nsi_set_all_parameters_ex *params = (struct nsi_set_all_parameters_ex *)args;
++    return nsi_set_all_parameters_ex( params );
++}
++
+ #if defined(HAVE_LINUX_RTNETLINK_H) || defined(__APPLE__)
+ static struct
+ {
+@@ -351,4 +375,5 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
+     unix_nsi_get_all_parameters_ex,
+     unix_nsi_get_parameter_ex,
+     unix_nsi_get_notification,
++    unix_nsi_set_all_parameters_ex,
+ };
+diff --git a/dlls/nsiproxy.sys/unix_private.h b/dlls/nsiproxy.sys/unix_private.h
+index 7fac3af4f88..27ce9a08115 100644
+--- a/dlls/nsiproxy.sys/unix_private.h
++++ b/dlls/nsiproxy.sys/unix_private.h
+@@ -27,6 +27,7 @@
+ NTSTATUS nsi_enumerate_all_ex( struct nsi_enumerate_all_ex *params );
+ NTSTATUS nsi_get_all_parameters_ex( struct nsi_get_all_parameters_ex *params );
+ NTSTATUS nsi_get_parameter_ex( struct nsi_get_parameter_ex *params );
++NTSTATUS nsi_set_all_parameters_ex( struct nsi_set_all_parameters_ex *params );
+ 
+ static inline NTSTATUS nsi_enumerate_all( UINT unk, UINT unk2, const NPI_MODULEID *module, UINT table,
+                                           void *key_data, UINT key_size, void *rw_data, UINT rw_size,
+@@ -142,6 +143,7 @@ struct module_table
+                                     void *static_data, UINT static_size );
+     NTSTATUS (*get_parameter)( const void *key, UINT key_size, UINT param_type,
+                                void *data, UINT data_size, UINT data_offset );
++    NTSTATUS (*set_all_parameters)( UINT action, const void *key, UINT key_size, const void *rw_data, UINT rw_size );
+ };
+ 
+ struct module
+diff --git a/include/netioapi.h b/include/netioapi.h
+index 9994e5b19ac..68bac17624c 100644
+--- a/include/netioapi.h
++++ b/include/netioapi.h
+@@ -267,6 +267,10 @@ IPHLPAPI_DLL_LINKAGE DWORD WINAPI ConvertInterfaceLuidToNameW(const NET_LUID*,WC
+ IPHLPAPI_DLL_LINKAGE DWORD WINAPI ConvertInterfaceNameToLuidA(const char*,NET_LUID*);
+ IPHLPAPI_DLL_LINKAGE DWORD WINAPI ConvertInterfaceNameToLuidW(const WCHAR*,NET_LUID*);
+ IPHLPAPI_DLL_LINKAGE DWORD WINAPI ConvertLengthToIpv4Mask(ULONG,ULONG*);
++IPHLPAPI_DLL_LINKAGE DWORD WINAPI CreateIpForwardEntry2(const MIB_IPFORWARD_ROW2*);
++IPHLPAPI_DLL_LINKAGE DWORD WINAPI CreateUnicastIpAddressEntry(const MIB_UNICASTIPADDRESS_ROW*);
++IPHLPAPI_DLL_LINKAGE DWORD WINAPI DeleteIpForwardEntry2(const MIB_IPFORWARD_ROW2*);
++IPHLPAPI_DLL_LINKAGE DWORD WINAPI DeleteUnicastIpAddressEntry(const MIB_UNICASTIPADDRESS_ROW*);
+ IPHLPAPI_DLL_LINKAGE void WINAPI FreeMibTable(void*);
+ IPHLPAPI_DLL_LINKAGE DWORD WINAPI GetAnycastIpAddressTable(ADDRESS_FAMILY,MIB_ANYCASTIPADDRESS_TABLE**);
+ IPHLPAPI_DLL_LINKAGE DWORD WINAPI GetBestRoute2(NET_LUID *luid, NET_IFINDEX index, const SOCKADDR_INET *source,
+@@ -288,5 +292,11 @@ IPHLPAPI_DLL_LINKAGE DWORD WINAPI GetUnicastIpAddressTable(ADDRESS_FAMILY,MIB_UN
+ IPHLPAPI_DLL_LINKAGE DWORD WINAPI SetCurrentThreadCompartmentId(NET_IF_COMPARTMENT_ID);
+ IPHLPAPI_DLL_LINKAGE PCHAR WINAPI if_indextoname(NET_IFINDEX,PCHAR);
+ IPHLPAPI_DLL_LINKAGE NET_IFINDEX WINAPI if_nametoindex(PCSTR);
++IPHLPAPI_DLL_LINKAGE void WINAPI InitializeIpForwardEntry(MIB_IPFORWARD_ROW2*);
++IPHLPAPI_DLL_LINKAGE void WINAPI InitializeIpInterfaceEntry(MIB_IPINTERFACE_ROW*);
++IPHLPAPI_DLL_LINKAGE void WINAPI InitializeUnicastIpAddressEntry(MIB_UNICASTIPADDRESS_ROW*);
++IPHLPAPI_DLL_LINKAGE DWORD WINAPI SetIpForwardEntry2(const MIB_IPFORWARD_ROW2*);
++IPHLPAPI_DLL_LINKAGE DWORD WINAPI SetIpInterfaceEntry(MIB_IPINTERFACE_ROW*);
++IPHLPAPI_DLL_LINKAGE DWORD WINAPI SetUnicastIpAddressEntry(const MIB_UNICASTIPADDRESS_ROW*);
+ 
+ #endif /* __WINE_NETIOAPI_H */
+diff --git a/include/wine/nsi.h b/include/wine/nsi.h
+index 5028bbf9e19..6f49baf1d9c 100644
+--- a/include/wine/nsi.h
++++ b/include/wine/nsi.h
+@@ -423,6 +423,7 @@ struct nsi_udp_endpoint_static
+ #define IOCTL_NSIPROXY_WINE_GET_PARAMETER         CTL_CODE(FILE_DEVICE_NETWORK, 0x402, METHOD_BUFFERED, 0)
+ #define IOCTL_NSIPROXY_WINE_ICMP_ECHO             CTL_CODE(FILE_DEVICE_NETWORK, 0x403, METHOD_BUFFERED, 0)
+ #define IOCTL_NSIPROXY_WINE_CHANGE_NOTIFICATION   CTL_CODE(FILE_DEVICE_NETWORK, 0x404, METHOD_BUFFERED, 0)
++#define IOCTL_NSIPROXY_WINE_SET_ALL_PARAMETERS    CTL_CODE(FILE_DEVICE_NETWORK, 0x405, METHOD_BUFFERED, 0)
+ 
+ /* input for IOCTL_NSIPROXY_WINE_ENUMERATE_ALL */
+ struct nsiproxy_enumerate_all
+@@ -480,6 +481,18 @@ struct nsiproxy_icmp_echo
+     BYTE data[1]; /* ((opt_size + 3) & ~3) + req_size */
+ };
+ 
++/* input for IOCTL_NSIPROXY_WINE_SET_ALL_PARAMETERS */
++struct nsiproxy_set_all_parameters
++{
++    NPI_MODULEID module;
++    UINT first_arg;
++    UINT action;
++    UINT table;
++    UINT key_size;
++    UINT rw_size;
++    BYTE data[1]; /* key_size + rw_size */
++};
++
+ /* input for IOCTL_NSIPROXY_WINE_CHANGE_NOTIFICATION */
+ struct nsiproxy_request_notification
+ {
+@@ -543,6 +556,25 @@ struct nsi_get_parameter_ex
+     UINT data_offset;
+ };
+ 
++/* NSI_SET_ACTION */
++#define NSI_SET_DEFAULT                0
++#define NSI_SET_CREATE_ONLY            1
++#define NSI_SET_CREATE_OR_SET          2
++#define NSI_SET_DELETE                 3
++
++struct nsi_set_all_parameters_ex
++{
++    void *unknown[2];
++    const NPI_MODULEID *module;
++    UINT_PTR table;
++    UINT first_arg;
++    UINT action;
++    const void *key;
++    UINT key_size;
++    const void *rw_data;
++    UINT rw_size;
++};
++
+ struct nsi_request_change_notification_ex
+ {
+     DWORD unk;
+@@ -572,5 +604,8 @@ DWORD WINAPI NsiGetParameterEx( struct nsi_get_parameter_ex *params );
+ DWORD WINAPI NsiRequestChangeNotification( DWORD unk, const NPI_MODULEID *module, DWORD table, OVERLAPPED *ovr,
+                                            HANDLE *handle );
+ DWORD WINAPI NsiRequestChangeNotificationEx( struct nsi_request_change_notification_ex *params );
++DWORD WINAPI NsiSetAllParameters( DWORD unk, DWORD action, const NPI_MODULEID *module, DWORD table,
++                                  const void *key, DWORD key_size, const void *rw_data, DWORD rw_size );
++DWORD WINAPI NsiSetAllParametersEx( struct nsi_set_all_parameters_ex *params );
+ 
+ #endif /* __WINE_NSI_H */

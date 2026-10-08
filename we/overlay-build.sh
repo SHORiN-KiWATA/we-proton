@@ -53,6 +53,12 @@ declare -A TARGETS=(
     [programs/explorer]="programs/explorer/x86_64-windows/explorer.exe:x86_64-windows/explorer.exe programs/explorer/i386-windows/explorer.exe:i386-windows/explorer.exe programs/explorer/explorer.so:x86_64-unix/explorer.so"
     [dlls/qcap]="dlls/qcap/qcap.so:x86_64-unix/qcap.so"
     [dlls/wintun]="dlls/wintun/x86_64-windows/wintun.dll:x86_64-windows/wintun.dll dlls/wintun/i386-windows/wintun.dll:i386-windows/wintun.dll dlls/wintun/wintun.so:x86_64-unix/wintun.so"
+    [dlls/ntdll]="dlls/ntdll/x86_64-windows/ntdll.dll:x86_64-windows/ntdll.dll dlls/ntdll/i386-windows/ntdll.dll:i386-windows/ntdll.dll"
+    [dlls/kernel32]="dlls/kernel32/x86_64-windows/kernel32.dll:x86_64-windows/kernel32.dll dlls/kernel32/i386-windows/kernel32.dll:i386-windows/kernel32.dll"
+    [dlls/kernelbase]="dlls/kernelbase/x86_64-windows/kernelbase.dll:x86_64-windows/kernelbase.dll dlls/kernelbase/i386-windows/kernelbase.dll:i386-windows/kernelbase.dll"
+    [dlls/iphlpapi]="dlls/iphlpapi/x86_64-windows/iphlpapi.dll:x86_64-windows/iphlpapi.dll dlls/iphlpapi/i386-windows/iphlpapi.dll:i386-windows/iphlpapi.dll"
+    [dlls/nsi]="dlls/nsi/x86_64-windows/nsi.dll:x86_64-windows/nsi.dll dlls/nsi/i386-windows/nsi.dll:i386-windows/nsi.dll"
+    [dlls/nsiproxy.sys]="dlls/nsiproxy.sys/x86_64-windows/nsiproxy.sys:x86_64-windows/nsiproxy.sys dlls/nsiproxy.sys/nsiproxy.so:x86_64-unix/nsiproxy.so"
 )
 # d3dcompiler_43's sources are built into d3d10 and every other d3dcompiler_*.
 for m in d3d10 d3dcompiler_{33..43} d3dcompiler_46 d3dcompiler_47; do

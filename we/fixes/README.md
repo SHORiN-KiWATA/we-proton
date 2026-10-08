@@ -16,7 +16,9 @@
 | wine 0010 | WinHttpAddRequestHeaders 遇到开头的空行就返回 ERROR_WINHTTP_INVALID_HEADER，自定义请求头加不上，请求发不出去 | `0010-winhttp-leading-empty-lines/` |
 | wine 0011 | 通知区图标只能嵌进 XEmbed 系统托盘，在只支持 StatusNotifierItem 的面板（waybar 等 Wayland 面板）上看不到，隐藏到托盘的程序叫不回来 | `0011-explorer-status-notifier-items/` |
 | wine 0012 | WoW64 下视频采集返回给 32 位程序的媒体类型带着未初始化的 `pUnk`，枚举摄像头格式的程序（如 Chromium/CEF）释放时崩溃 | `0012-qcap-wow64-media-type-punk/` |
+| wine 0013 | 用私有命名空间（`CreatePrivateNamespace`/`OpenPrivateNamespace`、边界描述符）做单实例检测的客户端在 Wine 里一启动就崩 | `0013-private-namespaces/` |
 | wine 0014 | 线程调用 `ImmDisableIME` 后，宿主输入法提交的文字被丢掉，靠 TSF 收输入法文字的程序能看到候选框，但打不了中文 | `0014-ime-disabled-thread-text/` |
+| wine 0015 | 设置网卡参数、给网卡加地址和路由的 iphlpapi 函数没有实现，程序配置虚拟网卡时失败 | `0015-iphlpapi-set-path/` |
 | wine 0016 | 用 wintun 接口创建虚拟网卡的程序（VPN、游戏加速器等）在 Wine 里没有实现，建网卡一步失败 | `0016-wintun-dll/` |
 | vkd3d-proton 0001 | dxil-spirv 生成非法的结构化控制流，RADV 拒绝后崩溃 | `vkd3d-0001-dxil-spirv-loop-breaks/` |
 
