@@ -19,6 +19,7 @@
 | `wine/0005-ntdll-Report-written-write-copy-pages-as-read-write` | 写过的写时复制页报告 `PAGE_READWRITE` |
 | `wine/0006-win32u-Don-t-activate-WS_EX_NOACTIVATE-windows-in-pl` | 活动窗口消失后不把 `WS_EX_NOACTIVATE` 窗口设成前台 |
 | `wine/0007-win32u-Draw-layered-child-windows-into-their-parent-` | 分层子窗口（`WS_CHILD` + `WS_EX_LAYERED`）画进父窗口，不再变成单独的顶层窗口 |
+| `wine/0008-rpcrt4-Marshal-type-library-parameters-without-a-dir` | 类型库封送把没有 `[in]`/`[out]` 的指针参数按 `[in, out]` 处理，和 Windows 一致 |
 | `vkd3d-proton/0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
 
 每个补丁的现象、根因、Windows 实测、验证和排查过程见 `we/fixes/`。
@@ -32,9 +33,12 @@
 - `writecopy_probe`、`writecopy_probe2`（0005）：写时复制页写前写后报告的保护属性、代码页打补丁、区域边界
 - `noactivate_probe`（0006）：普通窗口隐藏、最小化、销毁时谁接手前台，`WS_EX_NOACTIVATE` 窗口在同一进程和另一个进程两种情况；要在有显示的环境里跑（Xvfb 即可）
 - `layered_child_probe`（0007）：用 `UpdateLayeredWindow` 更新的分层子窗口画在哪里、跟不跟父窗口走。用 `layered_child_grab.py` 在 Xvfb 上跑（`DISPLAY=:N layered_child_grab.py <runner>/files/bin/wine layered_child_probe.exe [pos]`），它从 X 根窗口读像素，需要没有合成器的 X 服务器
+- `typelib_noflags_probe`（0008）：参数不带方向的类型库接口跨套间调用时，服务端看到什么、客户端拿回什么。`build.sh` 另编一个 32 位的 `typelib_noflags_probe32.exe`，两个都要跑
+- `sta_thread_exit_probe`（0008 排查时的弯路）：客户端 STA 线程不调 `CoUninitialize` 就退出时，代理的引用什么时候释放；Windows 和 Wine 相同
+- `quit_filter_probe`（0008 排查时的弯路）：`PostQuitMessage` 和 `PostThreadMessage(WM_QUIT)` 遇到各种 `GetMessage`/`PeekMessage` 过滤条件时返回什么；Windows 和 Wine 相同
 - `dxil-spirv/run.sh`（vkd3d-proton 0001）：用 dxil-spirv 的 `structurize-test` 跑 `*.st` 控制流图，检查生成的 SPIR-V 能通过校验。源码取 `build/overlay/src-vkd3d-proton`（先跑 `overlay-build.sh`）；`--unpatched` 用未打补丁的子模块，应该失败
 
-Wine 自己的测试：用 `build/overlay/src-wine` 另配一个 `--enable-tests` 的构建目录，编 `dlls/kernel32/tests`、`dlls/ntdll/tests`、`dlls/user32/tests`，用新旧 runner 各跑一遍、逐条比对失败项（0005、0006 就是这样验证的）。
+Wine 自己的测试：用 `build/overlay/src-wine` 另配一个 `--enable-tests` 的构建目录，编 `dlls/kernel32/tests`、`dlls/ntdll/tests`、`dlls/user32/tests`（0008 是 `dlls/oleaut32/tests`、`dlls/rpcrt4/tests`），用新旧 runner 各跑一遍、逐条比对失败项（0005 起都这样验证）。
 
 ## 诊断
 
@@ -64,7 +68,7 @@ we/overlay-build.sh --install
 
 1. 下载官方 `dwproton-11.0-14` 发布包到 `~/.cache/we-proton/`，校验 sha512
 2. 从 `wine/` 导出源码，打 `patches/wine/*.patch`，生成 configure 和 vulkan 头文件
-3. 在 `Makefile.in` 指定的 Steam Linux Runtime 4.0 SDK 镜像里（docker）配置、编译 Wine，编译参数照抄 `Makefile.in`（`-march=nocona`、禁用 AVX、`-mcmodel=small` 等），unix 库只依赖运行时里有的库（在宿主机上编会链接宿主机的 `libunwind`，进不了运行时）。只编补丁动到的东西：`dlls/ntdll/unix` → `ntdll.so`，`server` → `wineserver`，`dlls/ntoskrnl.exe` → `ntoskrnl.exe`，`dlls/win32u` → `win32u.so`。一个目录可以对应多个文件（32 位程序也会加载的 PE DLL 要换两个架构）。补丁动到别的目录时脚本会报错，要先在 `TARGETS` 里加映射（`*/tests/*` 不发布，跳过）
+3. 在 `Makefile.in` 指定的 Steam Linux Runtime 4.0 SDK 镜像里（docker）配置、编译 Wine，编译参数照抄 `Makefile.in`（`-march=nocona`、禁用 AVX、`-mcmodel=small` 等），unix 库只依赖运行时里有的库（在宿主机上编会链接宿主机的 `libunwind`，进不了运行时）。只编补丁动到的东西：`dlls/ntdll/unix` → `ntdll.so`，`server` → `wineserver`，`dlls/ntoskrnl.exe` → `ntoskrnl.exe`，`dlls/win32u` → `win32u.so`，`dlls/rpcrt4` → 64 位和 32 位的 `rpcrt4.dll`（所以配置了 i386 和 x86_64 两个 PE 架构）。补丁动到别的目录时脚本会报错，要先在 `TARGETS` 里加映射（`*/tests/*` 不发布，跳过）
 4. `patches/vkd3d-proton/` 有补丁时：同步 `vkd3d-proton/` 源码到 `build/overlay/src-vkd3d-proton`，打补丁，用 meson 交叉编译 x86_64 和 i386 的 `d3d12.dll`、`d3d12core.dll`，编译参数照抄 `Makefile.in`（`-march=nocona`、禁用 AVX、`-O3`、静态 libstdc++）。需要 `git submodule update --init --recursive vkd3d-proton`；widl 用 overlay 里 wine 编出来的
 5. 替换进发布包，改名为 `we-proton-11.0-14-<N>`，输出到 `build/`，再生成三个发布文件：`<名字>.tar.xz`（runner）、`<名字>.sha512sum`、`<名字>-source.tar.xz`（构建用的、打好补丁的 Wine 和 vkd3d-proton 源码，满足 LGPL 提供源码的要求）
 6. `--install` 时复制到 `~/.local/share/proton/runners/WE-Proton`

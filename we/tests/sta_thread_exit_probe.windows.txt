@@ -1,0 +1,16 @@
+exit without Release or CoUninitialize
+  marshalled, object refs 4
+  call through the proxy 0x80040111 (the object returns CLASS_E_CLASSNOTAVAILABLE), object refs 4
+  client references released 0 ms after the client thread exited
+Release, exit without CoUninitialize
+  marshalled, object refs 4
+  call through the proxy 0x80040111 (the object returns CLASS_E_CLASSNOTAVAILABLE), object refs 4
+  client references released 0 ms after the client thread exited
+CoUninitialize, exit without Release
+  marshalled, object refs 4
+  call through the proxy 0x80040111 (the object returns CLASS_E_CLASSNOTAVAILABLE), object refs 4
+  client references released 0 ms after the client thread exited
+Release and CoUninitialize, then exit
+  marshalled, object refs 4
+  call through the proxy 0x80040111 (the object returns CLASS_E_CLASSNOTAVAILABLE), object refs 4
+  client references released 0 ms after the client thread exited

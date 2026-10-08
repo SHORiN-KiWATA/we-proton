@@ -64,9 +64,10 @@ Delta Force or VALORANT) and does not adapt to ACE or any other anti-cheat.
 - Test programs go in `we/tests/` (static mingw builds, see `we/tests/build.sh`),
   with their output before and after the fix (`*.wine<release>.txt`,
   `*.windows.txt`).
-- Patches, commit messages, fix reports, test programs and their output describe
-  Wine bugs only. They must not name specific programs, game platforms, games or
-  anti-cheats. `README.md`, `README.en.md` and this file are the only exceptions.
+- Patches, commit messages, test programs and their output describe Wine bugs only.
+  They must not name specific programs, game platforms, games or anti-cheats.
+  Fix reports name the game the problem was found in, but no anti-cheat.
+  `README.md`, `README.en.md` and this file may name programs too.
 - Build with `we/overlay-build.sh --release <N>`. It needs docker: Wine is built in
   the Steam Linux Runtime SDK image named in `Makefile.in`, so the result runs inside
   the runtime. It deletes and recreates `build/we-proton-<version>-<N>`, so do not run
