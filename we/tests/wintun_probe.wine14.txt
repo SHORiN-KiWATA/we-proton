@@ -1,0 +1,46 @@
+export WintunCreateAdapter=yes
+export WintunOpenAdapter=yes
+export WintunCloseAdapter=yes
+export WintunDeleteDriver=yes
+export WintunGetAdapterLUID=yes
+export WintunGetRunningDriverVersion=yes
+export WintunSetLogger=yes
+export WintunStartSession=yes
+export WintunEndSession=yes
+export WintunGetReadWaitEvent=yes
+export WintunReceivePacket=yes
+export WintunReleaseReceivePacket=yes
+export WintunAllocateSendPacket=yes
+export WintunSendPacket=yes
+== driver ==
+driver-version=0x00000000
+delete-driver(no driver yet)=1 err=3735928559
+== create ==
+create-adapter=ok
+luid=03000000-00170000
+luid-to-index err=0 index=3
+index-to-luid err=0 luid=17000003000000 equal=1
+luid-to-alias err=0 alias=WintunProbe
+adapter: name=WintunProbe description=WintunProbe iftype=23 operstatus=1
+create-same-name=ok err=3735928559
+driver-version-after-create=0x0000000e
+open-adapter=ok err=3735928559
+== session ==
+start-session(0)=NULL err=87
+start-session(0x1000)=NULL err=87
+start-session(0x30000)=NULL err=87
+start-session(0x8000000)=NULL err=87
+start-session(0x20000)=ok err=0
+start-session-second=NULL err=1247
+read-wait-event=00000044 err=1247
+event-type=1 state=0
+event-wait(0)=258
+receive-drain: 48 (ipv6 next=58)
+allocate(0x20001)=NULL err=111
+allocate(1500)=packet err=111
+send=done err=111
+end-session=done
+== close ==
+open-after-close=NULL err=1168
+delete-driver=1 err=3735928559
+done

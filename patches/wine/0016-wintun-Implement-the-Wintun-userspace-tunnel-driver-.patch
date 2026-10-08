@@ -1,0 +1,1258 @@
+From 5d10276ec92cbeefcaec3ab06165f23d48025f03 Mon Sep 17 00:00:00 2001
+From: SHORiN-KIWATA <shorin@users.noreply.github.com>
+Date: Thu, 8 Oct 2026 23:10:06 +0900
+Subject: [PATCH] wintun: Implement the Wintun userspace tunnel driver
+ interface.
+
+Wintun lets a program create a TUN adapter and exchange packets with the
+network stack through it. Implement the DLL on top of the unix TUN driver:
+creating an adapter opens /dev/net/tun, the returned LUID is the one the
+NDIS ifinfo table has for the new interface, so the iphlpapi interface,
+address and route functions can be used on it, and a session exchanges
+packets between the TUN device and buffers handed to the caller.
+
+The structures passed to the unix library do not depend on the pointer
+size, so the same functions serve 32-bit callers under WoW64.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ configure.ac            |   1 +
+ dlls/wintun/Makefile.in |   7 +
+ dlls/wintun/unixlib.c   | 509 ++++++++++++++++++++++++++++++++++++++++
+ dlls/wintun/unixlib.h   |  97 ++++++++
+ dlls/wintun/wintun.c    | 495 ++++++++++++++++++++++++++++++++++++++
+ dlls/wintun/wintun.h    |  55 +++++
+ dlls/wintun/wintun.spec |  14 ++
+ 7 files changed, 1178 insertions(+)
+ create mode 100644 dlls/wintun/Makefile.in
+ create mode 100644 dlls/wintun/unixlib.c
+ create mode 100644 dlls/wintun/unixlib.h
+ create mode 100644 dlls/wintun/wintun.c
+ create mode 100644 dlls/wintun/wintun.h
+ create mode 100644 dlls/wintun/wintun.spec
+
+diff --git a/configure.ac b/configure.ac
+index 8a5b66af4c3..9bbba6a215c 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -3480,6 +3480,7 @@ WINE_CONFIG_MAKEFILE(dlls/wintab32)
+ WINE_CONFIG_MAKEFILE(dlls/wintab32/tests)
+ WINE_CONFIG_MAKEFILE(dlls/wintrust)
+ WINE_CONFIG_MAKEFILE(dlls/wintrust/tests)
++WINE_CONFIG_MAKEFILE(dlls/wintun)
+ WINE_CONFIG_MAKEFILE(dlls/wintypes)
+ WINE_CONFIG_MAKEFILE(dlls/wintypes/tests)
+ WINE_CONFIG_MAKEFILE(dlls/winusb)
+diff --git a/dlls/wintun/Makefile.in b/dlls/wintun/Makefile.in
+new file mode 100644
+index 00000000000..d2eba7c018d
+--- /dev/null
++++ b/dlls/wintun/Makefile.in
+@@ -0,0 +1,7 @@
++MODULE    = wintun.dll
++UNIXLIB   = wintun.so
++IMPORTS   = iphlpapi kernel32
++
++SOURCES = \
++	unixlib.c \
++	wintun.c
+diff --git a/dlls/wintun/unixlib.c b/dlls/wintun/unixlib.c
+new file mode 100644
+index 00000000000..8c3e038b4b0
+--- /dev/null
++++ b/dlls/wintun/unixlib.c
+@@ -0,0 +1,509 @@
++/*
++ * Wintun userspace tunnel driver interface, unix side
++ *
++ * Copyright 2026 SHORiN-KIWATA
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
++ */
++
++#if 0
++#pragma makedep unix
++#endif
++
++#include "config.h"
++
++#include <errno.h>
++#include <stdint.h>
++#include <stdlib.h>
++#include <string.h>
++#include <unistd.h>
++#include <fcntl.h>
++#include <poll.h>
++#include <net/if.h>
++
++#ifdef __linux__
++#include <sys/ioctl.h>
++#include <sys/socket.h>
++#include <linux/if_tun.h>
++#endif
++
++#include "ntstatus.h"
++#define WIN32_NO_STATUS
++#include "windef.h"
++#include "winnt.h"
++#include "winerror.h"
++#include "wine/unixlib.h"
++
++#include "unixlib.h"
++
++#define MAX_ADAPTERS 32
++
++struct unix_adapter
++{
++    char name[WINTUN_IFNAME_MAX];
++    int fd;
++    int wake[2];
++    int woken;
++    unsigned int index;
++    unsigned int refcount;
++};
++
++static struct unix_adapter *adapters[MAX_ADAPTERS];
++
++static struct unix_adapter *find_adapter( const char *name )
++{
++    unsigned int i;
++
++    for (i = 0; i < MAX_ADAPTERS; i++)
++        if (adapters[i] && !strcmp( adapters[i]->name, name )) return adapters[i];
++    return NULL;
++}
++
++static struct unix_adapter *find_adapter_ctx( UINT64 ctx )
++{
++    unsigned int i;
++
++    for (i = 0; i < MAX_ADAPTERS; i++)
++        if (adapters[i] == (struct unix_adapter *)(uintptr_t)ctx) return adapters[i];
++    return NULL;
++}
++
++static void add_adapter( struct unix_adapter *adapter )
++{
++    unsigned int i;
++
++    for (i = 0; i < MAX_ADAPTERS; i++)
++        if (!adapters[i]) { adapters[i] = adapter; return; }
++}
++
++static void remove_adapter( struct unix_adapter *adapter )
++{
++    unsigned int i;
++
++    for (i = 0; i < MAX_ADAPTERS; i++)
++        if (adapters[i] == adapter) { adapters[i] = NULL; return; }
++}
++
++static UINT errno_to_status( int err )
++{
++    switch (err)
++    {
++    case ENOENT: return ERROR_FILE_NOT_FOUND;
++    case EEXIST: return ERROR_ALREADY_EXISTS;
++    case EACCES:
++    case EPERM: return ERROR_ACCESS_DENIED;
++    case EBUSY: return ERROR_BUSY;
++    case EINVAL: return ERROR_INVALID_PARAMETER;
++    case ENODEV:
++    case ENXIO: return ERROR_NO_SUCH_DEVICE;
++    case ENOMEM: return ERROR_NOT_ENOUGH_MEMORY;
++    case ENOSPC: return ERROR_DISK_FULL;
++    case EAGAIN: return ERROR_NO_MORE_ITEMS;
++    default: return ERROR_GEN_FAILURE;
++    }
++}
++
++/* Derive the unix interface name from the adapter name, keeping it
++ * deterministic so that an adapter left behind by a crashed process can be
++ * opened again. Linux interface names are limited to 15 characters and may
++ * not contain spaces. */
++static void make_ifname( const WCHAR *name, char ifname[WINTUN_IFNAME_MAX] )
++{
++    static const char hex[] = "0123456789abcdef";
++    char tmp[64];
++    unsigned int i, len = 0;
++    UINT64 hash;
++
++    for (i = 0; name && name[i] && len < sizeof(tmp) - 1; i++)
++    {
++        WCHAR c = name[i];
++
++        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
++            c == '-' || c == '_')
++            tmp[len++] = (char)c;
++        else
++            tmp[len++] = '_';
++    }
++    tmp[len] = 0;
++    if (!len) { memcpy( tmp, "wintun", 7 ); len = 6; }
++
++    if (len <= WINTUN_IFNAME_MAX - 1)
++    {
++        memcpy( ifname, tmp, len + 1 );
++        return;
++    }
++
++    hash = 0xcbf29ce484222325ULL;
++    for (i = 0; name[i]; i++)
++    {
++        hash ^= (unsigned char)(name[i] & 0xff);
++        hash *= 0x100000001b3ULL;
++        hash ^= (unsigned char)(name[i] >> 8);
++        hash *= 0x100000001b3ULL;
++    }
++    memcpy( ifname, "wt_", 3 );
++    for (i = 0; i < 8; i++) ifname[3 + i] = hex[(hash >> (28 - 4 * i)) & 0xf];
++    ifname[11] = 0;
++}
++
++#ifdef __linux__
++
++static int make_pipe( int fds[2] )
++{
++    if (pipe( fds )) return -1;
++    fcntl( fds[0], F_SETFL, O_NONBLOCK );
++    fcntl( fds[1], F_SETFL, O_NONBLOCK );
++    fcntl( fds[0], F_SETFD, FD_CLOEXEC );
++    fcntl( fds[1], F_SETFD, FD_CLOEXEC );
++    return 0;
++}
++
++static int open_tun( const char *ifname, unsigned int *index )
++{
++    struct ifreq ifr;
++    int fd, sock, err;
++
++    if ((fd = open( "/dev/net/tun", O_RDWR | O_NONBLOCK )) < 0) return -1;
++    fcntl( fd, F_SETFD, FD_CLOEXEC );
++
++    memset( &ifr, 0, sizeof(ifr) );
++    memcpy( ifr.ifr_name, ifname, strlen( ifname ) );
++    ifr.ifr_flags = IFF_TUN | IFF_NO_PI | IFF_PERSIST;
++    if (ioctl( fd, TUNSETIFF, &ifr ) < 0)
++    {
++        err = errno;
++        close( fd );
++        errno = err;
++        return -1;
++    }
++
++    if ((sock = socket( AF_INET, SOCK_DGRAM, 0 )) >= 0)
++    {
++        memset( &ifr, 0, sizeof(ifr) );
++        memcpy( ifr.ifr_name, ifname, strlen( ifname ) );
++        if (!ioctl( sock, SIOCGIFFLAGS, &ifr ))
++        {
++            ifr.ifr_flags |= IFF_UP;
++            ioctl( sock, SIOCSIFFLAGS, &ifr );
++        }
++        close( sock );
++    }
++
++    if (index) *index = if_nametoindex( ifname );
++    return fd;
++}
++
++static void destroy_tun( struct unix_adapter *adapter )
++{
++    if (adapter->fd >= 0)
++    {
++        ioctl( adapter->fd, TUNSETPERSIST, 0 );
++        close( adapter->fd );
++        adapter->fd = -1;
++    }
++}
++
++static void close_pipe( struct unix_adapter *adapter )
++{
++    if (adapter->wake[0] >= 0) close( adapter->wake[0] );
++    if (adapter->wake[1] >= 0) close( adapter->wake[1] );
++    adapter->wake[0] = adapter->wake[1] = -1;
++}
++
++#else /* __linux__ */
++
++static int make_pipe( int fds[2] ) { (void)fds; return -1; }
++static int open_tun( const char *ifname, unsigned int *index )
++{
++    (void)ifname;
++    (void)index;
++    errno = ENOTSUP;
++    return -1;
++}
++static void destroy_tun( struct unix_adapter *adapter ) { (void)adapter; }
++static void close_pipe( struct unix_adapter *adapter ) { (void)adapter; }
++
++#endif /* __linux__ */
++
++static NTSTATUS wintun_create_adapter( void *args )
++{
++    struct wintun_create_params *params = args;
++    struct unix_adapter *adapter;
++    char ifname[WINTUN_IFNAME_MAX];
++
++    params->ctx = 0;
++    params->status = 0;
++    params->ifindex = 0;
++    memset( params->ifname, 0, sizeof(params->ifname) );
++
++    make_ifname( params->name, ifname );
++
++    if ((adapter = find_adapter( ifname )))
++    {
++        adapter->refcount++;
++        params->ctx = (UINT64)(uintptr_t)adapter;
++        params->ifindex = adapter->index;
++        memcpy( params->ifname, adapter->name, strlen( adapter->name ) + 1 );
++        return STATUS_SUCCESS;
++    }
++
++    if (!(adapter = calloc( 1, sizeof(*adapter) )))
++    {
++        params->status = ERROR_NOT_ENOUGH_MEMORY;
++        return STATUS_SUCCESS;
++    }
++    adapter->fd = -1;
++    adapter->wake[0] = adapter->wake[1] = -1;
++
++    if ((adapter->fd = open_tun( ifname, &adapter->index )) < 0)
++    {
++        params->status = errno_to_status( errno );
++        free( adapter );
++        return STATUS_SUCCESS;
++    }
++    adapter->refcount = 1;
++    if (make_pipe( adapter->wake ))
++    {
++        params->status = errno_to_status( errno );
++        destroy_tun( adapter );
++        free( adapter );
++        return STATUS_SUCCESS;
++    }
++
++    memcpy( adapter->name, ifname, strlen( ifname ) + 1 );
++    add_adapter( adapter );
++
++    params->ctx = (UINT64)(uintptr_t)adapter;
++    params->ifindex = adapter->index;
++    memcpy( params->ifname, ifname, strlen( ifname ) + 1 );
++    return STATUS_SUCCESS;
++}
++
++static NTSTATUS wintun_open_adapter( void *args )
++{
++    struct wintun_open_params *params = args;
++    struct unix_adapter *adapter;
++    char ifname[WINTUN_IFNAME_MAX];
++
++    params->ctx = 0;
++    params->status = 0;
++    params->ifindex = 0;
++    memset( params->ifname, 0, sizeof(params->ifname) );
++
++    make_ifname( params->name, ifname );
++
++    if ((adapter = find_adapter( ifname )))
++    {
++        adapter->refcount++;
++        params->ctx = (UINT64)(uintptr_t)adapter;
++        params->ifindex = adapter->index;
++        memcpy( params->ifname, adapter->name, strlen( adapter->name ) + 1 );
++        return STATUS_SUCCESS;
++    }
++
++    if (!if_nametoindex( ifname ))
++    {
++        params->status = ERROR_NOT_FOUND;
++        return STATUS_SUCCESS;
++    }
++
++    if (!(adapter = calloc( 1, sizeof(*adapter) )))
++    {
++        params->status = ERROR_NOT_ENOUGH_MEMORY;
++        return STATUS_SUCCESS;
++    }
++    adapter->fd = -1;
++    adapter->wake[0] = adapter->wake[1] = -1;
++
++    if ((adapter->fd = open_tun( ifname, &adapter->index )) < 0)
++    {
++        params->status = errno_to_status( errno );
++        free( adapter );
++        return STATUS_SUCCESS;
++    }
++    adapter->refcount = 1;
++    if (make_pipe( adapter->wake ))
++    {
++        params->status = errno_to_status( errno );
++        destroy_tun( adapter );
++        free( adapter );
++        return STATUS_SUCCESS;
++    }
++
++    memcpy( adapter->name, ifname, strlen( ifname ) + 1 );
++    add_adapter( adapter );
++
++    params->ctx = (UINT64)(uintptr_t)adapter;
++    params->ifindex = adapter->index;
++    memcpy( params->ifname, ifname, strlen( ifname ) + 1 );
++    return STATUS_SUCCESS;
++}
++
++static NTSTATUS wintun_close_adapter( void *args )
++{
++    struct wintun_close_params *params = args;
++    struct unix_adapter *adapter = find_adapter_ctx( params->ctx );
++
++    params->status = 0;
++    if (!adapter)
++    {
++        params->status = ERROR_INVALID_HANDLE;
++        return STATUS_SUCCESS;
++    }
++
++    if (--adapter->refcount) return STATUS_SUCCESS;
++
++    destroy_tun( adapter );
++    close_pipe( adapter );
++    remove_adapter( adapter );
++    free( adapter );
++    return STATUS_SUCCESS;
++}
++
++static NTSTATUS wintun_read_packet( void *args )
++{
++    struct wintun_io_params *params = args;
++    struct unix_adapter *adapter = find_adapter_ctx( params->ctx );
++    ssize_t ret;
++
++    params->ret = 0;
++    params->status = 0;
++    if (!adapter)
++    {
++        params->status = ERROR_INVALID_HANDLE;
++        return STATUS_SUCCESS;
++    }
++
++    if ((ret = read( adapter->fd, (void *)(uintptr_t)params->buffer, params->size )) < 0)
++    {
++        params->status = errno_to_status( errno );
++        return STATUS_SUCCESS;
++    }
++    params->ret = ret;
++    return STATUS_SUCCESS;
++}
++
++static NTSTATUS wintun_write_packet( void *args )
++{
++    struct wintun_io_params *params = args;
++    struct unix_adapter *adapter = find_adapter_ctx( params->ctx );
++    ssize_t ret;
++
++    params->ret = 0;
++    params->status = 0;
++    if (!adapter)
++    {
++        params->status = ERROR_INVALID_HANDLE;
++        return STATUS_SUCCESS;
++    }
++
++    if ((ret = write( adapter->fd, (void *)(uintptr_t)params->buffer, params->size )) < 0)
++    {
++        params->status = errno_to_status( errno );
++        return STATUS_SUCCESS;
++    }
++    params->ret = ret;
++    return STATUS_SUCCESS;
++}
++
++static NTSTATUS wintun_wait_readable( void *args )
++{
++    struct wintun_wait_params *params = args;
++    struct unix_adapter *adapter = find_adapter_ctx( params->ctx );
++    struct pollfd fds[2];
++    int ret;
++
++    params->readable = 0;
++    params->woken = 0;
++    params->status = 0;
++    if (!adapter)
++    {
++        params->status = ERROR_INVALID_HANDLE;
++        return STATUS_SUCCESS;
++    }
++    if (adapter->woken)
++    {
++        params->woken = 1;
++        return STATUS_SUCCESS;
++    }
++
++    fds[0].fd = adapter->fd;
++    fds[0].events = POLLIN;
++    fds[0].revents = 0;
++    fds[1].fd = adapter->wake[0];
++    fds[1].events = POLLIN;
++    fds[1].revents = 0;
++
++    ret = poll( fds, 2, params->timeout == WINTUN_WAIT_INFINITE ? -1 : (int)params->timeout );
++    if (ret < 0)
++    {
++        params->status = errno_to_status( errno );
++        return STATUS_SUCCESS;
++    }
++    if (ret > 0 && (fds[0].revents & POLLIN)) params->readable = 1;
++    if (adapter->woken || (ret > 0 && (fds[1].revents & POLLIN))) params->woken = 1;
++    return STATUS_SUCCESS;
++}
++
++static NTSTATUS wintun_wake( void *args )
++{
++    struct wintun_wake_params *params = args;
++    struct unix_adapter *adapter = find_adapter_ctx( params->ctx );
++    char c = 1;
++
++    params->status = 0;
++    if (!adapter)
++    {
++        params->status = ERROR_INVALID_HANDLE;
++        return STATUS_SUCCESS;
++    }
++
++    adapter->woken = 1;
++    if (adapter->wake[1] >= 0 && write( adapter->wake[1], &c, 1 ) < 0)
++    {
++        /* the wait thread has already noticed */
++    }
++    return STATUS_SUCCESS;
++}
++
++const unixlib_entry_t __wine_unix_call_funcs[] =
++{
++    wintun_create_adapter,
++    wintun_open_adapter,
++    wintun_close_adapter,
++    wintun_read_packet,
++    wintun_write_packet,
++    wintun_wait_readable,
++    wintun_wake,
++};
++
++C_ASSERT( ARRAYSIZE(__wine_unix_call_funcs) == unix_wintun_funcs_count );
++
++#ifdef _WIN64
++
++const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
++{
++    wintun_create_adapter,
++    wintun_open_adapter,
++    wintun_close_adapter,
++    wintun_read_packet,
++    wintun_write_packet,
++    wintun_wait_readable,
++    wintun_wake,
++};
++
++C_ASSERT( ARRAYSIZE(__wine_unix_call_wow64_funcs) == unix_wintun_funcs_count );
++
++#endif /* _WIN64 */
+diff --git a/dlls/wintun/unixlib.h b/dlls/wintun/unixlib.h
+new file mode 100644
+index 00000000000..1bedc2a77a6
+--- /dev/null
++++ b/dlls/wintun/unixlib.h
+@@ -0,0 +1,97 @@
++/*
++ * Wintun userspace tunnel driver interface, unix library definitions
++ *
++ * Copyright 2026 SHORiN-KIWATA
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
++ */
++
++#ifndef __WINTUN_UNIXLIB_H
++#define __WINTUN_UNIXLIB_H
++
++#include <stdarg.h>
++#include <windef.h>
++#include <winnt.h>
++#include <wine/unixlib.h>
++
++#define WINTUN_NAME_MAX 64
++#define WINTUN_IFNAME_MAX 16
++#define WINTUN_WAIT_INFINITE 0xffffffff
++
++enum wintun_unix_funcs
++{
++    unix_wintun_create_adapter,
++    unix_wintun_open_adapter,
++    unix_wintun_close_adapter,
++    unix_wintun_read_packet,
++    unix_wintun_write_packet,
++    unix_wintun_wait_readable,
++    unix_wintun_wake,
++    unix_wintun_funcs_count,
++};
++
++/* These structures cross the PE/unix boundary as-is, also under WoW64, so
++ * their layout must not depend on the pointer size: 64-bit members come
++ * first and addresses are passed as UINT64. */
++
++struct wintun_create_params
++{
++    UINT64 ctx;                       /* out: unix adapter context */
++    UINT status;                      /* out: Win32 error code */
++    UINT ifindex;                     /* out */
++    WCHAR name[WINTUN_NAME_MAX];      /* in */
++    char ifname[WINTUN_IFNAME_MAX];   /* out */
++};
++
++struct wintun_open_params
++{
++    UINT64 ctx;                       /* out */
++    UINT status;                      /* out */
++    UINT ifindex;                     /* out */
++    WCHAR name[WINTUN_NAME_MAX];      /* in */
++    char ifname[WINTUN_IFNAME_MAX];   /* out */
++};
++
++struct wintun_io_params
++{
++    UINT64 ctx;      /* in */
++    UINT64 buffer;   /* in: address in this process */
++    UINT size;       /* in */
++    UINT ret;        /* out: bytes read or written */
++    UINT status;     /* out */
++};
++
++struct wintun_wait_params
++{
++    UINT64 ctx;      /* in */
++    UINT timeout;    /* in: milliseconds, WINTUN_WAIT_INFINITE waits forever */
++    UINT readable;   /* out */
++    UINT woken;      /* out */
++    UINT status;     /* out */
++};
++
++struct wintun_close_params
++{
++    UINT64 ctx;      /* in */
++    UINT status;     /* out */
++};
++
++struct wintun_wake_params
++{
++    UINT64 ctx;      /* in */
++    UINT status;     /* out */
++};
++
++#endif /* __WINTUN_UNIXLIB_H */
+diff --git a/dlls/wintun/wintun.c b/dlls/wintun/wintun.c
+new file mode 100644
+index 00000000000..e0993f57f32
+--- /dev/null
++++ b/dlls/wintun/wintun.c
+@@ -0,0 +1,495 @@
++/*
++ * Wintun userspace tunnel driver interface
++ *
++ * Copyright 2026 SHORiN-KIWATA
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
++ */
++
++#include <stdarg.h>
++#include <string.h>
++#include <windef.h>
++#include <winbase.h>
++#include <winerror.h>
++#include <winnt.h>
++#include <winsock2.h>
++#include <ws2ipdef.h>
++#include <ifdef.h>
++#include <nldef.h>
++#include <netioapi.h>
++
++#include <wine/debug.h>
++#include <wine/unixlib.h>
++
++#include "wintun.h"
++#include "unixlib.h"
++
++WINE_DEFAULT_DEBUG_CHANNEL(wintun);
++
++/* Version reported by WintunGetRunningDriverVersion: MAKELONG(minor, major),
++ * so 0.14 is 0x0000000e. Measured on Windows. */
++#define WINTUN_DRIVER_VERSION 0x0000000e
++
++struct _WINTUN_ADAPTER
++{
++    UINT64 ctx;
++    char ifname[WINTUN_IFNAME_MAX];
++    UINT ifindex;
++    NET_LUID luid;
++    BOOL have_luid;
++    struct _WINTUN_SESSION *session;
++};
++
++struct wintun_packet
++{
++    struct wintun_packet *next;
++    DWORD size;
++    BYTE data[1];
++};
++
++struct _WINTUN_SESSION
++{
++    struct _WINTUN_ADAPTER *adapter;
++    DWORD capacity;
++    HANDLE read_event;
++    HANDLE consume_event;
++    HANDLE thread;
++    BOOL stopping;
++    BYTE *scratch;
++    DWORD scratch_size;
++    DWORD rx_bytes;
++    DWORD tx_bytes;
++    struct wintun_packet *rx_head, *rx_tail;
++    struct wintun_packet *tx_head, *tx_tail;
++};
++
++static WINTUN_LOGGER_CALLBACK logger;
++static DWORD running_version;
++
++static BOOL get_interface_luid( UINT ifindex, NET_LUID *luid )
++{
++    if (!ConvertInterfaceIndexToLuid( ifindex, luid )) return TRUE;
++    WARN( "no luid for interface %u\n", ifindex );
++    return FALSE;
++}
++
++static void free_adapter( struct _WINTUN_ADAPTER *adapter )
++{
++    struct wintun_close_params params;
++
++    params.ctx = adapter->ctx;
++    params.status = 0;
++    WINE_UNIX_CALL( unix_wintun_close_adapter, &params );
++    HeapFree( GetProcessHeap(), 0, adapter );
++}
++
++BOOL WINAPI DllMain( HINSTANCE instance, DWORD reason, void *reserved )
++{
++    if (reason == DLL_PROCESS_ATTACH && __wine_init_unix_call()) return FALSE;
++    return TRUE;
++}
++
++WINTUN_ADAPTER_HANDLE WINAPI WintunCreateAdapter( LPCWSTR name, LPCWSTR tunnel_type, const GUID *requested_guid )
++{
++    struct wintun_create_params params;
++    struct _WINTUN_ADAPTER *adapter;
++    unsigned int i;
++
++    TRACE( "%s, %s, %p\n", debugstr_w(name), debugstr_w(tunnel_type), requested_guid );
++
++    if (!name || !*name)
++    {
++        SetLastError( ERROR_INVALID_PARAMETER );
++        return NULL;
++    }
++
++    memset( &params, 0, sizeof(params) );
++    for (i = 0; i + 1 < ARRAY_SIZE(params.name) && name[i]; i++) params.name[i] = name[i];
++
++    if (WINE_UNIX_CALL( unix_wintun_create_adapter, &params ) || params.status)
++    {
++        SetLastError( params.status ? params.status : ERROR_GEN_FAILURE );
++        return NULL;
++    }
++
++    if (!(adapter = HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*adapter) )))
++    {
++        struct wintun_close_params close_params = { params.ctx, 0 };
++        WINE_UNIX_CALL( unix_wintun_close_adapter, &close_params );
++        SetLastError( ERROR_NOT_ENOUGH_MEMORY );
++        return NULL;
++    }
++
++    adapter->ctx = params.ctx;
++    memcpy( adapter->ifname, params.ifname, sizeof(adapter->ifname) );
++    adapter->ifindex = params.ifindex;
++    if (!(adapter->have_luid = get_interface_luid( adapter->ifindex, &adapter->luid )))
++    {
++        free_adapter( adapter );
++        SetLastError( ERROR_FILE_NOT_FOUND );
++        return NULL;
++    }
++    running_version = WINTUN_DRIVER_VERSION;
++
++    TRACE( "created %s, ifindex %u, luid %s\n", adapter->ifname, adapter->ifindex,
++           wine_dbgstr_longlong( adapter->luid.Value ) );
++    return adapter;
++}
++
++WINTUN_ADAPTER_HANDLE WINAPI WintunOpenAdapter( LPCWSTR name )
++{
++    struct wintun_open_params params;
++    struct _WINTUN_ADAPTER *adapter;
++    unsigned int i;
++
++    TRACE( "%s\n", debugstr_w(name) );
++
++    if (!name || !*name)
++    {
++        SetLastError( ERROR_INVALID_PARAMETER );
++        return NULL;
++    }
++
++    memset( &params, 0, sizeof(params) );
++    for (i = 0; i + 1 < ARRAY_SIZE(params.name) && name[i]; i++) params.name[i] = name[i];
++
++    if (WINE_UNIX_CALL( unix_wintun_open_adapter, &params ) || params.status)
++    {
++        SetLastError( params.status ? params.status : ERROR_GEN_FAILURE );
++        return NULL;
++    }
++
++    if (!(adapter = HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*adapter) )))
++    {
++        struct wintun_close_params close_params = { params.ctx, 0 };
++        WINE_UNIX_CALL( unix_wintun_close_adapter, &close_params );
++        SetLastError( ERROR_NOT_ENOUGH_MEMORY );
++        return NULL;
++    }
++
++    adapter->ctx = params.ctx;
++    memcpy( adapter->ifname, params.ifname, sizeof(adapter->ifname) );
++    adapter->ifindex = params.ifindex;
++    if (!(adapter->have_luid = get_interface_luid( adapter->ifindex, &adapter->luid )))
++    {
++        free_adapter( adapter );
++        SetLastError( ERROR_FILE_NOT_FOUND );
++        return NULL;
++    }
++    running_version = WINTUN_DRIVER_VERSION;
++
++    TRACE( "opened %s, ifindex %u, luid %s\n", adapter->ifname, adapter->ifindex,
++           wine_dbgstr_longlong( adapter->luid.Value ) );
++    return adapter;
++}
++
++void WINAPI WintunCloseAdapter( WINTUN_ADAPTER_HANDLE handle )
++{
++    TRACE( "%p\n", handle );
++
++    if (!handle) return;
++    if (handle->session) WintunEndSession( handle->session );
++    free_adapter( handle );
++}
++
++BOOL WINAPI WintunDeleteDriver( void )
++{
++    TRACE( "\n" );
++    running_version = 0;
++    return TRUE;
++}
++
++void WINAPI WintunGetAdapterLUID( WINTUN_ADAPTER_HANDLE handle, LUID *luid )
++{
++    if (!luid) return;
++    if (!handle || !handle->have_luid)
++    {
++        memset( luid, 0, sizeof(*luid) );
++        return;
++    }
++    *(UINT64 *)luid = handle->luid.Value;
++}
++
++DWORD WINAPI WintunGetRunningDriverVersion( void )
++{
++    TRACE( "\n" );
++    return running_version;
++}
++
++void WINAPI WintunSetLogger( WINTUN_LOGGER_CALLBACK new_logger )
++{
++    logger = new_logger;
++}
++
++static DWORD WINAPI read_wait_thread( void *arg )
++{
++    struct _WINTUN_SESSION *session = arg;
++
++    for (;;)
++    {
++        struct wintun_wait_params params;
++
++        memset( &params, 0, sizeof(params) );
++        params.ctx = session->adapter->ctx;
++        params.timeout = WINTUN_WAIT_INFINITE;
++
++        if (WINE_UNIX_CALL( unix_wintun_wait_readable, &params )) break;
++        if (session->stopping || params.woken) break;
++        if (!params.readable) continue;
++
++        SetEvent( session->read_event );
++        WaitForSingleObject( session->consume_event, INFINITE );
++        if (session->stopping) break;
++        ResetEvent( session->consume_event );
++    }
++    return 0;
++}
++
++WINTUN_SESSION_HANDLE WINAPI WintunStartSession( WINTUN_ADAPTER_HANDLE handle, DWORD capacity )
++{
++    struct _WINTUN_SESSION *session;
++
++    TRACE( "%p, %lu\n", handle, capacity );
++
++    if (!handle)
++    {
++        SetLastError( ERROR_INVALID_PARAMETER );
++        return NULL;
++    }
++    if (handle->session)
++    {
++        SetLastError( ERROR_ALREADY_INITIALIZED );  /* matches the Windows driver */
++        return NULL;
++    }
++    if (capacity < (128 * 1024) || capacity > (64 * 1024 * 1024) ||
++        (capacity & (capacity - 1)))
++    {
++        SetLastError( ERROR_INVALID_PARAMETER );
++        return NULL;
++    }
++
++    if (!(session = HeapAlloc( GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(*session) )))
++    {
++        SetLastError( ERROR_NOT_ENOUGH_MEMORY );
++        return NULL;
++    }
++
++    session->adapter = handle;
++    session->capacity = capacity;
++    session->scratch_size = 65536;
++    session->scratch = HeapAlloc( GetProcessHeap(), 0, session->scratch_size );
++    session->read_event = CreateEventW( NULL, FALSE, FALSE, NULL );
++    session->consume_event = CreateEventW( NULL, FALSE, FALSE, NULL );
++
++    if (!session->scratch || !session->read_event || !session->consume_event)
++    {
++        if (session->read_event) CloseHandle( session->read_event );
++        if (session->consume_event) CloseHandle( session->consume_event );
++        if (session->scratch) HeapFree( GetProcessHeap(), 0, session->scratch );
++        HeapFree( GetProcessHeap(), 0, session );
++        SetLastError( ERROR_NOT_ENOUGH_MEMORY );
++        return NULL;
++    }
++
++    if (!(session->thread = CreateThread( NULL, 0, read_wait_thread, session, 0, NULL )))
++    {
++        SetLastError( ERROR_NOT_ENOUGH_MEMORY );
++        CloseHandle( session->read_event );
++        CloseHandle( session->consume_event );
++        HeapFree( GetProcessHeap(), 0, session->scratch );
++        HeapFree( GetProcessHeap(), 0, session );
++        return NULL;
++    }
++
++    handle->session = session;
++    return session;
++}
++
++void WINAPI WintunEndSession( WINTUN_SESSION_HANDLE session )
++{
++    struct wintun_wake_params params;
++
++    TRACE( "%p\n", session );
++
++    if (!session) return;
++
++    session->stopping = TRUE;
++    if (session->consume_event) SetEvent( session->consume_event );
++    params.ctx = session->adapter->ctx;
++    params.status = 0;
++    WINE_UNIX_CALL( unix_wintun_wake, &params );
++
++    if (session->thread)
++    {
++        WaitForSingleObject( session->thread, INFINITE );
++        CloseHandle( session->thread );
++    }
++
++    while (session->rx_head)
++    {
++        struct wintun_packet *packet = session->rx_head;
++        session->rx_head = packet->next;
++        HeapFree( GetProcessHeap(), 0, packet );
++    }
++    while (session->tx_head)
++    {
++        struct wintun_packet *packet = session->tx_head;
++        session->tx_head = packet->next;
++        HeapFree( GetProcessHeap(), 0, packet );
++    }
++
++    if (session->read_event) CloseHandle( session->read_event );
++    if (session->consume_event) CloseHandle( session->consume_event );
++    if (session->scratch) HeapFree( GetProcessHeap(), 0, session->scratch );
++
++    session->adapter->session = NULL;
++    HeapFree( GetProcessHeap(), 0, session );
++}
++
++HANDLE WINAPI WintunGetReadWaitEvent( WINTUN_SESSION_HANDLE session )
++{
++    if (!session)
++    {
++        SetLastError( ERROR_INVALID_PARAMETER );
++        return NULL;
++    }
++    return session->read_event;
++}
++
++BYTE *WINAPI WintunReceivePacket( WINTUN_SESSION_HANDLE session, DWORD *packet_size )
++{
++    struct wintun_io_params params;
++    struct wintun_packet *packet;
++
++    if (!session || !packet_size)
++    {
++        SetLastError( ERROR_INVALID_PARAMETER );
++        return NULL;
++    }
++    if (session->rx_bytes >= session->capacity)
++    {
++        SetLastError( ERROR_NO_MORE_ITEMS );
++        return NULL;
++    }
++
++    memset( &params, 0, sizeof(params) );
++    params.ctx = session->adapter->ctx;
++    params.buffer = (UINT64)(ULONG_PTR)session->scratch;
++    params.size = session->scratch_size;
++
++    if (WINE_UNIX_CALL( unix_wintun_read_packet, &params ) || params.status || !params.ret)
++    {
++        SetLastError( params.status ? params.status : ERROR_NO_MORE_ITEMS );
++        return NULL;
++    }
++
++    if (!(packet = HeapAlloc( GetProcessHeap(), 0, FIELD_OFFSET( struct wintun_packet, data ) + params.ret )))
++    {
++        SetLastError( ERROR_NOT_ENOUGH_MEMORY );
++        return NULL;
++    }
++    packet->size = params.ret;
++    packet->next = NULL;
++    memcpy( packet->data, session->scratch, params.ret );
++
++    if (session->rx_tail) session->rx_tail->next = packet;
++    else session->rx_head = packet;
++    session->rx_tail = packet;
++    session->rx_bytes += params.ret;
++
++    SetEvent( session->consume_event );
++    *packet_size = params.ret;
++    return packet->data;
++}
++
++void WINAPI WintunReleaseReceivePacket( WINTUN_SESSION_HANDLE session, const BYTE *data )
++{
++    struct wintun_packet *packet, *prev = NULL;
++
++    if (!session || !data) return;
++
++    for (packet = session->rx_head; packet; prev = packet, packet = packet->next)
++    {
++        if (packet->data != data) continue;
++        if (prev) prev->next = packet->next;
++        else session->rx_head = packet->next;
++        if (session->rx_tail == packet) session->rx_tail = prev;
++        session->rx_bytes -= packet->size;
++        HeapFree( GetProcessHeap(), 0, packet );
++        return;
++    }
++    WARN( "unknown packet %p\n", data );
++}
++
++BYTE *WINAPI WintunAllocateSendPacket( WINTUN_SESSION_HANDLE session, DWORD packet_size )
++{
++    struct wintun_packet *packet;
++
++    if (!session || !packet_size)
++    {
++        SetLastError( ERROR_INVALID_PARAMETER );
++        return NULL;
++    }
++    if (session->tx_bytes + packet_size > session->capacity)
++    {
++        SetLastError( ERROR_BUFFER_OVERFLOW );
++        return NULL;
++    }
++
++    if (!(packet = HeapAlloc( GetProcessHeap(), 0, FIELD_OFFSET( struct wintun_packet, data ) + packet_size )))
++    {
++        SetLastError( ERROR_NOT_ENOUGH_MEMORY );
++        return NULL;
++    }
++    packet->size = packet_size;
++    packet->next = NULL;
++
++    if (session->tx_tail) session->tx_tail->next = packet;
++    else session->tx_head = packet;
++    session->tx_tail = packet;
++    session->tx_bytes += packet_size;
++    return packet->data;
++}
++
++void WINAPI WintunSendPacket( WINTUN_SESSION_HANDLE session, const BYTE *data )
++{
++    struct wintun_packet *packet, *prev = NULL;
++    struct wintun_io_params params;
++
++    if (!session || !data) return;
++
++    for (packet = session->tx_head; packet; prev = packet, packet = packet->next)
++        if (packet->data == data) break;
++    if (!packet)
++    {
++        WARN( "unknown packet %p\n", data );
++        return;
++    }
++
++    memset( &params, 0, sizeof(params) );
++    params.ctx = session->adapter->ctx;
++    params.buffer = (UINT64)(ULONG_PTR)data;
++    params.size = packet->size;
++    if (WINE_UNIX_CALL( unix_wintun_write_packet, &params ))
++        WARN( "write call failed\n" );
++    else if (params.status)
++        WARN( "write failed, status %lu\n", params.status );
++
++    if (prev) prev->next = packet->next;
++    else session->tx_head = packet->next;
++    if (session->tx_tail == packet) session->tx_tail = prev;
++    session->tx_bytes -= packet->size;
++    HeapFree( GetProcessHeap(), 0, packet );
++}
+diff --git a/dlls/wintun/wintun.h b/dlls/wintun/wintun.h
+new file mode 100644
+index 00000000000..9f3bbcb23dd
+--- /dev/null
++++ b/dlls/wintun/wintun.h
+@@ -0,0 +1,55 @@
++/*
++ * Wintun userspace tunnel driver interface
++ *
++ * Copyright 2026 SHORiN-KIWATA
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
++ */
++
++#ifndef __WINTUN_H
++#define __WINTUN_H
++
++#include <windef.h>
++#include <winnt.h>
++#include <guiddef.h>
++
++typedef struct _WINTUN_ADAPTER *WINTUN_ADAPTER_HANDLE;
++typedef struct _WINTUN_SESSION *WINTUN_SESSION_HANDLE;
++
++typedef enum _WINTUN_LOGGER_LEVEL
++{
++    WINTUN_LOG_INFO,
++    WINTUN_LOG_WARN,
++    WINTUN_LOG_ERR
++} WINTUN_LOGGER_LEVEL;
++
++typedef void (WINAPI *WINTUN_LOGGER_CALLBACK)( WINTUN_LOGGER_LEVEL level, DWORD64 timestamp, LPCWSTR message );
++
++WINTUN_ADAPTER_HANDLE WINAPI WintunCreateAdapter( LPCWSTR name, LPCWSTR tunnel_type, const GUID *requested_guid );
++WINTUN_ADAPTER_HANDLE WINAPI WintunOpenAdapter( LPCWSTR name );
++void WINAPI WintunCloseAdapter( WINTUN_ADAPTER_HANDLE adapter );
++BOOL WINAPI WintunDeleteDriver( void );
++void WINAPI WintunGetAdapterLUID( WINTUN_ADAPTER_HANDLE adapter, LUID *luid );
++DWORD WINAPI WintunGetRunningDriverVersion( void );
++void WINAPI WintunSetLogger( WINTUN_LOGGER_CALLBACK new_logger );
++WINTUN_SESSION_HANDLE WINAPI WintunStartSession( WINTUN_ADAPTER_HANDLE adapter, DWORD capacity );
++void WINAPI WintunEndSession( WINTUN_SESSION_HANDLE session );
++HANDLE WINAPI WintunGetReadWaitEvent( WINTUN_SESSION_HANDLE session );
++BYTE *WINAPI WintunReceivePacket( WINTUN_SESSION_HANDLE session, DWORD *packet_size );
++void WINAPI WintunReleaseReceivePacket( WINTUN_SESSION_HANDLE session, const BYTE *packet );
++BYTE *WINAPI WintunAllocateSendPacket( WINTUN_SESSION_HANDLE session, DWORD packet_size );
++void WINAPI WintunSendPacket( WINTUN_SESSION_HANDLE session, const BYTE *packet );
++
++#endif /* __WINTUN_H */
+diff --git a/dlls/wintun/wintun.spec b/dlls/wintun/wintun.spec
+new file mode 100644
+index 00000000000..2a94c447c4c
+--- /dev/null
++++ b/dlls/wintun/wintun.spec
+@@ -0,0 +1,14 @@
++@ stdcall WintunAllocateSendPacket(ptr long)
++@ stdcall WintunCloseAdapter(ptr)
++@ stdcall WintunCreateAdapter(wstr wstr ptr)
++@ stdcall WintunDeleteDriver()
++@ stdcall WintunEndSession(ptr)
++@ stdcall WintunGetAdapterLUID(ptr ptr)
++@ stdcall WintunGetReadWaitEvent(ptr)
++@ stdcall WintunGetRunningDriverVersion()
++@ stdcall WintunOpenAdapter(wstr)
++@ stdcall WintunReceivePacket(ptr ptr)
++@ stdcall WintunReleaseReceivePacket(ptr ptr)
++@ stdcall WintunSendPacket(ptr ptr)
++@ stdcall WintunSetLogger(ptr)
++@ stdcall WintunStartSession(ptr long)

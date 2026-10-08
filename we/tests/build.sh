@@ -3,9 +3,11 @@
 set -e
 cd "$(dirname "$0")"
 for c in *.c ../diag/*.c; do
-    x86_64-w64-mingw32-gcc -O2 -static -o "${c%.c}.exe" "$c" -lws2_32 -lntdll -lgdi32 -lole32 -loleaut32 -luuid -lshell32 -lwinhttp -lstrmiids
+    x86_64-w64-mingw32-gcc -O2 -static -o "${c%.c}.exe" "$c" -lws2_32 -lntdll -lgdi32 -lole32 -loleaut32 -luuid -lshell32 -lwinhttp -lstrmiids -liphlpapi -limm32
 done
 # probes whose behaviour has to be checked in 32-bit programs too
 for c in typelib_noflags_probe.c capture_mt_probe.c; do
     i686-w64-mingw32-gcc -O2 -static -o "${c%.c}32.exe" "$c" -lole32 -loleaut32 -luuid -lstrmiids
 done
+# the wintun.dll the probe loads is 32-bit
+i686-w64-mingw32-gcc -O2 -static -o wintun_probe32.exe wintun_probe.c -liphlpapi

@@ -52,6 +52,7 @@ declare -A TARGETS=(
     [dlls/winhttp]="dlls/winhttp/x86_64-windows/winhttp.dll:x86_64-windows/winhttp.dll dlls/winhttp/i386-windows/winhttp.dll:i386-windows/winhttp.dll"
     [programs/explorer]="programs/explorer/x86_64-windows/explorer.exe:x86_64-windows/explorer.exe programs/explorer/i386-windows/explorer.exe:i386-windows/explorer.exe programs/explorer/explorer.so:x86_64-unix/explorer.so"
     [dlls/qcap]="dlls/qcap/qcap.so:x86_64-unix/qcap.so"
+    [dlls/wintun]="dlls/wintun/x86_64-windows/wintun.dll:x86_64-windows/wintun.dll dlls/wintun/i386-windows/wintun.dll:i386-windows/wintun.dll dlls/wintun/wintun.so:x86_64-unix/wintun.so"
 )
 # d3dcompiler_43's sources are built into d3d10 and every other d3dcompiler_*.
 for m in d3d10 d3dcompiler_{33..43} d3dcompiler_46 d3dcompiler_47; do
@@ -63,6 +64,9 @@ declare -A WANT=()
 for p in "$ROOT"/patches/wine/*.patch; do
     for f in $(grep -E '^\+\+\+ b/' "$p" | sed 's#^+++ b/##'); do
         [[ $f == */tests/* ]] && continue  # conformance tests are not shipped
+        case $f in
+            configure.ac|include/*) continue ;;  # no binary of their own
+        esac
         hit=
         for dir in "${!TARGETS[@]}"; do
             [[ $f == "$dir"/* ]] && WANT[$dir]=1 && hit=1

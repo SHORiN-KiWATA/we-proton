@@ -25,6 +25,7 @@
 | `wine/0011-explorer-Show-systray-icons-as-StatusNotifierItems` | 会话里有 StatusNotifierWatcher 时，通知区图标用 StatusNotifierItem（D-Bus）显示，面板上的点击转成和嵌入式图标相同的回调，气泡变成桌面通知 |
 | `wine/0012-qcap-Clear-pUnk-in-media-types-returned-to-32-bit-ca` | WoW64 下视频采集返回给 32 位程序的媒体类型把 `pUnk` 设成 NULL，和 64 位一致 |
 | `wine/0014-win32u-Deliver-input-method-text-to-threads-with-the` | 线程被 `ImmDisableIME` 关掉 IME 后，宿主输入法提交的文字以 `WM_IME_CHAR` 送到焦点窗口，不再丢掉 |
+| `wine/0016-wintun-Implement-the-Wintun-userspace-tunnel-driver-` | 用 wintun 接口建虚拟网卡的程序在 Wine 里建不了网卡；内置 wintun.dll 把接口接到 Linux 的 `/dev/net/tun`，出口、LUID 和会话语义按 Windows 实测对齐 |
 | `vkd3d-proton/0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
 
 每个补丁的现象、根因、Windows 实测、验证和排查过程见 `we/fixes/`。
