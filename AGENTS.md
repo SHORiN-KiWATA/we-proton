@@ -59,17 +59,21 @@ Delta Force or VALORANT) and does not adapt to ACE or any other anti-cheat.
 - Every fix gets a report in `we/fixes/<number>-<topic>/README.md`: symptoms, root
   cause, how Windows behaves and how that was established, the fix, verification,
   the investigation including dead ends, and what was not verified. Add the patch to
-  the tables in `we/README.md`, `we/fixes/README.md`, `we/dist-README.md` and both
-  `README.md` and `README.en.md`.
+  the tables in `we/README.md`, `we/fixes/README.md` and `we/dist-README.md`.
+  `README.md` and `README.en.md` do not list patches; they link to `we/fixes/`.
 - Test programs go in `we/tests/` (static mingw builds, see `we/tests/build.sh`),
   with their output before and after the fix (`*.wine<release>.txt`,
   `*.windows.txt`).
 - Patches, commit messages, fix reports, test programs and their output describe
   Wine bugs only. They must not name specific programs, game platforms, games or
   anti-cheats. `README.md`, `README.en.md` and this file are the only exceptions.
-- Build with `we/overlay-build.sh --release <N>`. It deletes and recreates
-  `build/we-proton-<version>-<N>`, so do not run it while anything is running from
-  that directory. Do not patch files of an installed runner by hand.
+- Build with `we/overlay-build.sh --release <N>`. It needs docker: Wine is built in
+  the Steam Linux Runtime SDK image named in `Makefile.in`, so the result runs inside
+  the runtime. It deletes and recreates `build/we-proton-<version>-<N>`, so do not run
+  it while anything is running from that directory. Do not patch files of an
+  installed runner by hand.
+- Proton runs inside Steam Linux Runtime 4.0. Test there, not by running `proton`
+  directly on the host, where its bundled media libraries are missing.
 - Check for regressions with Wine's own conformance tests (a separate
   `--enable-tests` build, see `we/README.md`): run the relevant tests with the old
   and the new runner and compare the failures one by one. Timing-sensitive tests fail

@@ -5,6 +5,11 @@
 # them in. The full container build (make redist) gives the same result from
 # scratch but takes hours.
 #
+# Wine is built in the same Steam Runtime SDK image and with the same flags as
+# Makefile.in uses, so the unix libraries only need what the runtime provides
+# (built on the host they picked up e.g. libunwind and failed to load inside
+# the runtime). Needs docker.
+#
 #   we/overlay-build.sh [--release N] [--install] [--jobs N]
 #
 #   --release N   WE-Proton release number (default 1) -> we-proton-<base>-N
@@ -36,12 +41,14 @@ mkdir -p "$OBJ" "$CACHE"
 log() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 
 # --- which binaries each patched source directory ends up in -----------------
-# lib/wine paths are relative to files/lib/wine in the runner.
+# Space-separated build:runner pairs; runner paths are relative to
+# files/lib/wine. PE DLLs that 32-bit programs load too need both arches.
 declare -A TARGETS=(
     [dlls/ntdll/unix]="dlls/ntdll/ntdll.so:x86_64-unix/ntdll.so"
     [server]="server/wineserver:../../bin/wineserver"
     [dlls/ntoskrnl.exe]="dlls/ntoskrnl.exe/x86_64-windows/ntoskrnl.exe:x86_64-windows/ntoskrnl.exe"
     [dlls/win32u]="dlls/win32u/win32u.so:x86_64-unix/win32u.so"
+    [dlls/rpcrt4]="dlls/rpcrt4/x86_64-windows/rpcrt4.dll:x86_64-windows/rpcrt4.dll dlls/rpcrt4/i386-windows/rpcrt4.dll:i386-windows/rpcrt4.dll"
 )
 declare -A WANT=()
 for p in "$ROOT"/patches/wine/*.patch; do
@@ -88,17 +95,48 @@ if [ "$(cat "$OBJ/.src-stamp" 2>/dev/null)" != "$STAMP" ]; then
 fi
 
 # --- build only what the patches touch ---------------------------------------
+# The SDK image and the compiler flags are the ones Makefile.in uses for wine:
+# HOST_CFLAGS/CCOS_CFLAGS/<arch>_CFLAGS/CFLAGS for gcc, WINE_CFLAGS and
+# WINE_AUTOCONF_ARGS (gstreamer, ffmpeg, pcap and wayland are left out: none of the
+# binaries replaced here use them, and Makefile.in builds their libraries itself).
+SDK_IMAGE=$(sed -n 's/^\s*STEAMRT_IMAGE ?= \(.*\/sdk\/x86_64:.*\)$/\1/p' "$ROOT/Makefile.in")
+[ -n "$SDK_IMAGE" ] || { echo "no x86_64 STEAMRT_IMAGE in Makefile.in" >&2; exit 1; }
+COMMON_CFLAGS="-O2 -march=nocona -mtune=core-avx2 -pipe -mfpmath=sse -mno-avx -mno-avx2 -mno-avx512f -fvect-cost-model=cheap"
+COMMON_CFLAGS+=" -fwrapv -fno-strict-aliasing -ffunction-sections -fdata-sections -fno-omit-frame-pointer"
+COMMON_CFLAGS+=" -Wno-discarded-qualifiers -Wno-stringop-overflow -Wno-incompatible-pointer-types"
+UNIX_CFLAGS="-mcmodel=small $COMMON_CFLAGS -Wl,--exclude-libs=libstdc++.a"
+X86_64_PE_CFLAGS="-mcmodel=small $COMMON_CFLAGS"
+I386_PE_CFLAGS="-mstackrealign $COMMON_CFLAGS"
+CONFIGURE_ARGS="--with-mingw=gcc --enable-build-id --disable-tests --with-x"
+CONFIGURE_ARGS+=" --without-gstreamer --without-ffmpeg --without-pcap --without-unwind --without-oss --enable-archs=x86_64,i386 --enable-win64"
+CONFIG_STAMP="$SDK_IMAGE $CONFIGURE_ARGS $UNIX_CFLAGS $X86_64_PE_CFLAGS $I386_PE_CFLAGS"
+
+in_sdk() {
+    docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$OBJ:$OBJ" -w "$B" "$SDK_IMAGE" bash -c "$1"
+}
+
 B=$OBJ/wine
-if [ ! -f "$B/Makefile" ]; then
-    log "configuring"
+if [ ! -f "$B/Makefile" ] || [ "$(cat "$B/.config-stamp" 2>/dev/null)" != "$CONFIG_STAMP" ]; then
+    log "configuring in $SDK_IMAGE"
+    rm -rf "$B"
     mkdir -p "$B"
-    (cd "$B" && "$SRC/configure" --enable-archs=x86_64 --disable-tests > configure.log 2>&1) \
+    in_sdk "$(printf '%q ' env \
+        CC=x86_64-linux-gnu-gcc CXX=x86_64-linux-gnu-g++ PKG_CONFIG=x86_64-linux-gnu-pkg-config \
+        CFLAGS="$UNIX_CFLAGS" CXXFLAGS="$UNIX_CFLAGS" \
+        CROSSCFLAGS="$X86_64_PE_CFLAGS" \
+        x86_64_CC=x86_64-w64-mingw32-gcc x86_64_CFLAGS="$X86_64_PE_CFLAGS" \
+        i386_CC=i686-w64-mingw32-gcc i386_CFLAGS="$I386_PE_CFLAGS" \
+        "$SRC/configure" $CONFIGURE_ARGS) > configure.log 2>&1" \
         || { tail -20 "$B/configure.log" >&2; exit 1; }
+    echo "$CONFIG_STAMP" > "$B/.config-stamp"
 fi
 make_targets=()
-for dir in "${!WANT[@]}"; do make_targets+=("${TARGETS[$dir]%%:*}"); done
-log "building ${make_targets[*]}"
-make -C "$B" -j"$JOBS" "${make_targets[@]}" > "$OBJ/make.log" 2>&1 || { grep -m20 -E 'error' "$OBJ/make.log" >&2; exit 1; }
+for dir in "${!WANT[@]}"; do
+    for pair in ${TARGETS[$dir]}; do make_targets+=("${pair%%:*}"); done
+done
+log "building ${make_targets[*]} in the SDK"
+in_sdk "make -j$JOBS $(printf '%q ' "${make_targets[@]}")" > "$OBJ/make.log" 2>&1 \
+    || { grep -m20 -E 'error' "$OBJ/make.log" >&2; exit 1; }
 
 # --- vkd3d-proton, only if patches/vkd3d-proton has something --------------------
 # Same source prep as .vkd3d-proton-post-source and the same flags as rules-meson
@@ -189,12 +227,15 @@ mkdir -p "$OBJ/unpack"
 tar -xf "$TARBALL" -C "$OBJ/unpack"
 mv "$OBJ/unpack/$BASE-x86_64" "$DIST"
 for dir in "${!WANT[@]}"; do
-    from=${TARGETS[$dir]%%:*}; to=$DIST/files/lib/wine/${TARGETS[$dir]#*:}
-    case "$from" in
-        *.so|*/wineserver) strip --strip-unneeded -o "$to" "$B/$from" ;;
-        *) x86_64-w64-mingw32-strip -o "$to" "$B/$from" ;;
-    esac
-    echo "  $from -> ${to#$DIST/}"
+    for pair in ${TARGETS[$dir]}; do
+        from=${pair%%:*}; to=$DIST/files/lib/wine/${pair#*:}
+        case "$from" in
+            *.so|*/wineserver) strip --strip-unneeded -o "$to" "$B/$from" ;;
+            */i386-windows/*) i686-w64-mingw32-strip -o "$to" "$B/$from" ;;
+            *) x86_64-w64-mingw32-strip -o "$to" "$B/$from" ;;
+        esac
+        echo "  $from -> ${to#$DIST/}"
+    done
 done
 if [ -n "$VKD3D_PATCHES" ]; then
     for arch in "${VKD3D_ARCHS[@]}"; do

@@ -31,6 +31,8 @@ WE-Proton 是 DW-Proton 的一个个人修改版，补了几个 Wine 和 vkd3d-p
 
 然后在启动器里选 `@NAME@`。
 
+它要在 Steam Linux Runtime 4.0 里运行（`toolmanifest.vdf` 里的 `require_tool_appid 4183110`）。Steam、umu、Lutris、wegame-launcher 会自动这样做；在运行时外面直接执行 `proton` 时，自带的 GStreamer 插件等缺少依赖库，视频和音频解码之类的功能会出问题。
+
 ## 说明
 
 - 0005 依赖 Linux 6.7 及以上内核的 userfaultfd 异步写保护；内核更旧时这一项不生效，其他照常
