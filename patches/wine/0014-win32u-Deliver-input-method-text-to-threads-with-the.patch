@@ -1,0 +1,46 @@
+From b43057058f97863558372ab991b9d01646d392a5 Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Thu, 8 Oct 2026 22:07:17 +0900
+Subject: [PATCH] win32u: Deliver input method text to threads with the IME
+ disabled.
+
+ImmDisableIME destroys the default IME window of the thread, and the
+IME updates the X11 driver posts for its windows were dropped when they
+found no IME window, including text the host input method had already
+committed. On Windows such a thread still gets text from text services
+through TSF, and programs that take their input that way may disable
+IMM on their thread. Wine has no TSF text services, so deliver the
+committed text as WM_IME_CHAR messages instead.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/win32u/imm.c | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/dlls/win32u/imm.c b/dlls/win32u/imm.c
+index 0008a19839d..7a10dfa2959 100644
+--- a/dlls/win32u/imm.c
++++ b/dlls/win32u/imm.c
+@@ -463,6 +463,19 @@ static void post_ime_update( HWND hwnd, UINT cursor_pos, WCHAR *comp_str, WCHAR
+     TRACE( "hwnd %p, cursor_pos %u - %u, comp_str %s, result_str %s\n", hwnd, LOWORD(cursor_pos),
+            HIWORD(cursor_pos), debugstr_w(comp_str), debugstr_w(result_str) );
+ 
++    /* A thread with the IME disabled has no IME window to turn updates into IME messages.
++     * On Windows it still gets text from text services through TSF, which Wine doesn't
++     * have, so deliver text the host input method has committed as characters. */
++    if (disable_ime || data->disable_ime)
++    {
++        HWND focus = get_focus();
++
++        if (!focus) focus = hwnd;
++        for (; result_str && *result_str; result_str++)
++            NtUserPostMessage( focus, WM_IME_CHAR, *result_str, 1 );
++        return;
++    }
++
+     comp_len = comp_str ? wcslen( comp_str ) + 1 : 0;
+     result_len = result_str ? wcslen( result_str ) + 1 : 0;
+ 
+-- 
+2.56.0
+

@@ -1,0 +1,21 @@
+== ime_edit_probe.exe 20
+default IME window present
+WM_IME_STARTCOMPOSITION
+WM_IME_COMPOSITION 0x1800 result "你好"
+WM_IME_CHAR "你"
+WM_IME_CHAR "好"
+WM_IME_ENDCOMPOSITION
+WM_CHAR "你"
+WM_CHAR "好"
+WM_IME_STARTCOMPOSITION
+WM_IME_COMPOSITION 0x1800 result "世界"
+WM_IME_CHAR "世"
+WM_IME_CHAR "界"
+WM_IME_ENDCOMPOSITION
+WM_CHAR "世"
+WM_CHAR "界"
+text "你好世界"
+== ime_edit_probe.exe 20 disable
+ImmDisableIME(0) 1
+default IME window none
+text ""
