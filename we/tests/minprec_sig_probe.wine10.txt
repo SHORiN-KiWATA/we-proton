@@ -1,0 +1,16 @@
+== minprec_vs.dxbc
+   input: hr 0x80004005
+   output: hr 0x80004005
+   in+out: hr 0x80004005
+   patch: hr 0x80004005
+   all: hr 0x80004005
+   d3d11 reflect: in 0 out 0 patch 0
+   d3d12 reflect: in 0 out 0 patch 0
+== minprec_hs.dxbc
+   input: hr 0x80004005
+   output: hr 0x80004005
+   in+out: hr 0x80004005
+   patch: hr 0x80004005
+   all: hr 0x80004005
+   d3d11 reflect: in 0 out 0 patch 0
+   d3d12 reflect: in 0 out 0 patch 0

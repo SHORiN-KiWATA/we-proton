@@ -12,6 +12,7 @@
 | wine 0006 | 活动窗口消失后，Wine 会把 `WS_EX_NOACTIVATE` 窗口设成前台 | `0006-noactivate-activation/` |
 | wine 0007 | 分层子窗口被做成单独的 override-redirect 顶层窗口，位置按屏幕原点算、不跟父窗口走 | `0007-layered-child-windows/` |
 | wine 0008 | 类型库封送把没有方向的参数只当输入，进程外 COM 服务器通过这类参数返回的结果全部丢失 | `0008-typelib-param-direction/` |
+| wine 0009 | d3dcompiler 的反射读不出最低精度签名（ISG1/OSG1/PSG1），按反射结果拼输入布局的程序得到空布局，创建管线失败 | `0009-d3dcompiler-min-precision-signatures/` |
 | vkd3d-proton 0001 | dxil-spirv 生成非法的结构化控制流，RADV 拒绝后崩溃 | `vkd3d-0001-dxil-spirv-loop-breaks/` |
 
 ## 已知、没修的问题

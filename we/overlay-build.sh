@@ -50,6 +50,12 @@ declare -A TARGETS=(
     [dlls/win32u]="dlls/win32u/win32u.so:x86_64-unix/win32u.so"
     [dlls/rpcrt4]="dlls/rpcrt4/x86_64-windows/rpcrt4.dll:x86_64-windows/rpcrt4.dll dlls/rpcrt4/i386-windows/rpcrt4.dll:i386-windows/rpcrt4.dll"
 )
+# d3dcompiler_43's sources are built into d3d10 and every other d3dcompiler_*.
+for m in d3d10 d3dcompiler_{33..43} d3dcompiler_46 d3dcompiler_47; do
+    for arch in x86_64 i386; do
+        TARGETS[dlls/d3dcompiler_43]+=" dlls/$m/$arch-windows/$m.dll:$arch-windows/$m.dll"
+    done
+done
 declare -A WANT=()
 for p in "$ROOT"/patches/wine/*.patch; do
     for f in $(grep -E '^\+\+\+ b/' "$p" | sed 's#^+++ b/##'); do

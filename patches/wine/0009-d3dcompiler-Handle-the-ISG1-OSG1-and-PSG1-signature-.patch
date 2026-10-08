@@ -1,0 +1,595 @@
+From a3c9210e014ff8902f61518a9a811121859ff2f2 Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Thu, 8 Oct 2026 20:07:17 +0900
+Subject: [PATCH] d3dcompiler: Handle the ISG1, OSG1 and PSG1 signature chunks.
+
+Shaders that use min16float, min16int or min16uint anywhere in a
+signature are written with ISG1/OSG1/PSG1 instead of ISGN/OSGN/PCSG.
+Each element has two more fields than an ISGN element: the stream index
+before the semantic name offset, and the minimum precision after the
+mask.
+
+Reflection skipped these chunks, so such a shader reported no input or
+output parameters, and D3DGetBlobPart() failed to extract its
+signatures. An application that builds its input layout from the
+reflected input signature ended up with an empty layout, which pipeline
+creation rightly rejects.
+
+Parse the chunks with the 8-field layout and report MinPrecision from
+them; ISGN, OSGN and PCSG keep D3D_MIN_PRECISION_DEFAULT. Element sizes
+other than 6 now always skip the stream field, also in the D3D10 build
+where the structure has no Stream member.
+
+The tests use shaders compiled with d3dcompiler_47 and pass on Windows.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/d3dcompiler_43/blob.c                |  12 +-
+ dlls/d3dcompiler_43/d3dcompiler_private.h |   3 +
+ dlls/d3dcompiler_43/reflection.c          |  27 ++-
+ dlls/d3dcompiler_43/tests/blob.c          | 129 +++++++++++
+ dlls/d3dcompiler_43/tests/reflection.c    | 252 ++++++++++++++++++++++
+ 5 files changed, 414 insertions(+), 9 deletions(-)
+
+diff --git a/dlls/d3dcompiler_43/blob.c b/dlls/d3dcompiler_43/blob.c
+index 0c29c36c70c..d9aa95ca2f6 100644
+--- a/dlls/d3dcompiler_43/blob.c
++++ b/dlls/d3dcompiler_43/blob.c
+@@ -169,23 +169,25 @@ static BOOL check_blob_part(DWORD tag, D3D_BLOB_PART part)
+     switch(part)
+     {
+         case D3D_BLOB_INPUT_SIGNATURE_BLOB:
+-            if (tag == TAG_ISGN) add = TRUE;
++            if (tag == TAG_ISGN || tag == TAG_ISG1) add = TRUE;
+             break;
+ 
+         case D3D_BLOB_OUTPUT_SIGNATURE_BLOB:
+-            if (tag == TAG_OSGN || tag == TAG_OSG5) add = TRUE;
++            if (tag == TAG_OSGN || tag == TAG_OSG5 || tag == TAG_OSG1) add = TRUE;
+             break;
+ 
+         case D3D_BLOB_INPUT_AND_OUTPUT_SIGNATURE_BLOB:
+-            if (tag == TAG_ISGN || tag == TAG_OSGN || tag == TAG_OSG5) add = TRUE;
++            if (tag == TAG_ISGN || tag == TAG_ISG1 || tag == TAG_OSGN || tag == TAG_OSG5 || tag == TAG_OSG1) add = TRUE;
+             break;
+ 
+         case D3D_BLOB_PATCH_CONSTANT_SIGNATURE_BLOB:
+-            if (tag == TAG_PCSG) add = TRUE;
++            if (tag == TAG_PCSG || tag == TAG_PSG1) add = TRUE;
+             break;
+ 
+         case D3D_BLOB_ALL_SIGNATURE_BLOB:
+-            if (tag == TAG_ISGN || tag == TAG_OSGN || tag == TAG_OSG5 || tag == TAG_PCSG) add = TRUE;
++            if (tag == TAG_ISGN || tag == TAG_ISG1 || tag == TAG_OSGN || tag == TAG_OSG5 || tag == TAG_OSG1
++                    || tag == TAG_PCSG || tag == TAG_PSG1)
++                add = TRUE;
+             break;
+ 
+         case D3D_BLOB_DEBUG_INFO:
+diff --git a/dlls/d3dcompiler_43/d3dcompiler_private.h b/dlls/d3dcompiler_43/d3dcompiler_private.h
+index e6a527820c9..2e05172b7d2 100644
+--- a/dlls/d3dcompiler_43/d3dcompiler_private.h
++++ b/dlls/d3dcompiler_43/d3dcompiler_private.h
+@@ -528,6 +528,9 @@ void SlDeleteShader(struct bwriter_shader *shader);
+ #define TAG_OSGN MAKE_TAG('O', 'S', 'G', 'N')
+ #define TAG_OSG5 MAKE_TAG('O', 'S', 'G', '5')
+ #define TAG_PCSG MAKE_TAG('P', 'C', 'S', 'G')
++#define TAG_ISG1 MAKE_TAG('I', 'S', 'G', '1')
++#define TAG_OSG1 MAKE_TAG('O', 'S', 'G', '1')
++#define TAG_PSG1 MAKE_TAG('P', 'S', 'G', '1')
+ #define TAG_RDEF MAKE_TAG('R', 'D', 'E', 'F')
+ #define TAG_SDBG MAKE_TAG('S', 'D', 'B', 'G')
+ #define TAG_SHDR MAKE_TAG('S', 'H', 'D', 'R')
+diff --git a/dlls/d3dcompiler_43/reflection.c b/dlls/d3dcompiler_43/reflection.c
+index 21b367f5002..500f779ccb6 100644
+--- a/dlls/d3dcompiler_43/reflection.c
++++ b/dlls/d3dcompiler_43/reflection.c
+@@ -46,6 +46,7 @@ enum D3DCOMPILER_SIGNATURE_ELEMENT_SIZE
+ {
+     D3DCOMPILER_SIGNATURE_ELEMENT_SIZE6 = 6,
+     D3DCOMPILER_SIGNATURE_ELEMENT_SIZE7 = 7,
++    D3DCOMPILER_SIGNATURE_ELEMENT_SIZE8 = 8,
+ };
+ 
+ #define D3DCOMPILER_SHADER_TARGET_VERSION_MASK 0xffff
+@@ -1683,6 +1684,12 @@ static HRESULT d3dcompiler_parse_signature(struct d3dcompiler_shader_signature *
+ 
+     switch (section->tag)
+     {
++        case TAG_ISG1:
++        case TAG_OSG1:
++        case TAG_PSG1:
++            element_size = D3DCOMPILER_SIGNATURE_ELEMENT_SIZE8;
++            break;
++
+         case TAG_OSG5:
+             element_size = D3DCOMPILER_SIGNATURE_ELEMENT_SIZE7;
+             break;
+@@ -1729,15 +1736,16 @@ static HRESULT d3dcompiler_parse_signature(struct d3dcompiler_shader_signature *
+         uint32_t name_offset, mask;
+ 
+ #if D3D_COMPILER_VERSION >= 46
+-        /* FIXME */
+         d[i].MinPrecision = D3D_MIN_PRECISION_DEFAULT;
+ #endif
+-#if D3D_COMPILER_VERSION
+-        if (element_size == D3DCOMPILER_SIGNATURE_ELEMENT_SIZE7)
++        if (element_size != D3DCOMPILER_SIGNATURE_ELEMENT_SIZE6)
+         {
++#if D3D_COMPILER_VERSION
+             d[i].Stream = read_u32(&ptr);
+-        }
++#else
++            read_u32(&ptr);
+ #endif
++        }
+ 
+         name_offset = read_u32(&ptr);
+         d[i].SemanticName = string_data + (name_offset - string_data_offset);
+@@ -1748,6 +1756,14 @@ static HRESULT d3dcompiler_parse_signature(struct d3dcompiler_shader_signature *
+         mask = read_u32(&ptr);
+         d[i].ReadWriteMask = (mask >> 8) & 0xff;
+         d[i].Mask = mask & 0xff;
++        if (element_size == D3DCOMPILER_SIGNATURE_ELEMENT_SIZE8)
++        {
++#if D3D_COMPILER_VERSION >= 46
++            d[i].MinPrecision = read_u32(&ptr);
++#else
++            read_u32(&ptr);
++#endif
++        }
+ 
+         if (!stricmp(d[i].SemanticName, "sv_depth"))
+             d[i].SystemValueType = D3D_NAME_DEPTH;
+@@ -1877,6 +1893,7 @@ static HRESULT d3dcompiler_shader_reflection_init(struct d3dcompiler_shader_refl
+                 break;
+ 
+             case TAG_ISGN:
++            case TAG_ISG1:
+                 reflection->isgn = calloc(1, sizeof(*reflection->isgn));
+                 if (!reflection->isgn)
+                 {
+@@ -1895,6 +1912,7 @@ static HRESULT d3dcompiler_shader_reflection_init(struct d3dcompiler_shader_refl
+ 
+             case TAG_OSG5:
+             case TAG_OSGN:
++            case TAG_OSG1:
+                 reflection->osgn = calloc(1, sizeof(*reflection->osgn));
+                 if (!reflection->osgn)
+                 {
+@@ -1912,6 +1930,7 @@ static HRESULT d3dcompiler_shader_reflection_init(struct d3dcompiler_shader_refl
+                 break;
+ 
+             case TAG_PCSG:
++            case TAG_PSG1:
+                 reflection->pcsg = calloc(1, sizeof(*reflection->pcsg));
+                 if (!reflection->pcsg)
+                 {
+diff --git a/dlls/d3dcompiler_43/tests/blob.c b/dlls/d3dcompiler_43/tests/blob.c
+index 56432a9a81d..ee1dfbf2b3f 100644
+--- a/dlls/d3dcompiler_43/tests/blob.c
++++ b/dlls/d3dcompiler_43/tests/blob.c
+@@ -38,9 +38,12 @@
+     ((DWORD)(ch2) << 16) | ((DWORD)(ch3) << 24 ))
+ #define TAG_Aon9 MAKE_TAG('A', 'o', 'n', '9')
+ #define TAG_DXBC MAKE_TAG('D', 'X', 'B', 'C')
++#define TAG_ISG1 MAKE_TAG('I', 'S', 'G', '1')
+ #define TAG_ISGN MAKE_TAG('I', 'S', 'G', 'N')
++#define TAG_OSG1 MAKE_TAG('O', 'S', 'G', '1')
+ #define TAG_OSGN MAKE_TAG('O', 'S', 'G', 'N')
+ #define TAG_PCSG MAKE_TAG('P', 'C', 'S', 'G')
++#define TAG_PSG1 MAKE_TAG('P', 'S', 'G', '1')
+ #define TAG_RDEF MAKE_TAG('R', 'D', 'E', 'F')
+ #define TAG_SDBG MAKE_TAG('S', 'D', 'B', 'G')
+ #define TAG_SHDR MAKE_TAG('S', 'H', 'D', 'R')
+@@ -910,6 +913,131 @@ static void test_D3DWriteBlobToFile(void)
+ #endif
+ #endif
+ 
++#if D3D_COMPILER_VERSION >= 46
++/*
++ * D3DCompile() from d3dcompiler_47, entry "main", target hs_5_0. The min16
++ * type makes the compiler write ISG1, OSG1 and PSG1 instead of ISGN, OSGN and PCSG.
++ */
++#if 0
++struct cp
++{
++    float4 pos : POSITION;
++};
++
++struct patch_out
++{
++    float edges[3] : SV_TessFactor;
++    float inside : SV_InsideTessFactor;
++    min16float4 extra : TEXCOORD0;
++};
++
++patch_out patch_func(InputPatch<cp, 3> ip)
++{
++    patch_out o;
++    o.edges[0] = o.edges[1] = o.edges[2] = 1.0;
++    o.inside = 1.0;
++    o.extra = (min16float4)ip[0].pos;
++    return o;
++}
++
++[domain("tri")]
++[partitioning("integer")]
++[outputtopology("triangle_cw")]
++[outputcontrolpoints(3)]
++[patchconstantfunc("patch_func")]
++cp main(InputPatch<cp, 3> ip, uint i : SV_OutputControlPointID)
++{
++    return ip[i];
++}
++#endif
++static const DWORD test_blob_part_min_precision[] =
++{
++    0x43425844, 0x2d829507, 0xd2be829e, 0x9a7631b8, 0xad750fcb, 0x00000001, 0x00000498, 0x00000007,
++    0x0000003c, 0x000000a8, 0x000000e4, 0x00000120, 0x000001fc, 0x000003ec, 0x000003fc, 0x46454452,
++    0x00000064, 0x00000000, 0x00000000, 0x00000000, 0x0000003c, 0x48530500, 0x00000100, 0x0000003c,
++    0x31314452, 0x0000003c, 0x00000018, 0x00000020, 0x00000028, 0x00000024, 0x0000000c, 0x00000000,
++    0x7263694d, 0x666f736f, 0x52282074, 0x4c482029, 0x53204c53, 0x65646168, 0x6f432072, 0x6c69706d,
++    0x31207265, 0x00312e30, 0x31475349, 0x00000034, 0x00000001, 0x00000008, 0x00000000, 0x00000028,
++    0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x00000f0f, 0x00000000, 0x49534f50, 0x4e4f4954,
++    0xababab00, 0x3147534f, 0x00000034, 0x00000001, 0x00000008, 0x00000000, 0x00000028, 0x00000000,
++    0x00000000, 0x00000003, 0x00000000, 0x0000000f, 0x00000000, 0x49534f50, 0x4e4f4954, 0xababab00,
++    0x31475350, 0x000000d4, 0x00000005, 0x00000008, 0x00000000, 0x000000a8, 0x00000000, 0x0000000d,
++    0x00000003, 0x00000000, 0x00000e01, 0x00000000, 0x00000000, 0x000000a8, 0x00000001, 0x0000000d,
++    0x00000003, 0x00000001, 0x00000e01, 0x00000000, 0x00000000, 0x000000a8, 0x00000002, 0x0000000d,
++    0x00000003, 0x00000002, 0x00000e01, 0x00000000, 0x00000000, 0x000000b6, 0x00000000, 0x0000000e,
++    0x00000003, 0x00000003, 0x00000e01, 0x00000000, 0x00000000, 0x000000ca, 0x00000000, 0x00000000,
++    0x00000003, 0x00000004, 0x0000000f, 0x00000001, 0x545f5653, 0x46737365, 0x6f746361, 0x56530072,
++    0x736e495f, 0x54656469, 0x46737365, 0x6f746361, 0x45540072, 0x4f4f4358, 0xab004452, 0x58454853,
++    0x000001e8, 0x00030050, 0x0000007a, 0x01000071, 0x01001893, 0x01001894, 0x01001095, 0x01000896,
++    0x01001897, 0x0101086a, 0x01000073, 0x02000099, 0x00000003, 0x0200005f, 0x00017000, 0x04000067,
++    0x00102012, 0x00000000, 0x00000011, 0x04000067, 0x00102012, 0x00000001, 0x00000012, 0x04000067,
++    0x00102012, 0x00000002, 0x00000013, 0x02000068, 0x00000001, 0x0400005b, 0x00102012, 0x00000000,
++    0x00000003, 0x04000036, 0x00100012, 0x00000000, 0x0001700a, 0x06000036, 0x00902012, 0x0010000a,
++    0x00000000, 0x00004001, 0x3f800000, 0x0100003e, 0x01000073, 0x04000067, 0x00102012, 0x00000003,
++    0x00000014, 0x05000036, 0x00102012, 0x00000003, 0x00004001, 0x3f800000, 0x0100003e, 0x01000073,
++    0x0400005f, 0x00219012, 0x00000003, 0x00000000, 0x04000065, 0x80102012, 0x00004001, 0x00000004,
++    0x07000036, 0x80102012, 0x00004001, 0x00000004, 0x0021900a, 0x00000000, 0x00000000, 0x0100003e,
++    0x01000073, 0x0400005f, 0x00219022, 0x00000003, 0x00000000, 0x04000065, 0x80102022, 0x00004001,
++    0x00000004, 0x07000036, 0x80102022, 0x00004001, 0x00000004, 0x0021901a, 0x00000000, 0x00000000,
++    0x0100003e, 0x01000073, 0x0400005f, 0x00219042, 0x00000003, 0x00000000, 0x04000065, 0x80102042,
++    0x00004001, 0x00000004, 0x07000036, 0x80102042, 0x00004001, 0x00000004, 0x0021902a, 0x00000000,
++    0x00000000, 0x0100003e, 0x01000073, 0x0400005f, 0x00219082, 0x00000003, 0x00000000, 0x04000065,
++    0x80102082, 0x00004001, 0x00000004, 0x07000036, 0x80102082, 0x00004001, 0x00000004, 0x0021903a,
++    0x00000000, 0x00000000, 0x0100003e, 0x30494653, 0x00000008, 0x00000010, 0x00000000, 0x54415453,
++    0x00000094, 0x0000000d, 0x00000001, 0x00000000, 0x00000004, 0x00000000, 0x00000000, 0x00000000,
++    0x00000006, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
++    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000007, 0x00000000, 0x00000000, 0x00000000,
++    0x0000000a, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000003,
++    0x00000003, 0x00000001, 0x00000002, 0x00000000, 0x00000000, 0x00000000,
++};
++
++static void test_get_blob_part_min_precision(void)
++{
++    static const struct
++    {
++        D3D_BLOB_PART part;
++        SIZE_T size;
++        unsigned int tag_count;
++        DWORD tags[3];
++    }
++    tests[] =
++    {
++        {D3D_BLOB_INPUT_SIGNATURE_BLOB, 96, 1, {TAG_ISG1}},
++        {D3D_BLOB_OUTPUT_SIGNATURE_BLOB, 96, 1, {TAG_OSG1}},
++        {D3D_BLOB_INPUT_AND_OUTPUT_SIGNATURE_BLOB, 160, 2, {TAG_ISG1, TAG_OSG1}},
++        {D3D_BLOB_PATCH_CONSTANT_SIGNATURE_BLOB, 256, 1, {TAG_PSG1}},
++        {D3D_BLOB_ALL_SIGNATURE_BLOB, 384, 3, {TAG_ISG1, TAG_OSG1, TAG_PSG1}},
++    };
++    const DWORD *dword;
++    unsigned int i, j;
++    ID3DBlob *blob;
++    ULONG refcount;
++    HRESULT hr;
++
++    for (i = 0; i < ARRAY_SIZE(tests); ++i)
++    {
++        winetest_push_context("%u", i);
++        hr = D3DGetBlobPart(test_blob_part_min_precision, test_blob_part_min_precision[6], tests[i].part, 0, &blob);
++        ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++        if (FAILED(hr))
++        {
++            winetest_pop_context();
++            continue;
++        }
++        ok(ID3D10Blob_GetBufferSize(blob) == tests[i].size, "Got unexpected size %Iu.\n", ID3D10Blob_GetBufferSize(blob));
++        dword = ID3D10Blob_GetBufferPointer(blob);
++        ok(dword[0] == TAG_DXBC, "Got unexpected magic %#lx.\n", dword[0]);
++        ok(dword[7] == tests[i].tag_count, "Got unexpected section count %lu.\n", dword[7]);
++        for (j = 0; j < tests[i].tag_count && j < dword[7]; ++j)
++            ok(dword[dword[8 + j] / sizeof(DWORD)] == tests[i].tags[j], "Got unexpected tag %#lx for section %u.\n",
++                    dword[dword[8 + j] / sizeof(DWORD)], j);
++        refcount = ID3D10Blob_Release(blob);
++        ok(!refcount, "ID3DBlob has %lu references left.\n", refcount);
++        winetest_pop_context();
++    }
++}
++#endif
++
+ START_TEST(blob)
+ {
+ #if D3D_COMPILER_VERSION >= 43
+@@ -919,6 +1047,7 @@ START_TEST(blob)
+ #if D3D_COMPILER_VERSION >= 46
+     test_D3DReadFileToBlob();
+     test_D3DWriteBlobToFile();
++    test_get_blob_part_min_precision();
+ #endif
+ #endif
+ }
+diff --git a/dlls/d3dcompiler_43/tests/reflection.c b/dlls/d3dcompiler_43/tests/reflection.c
+index 85c2097c0fb..712c945e815 100644
+--- a/dlls/d3dcompiler_43/tests/reflection.c
++++ b/dlls/d3dcompiler_43/tests/reflection.c
+@@ -2248,6 +2248,255 @@ static const D3D12_SHADER_INPUT_BIND_DESC test_reflection_bound_resources_sm51_r
+     {"c2", D3D_SIT_CBUFFER, 0, 1, D3D_SIF_USERPACKED, 0, D3D_SRV_DIMENSION_UNKNOWN, 0, 1, 1},
+ };
+ 
++/*
++ * D3DCompile() from d3dcompiler_47, entry "main", target vs_5_0.
++ * The min16 types make the compiler write ISG1 and OSG1 signatures.
++ */
++#if 0
++struct vs_in
++{
++    min16float4 pos : POSITION;
++    min16uint2 id : TEXCOORD0;
++    float2 tex : TEXCOORD1;
++    uint instance : SV_InstanceID;
++};
++
++struct vs_out
++{
++    float4 pos : SV_Position;
++    min16float2 tex : TEXCOORD0;
++    min16int2 id : TEXCOORD1;
++};
++
++vs_out main(vs_in i)
++{
++    vs_out o;
++    o.pos = i.pos + i.instance;
++    o.tex = i.tex + (min16float2)i.id;
++    o.id = (min16int2)i.id;
++    return o;
++}
++#endif
++static const DWORD test_reflection_min_precision_vs_blob[] =
++{
++    0x43425844, 0xb12b34b3, 0xe1aa3bd7, 0xaf71e2a7, 0x5031e1d9, 0x00000001, 0x000003dc, 0x00000006,
++    0x00000038, 0x000000a4, 0x00000154, 0x000001dc, 0x00000330, 0x00000340, 0x46454452, 0x00000064,
++    0x00000000, 0x00000000, 0x00000000, 0x0000003c, 0xfffe0500, 0x00000100, 0x0000003c, 0x31314452,
++    0x0000003c, 0x00000018, 0x00000020, 0x00000028, 0x00000024, 0x0000000c, 0x00000000, 0x7263694d,
++    0x666f736f, 0x52282074, 0x4c482029, 0x53204c53, 0x65646168, 0x6f432072, 0x6c69706d, 0x31207265,
++    0x00312e30, 0x31475349, 0x000000a8, 0x00000004, 0x00000008, 0x00000000, 0x00000088, 0x00000000,
++    0x00000000, 0x00000003, 0x00000000, 0x00000f0f, 0x00000001, 0x00000000, 0x00000091, 0x00000000,
++    0x00000000, 0x00000001, 0x00000001, 0x00000303, 0x00000005, 0x00000000, 0x00000091, 0x00000001,
++    0x00000000, 0x00000003, 0x00000002, 0x00000303, 0x00000000, 0x00000000, 0x0000009a, 0x00000000,
++    0x00000008, 0x00000001, 0x00000003, 0x00000101, 0x00000000, 0x49534f50, 0x4e4f4954, 0x58455400,
++    0x524f4f43, 0x56530044, 0x736e495f, 0x636e6174, 0x00444965, 0x3147534f, 0x00000080, 0x00000003,
++    0x00000008, 0x00000000, 0x00000068, 0x00000000, 0x00000001, 0x00000003, 0x00000000, 0x0000000f,
++    0x00000000, 0x00000000, 0x00000074, 0x00000000, 0x00000000, 0x00000003, 0x00000001, 0x00000c03,
++    0x00000001, 0x00000000, 0x00000074, 0x00000001, 0x00000000, 0x00000002, 0x00000002, 0x00000c03,
++    0x00000004, 0x505f5653, 0x7469736f, 0x006e6f69, 0x43584554, 0x44524f4f, 0xababab00, 0x58454853,
++    0x0000014c, 0x00010050, 0x00000053, 0x0101086a, 0x0400005f, 0x801010f2, 0x00004001, 0x00000000,
++    0x0400005f, 0x80101032, 0x00014001, 0x00000001, 0x0300005f, 0x00101032, 0x00000002, 0x04000060,
++    0x00101012, 0x00000003, 0x00000008, 0x04000067, 0x001020f2, 0x00000000, 0x00000001, 0x04000065,
++    0x80102032, 0x00004001, 0x00000001, 0x04000065, 0x80102032, 0x00010001, 0x00000002, 0x02000068,
++    0x00000002, 0x06000056, 0x80100012, 0x00004001, 0x00000000, 0x0010100a, 0x00000003, 0x0a000000,
++    0x801000f2, 0x00004001, 0x00000000, 0x80100006, 0x00004001, 0x00000000, 0x80101e46, 0x00004001,
++    0x00000000, 0x06000036, 0x001020f2, 0x00000000, 0x80100e46, 0x00004001, 0x00000000, 0x07000056,
++    0x80100032, 0x00004001, 0x00000000, 0x80101046, 0x00014001, 0x00000001, 0x08000000, 0x00100032,
++    0x00000001, 0x80100046, 0x00004001, 0x00000000, 0x00101046, 0x00000002, 0x06000036, 0x80102032,
++    0x00004001, 0x00000001, 0x00100046, 0x00000001, 0x07000036, 0x80102032, 0x00010001, 0x00000002,
++    0x80101046, 0x00014001, 0x00000001, 0x0100003e, 0x30494653, 0x00000008, 0x00000010, 0x00000000,
++    0x54415453, 0x00000094, 0x00000008, 0x00000002, 0x00000000, 0x00000007, 0x00000002, 0x00000000,
++    0x00000000, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
++    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x00000002,
++    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
++    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
++};
++
++/*
++ * Same, target hs_5_0. All three signatures (ISG1, OSG1, PSG1) use the
++ * min precision layout, although only the patch constant one has a min16 type.
++ */
++#if 0
++struct cp
++{
++    float4 pos : POSITION;
++};
++
++struct patch_out
++{
++    float edges[3] : SV_TessFactor;
++    float inside : SV_InsideTessFactor;
++    min16float4 extra : TEXCOORD0;
++};
++
++patch_out patch_func(InputPatch<cp, 3> ip)
++{
++    patch_out o;
++    o.edges[0] = o.edges[1] = o.edges[2] = 1.0;
++    o.inside = 1.0;
++    o.extra = (min16float4)ip[0].pos;
++    return o;
++}
++
++[domain("tri")]
++[partitioning("integer")]
++[outputtopology("triangle_cw")]
++[outputcontrolpoints(3)]
++[patchconstantfunc("patch_func")]
++cp main(InputPatch<cp, 3> ip, uint i : SV_OutputControlPointID)
++{
++    return ip[i];
++}
++#endif
++static const DWORD test_reflection_min_precision_hs_blob[] =
++{
++    0x43425844, 0x2d829507, 0xd2be829e, 0x9a7631b8, 0xad750fcb, 0x00000001, 0x00000498, 0x00000007,
++    0x0000003c, 0x000000a8, 0x000000e4, 0x00000120, 0x000001fc, 0x000003ec, 0x000003fc, 0x46454452,
++    0x00000064, 0x00000000, 0x00000000, 0x00000000, 0x0000003c, 0x48530500, 0x00000100, 0x0000003c,
++    0x31314452, 0x0000003c, 0x00000018, 0x00000020, 0x00000028, 0x00000024, 0x0000000c, 0x00000000,
++    0x7263694d, 0x666f736f, 0x52282074, 0x4c482029, 0x53204c53, 0x65646168, 0x6f432072, 0x6c69706d,
++    0x31207265, 0x00312e30, 0x31475349, 0x00000034, 0x00000001, 0x00000008, 0x00000000, 0x00000028,
++    0x00000000, 0x00000000, 0x00000003, 0x00000000, 0x00000f0f, 0x00000000, 0x49534f50, 0x4e4f4954,
++    0xababab00, 0x3147534f, 0x00000034, 0x00000001, 0x00000008, 0x00000000, 0x00000028, 0x00000000,
++    0x00000000, 0x00000003, 0x00000000, 0x0000000f, 0x00000000, 0x49534f50, 0x4e4f4954, 0xababab00,
++    0x31475350, 0x000000d4, 0x00000005, 0x00000008, 0x00000000, 0x000000a8, 0x00000000, 0x0000000d,
++    0x00000003, 0x00000000, 0x00000e01, 0x00000000, 0x00000000, 0x000000a8, 0x00000001, 0x0000000d,
++    0x00000003, 0x00000001, 0x00000e01, 0x00000000, 0x00000000, 0x000000a8, 0x00000002, 0x0000000d,
++    0x00000003, 0x00000002, 0x00000e01, 0x00000000, 0x00000000, 0x000000b6, 0x00000000, 0x0000000e,
++    0x00000003, 0x00000003, 0x00000e01, 0x00000000, 0x00000000, 0x000000ca, 0x00000000, 0x00000000,
++    0x00000003, 0x00000004, 0x0000000f, 0x00000001, 0x545f5653, 0x46737365, 0x6f746361, 0x56530072,
++    0x736e495f, 0x54656469, 0x46737365, 0x6f746361, 0x45540072, 0x4f4f4358, 0xab004452, 0x58454853,
++    0x000001e8, 0x00030050, 0x0000007a, 0x01000071, 0x01001893, 0x01001894, 0x01001095, 0x01000896,
++    0x01001897, 0x0101086a, 0x01000073, 0x02000099, 0x00000003, 0x0200005f, 0x00017000, 0x04000067,
++    0x00102012, 0x00000000, 0x00000011, 0x04000067, 0x00102012, 0x00000001, 0x00000012, 0x04000067,
++    0x00102012, 0x00000002, 0x00000013, 0x02000068, 0x00000001, 0x0400005b, 0x00102012, 0x00000000,
++    0x00000003, 0x04000036, 0x00100012, 0x00000000, 0x0001700a, 0x06000036, 0x00902012, 0x0010000a,
++    0x00000000, 0x00004001, 0x3f800000, 0x0100003e, 0x01000073, 0x04000067, 0x00102012, 0x00000003,
++    0x00000014, 0x05000036, 0x00102012, 0x00000003, 0x00004001, 0x3f800000, 0x0100003e, 0x01000073,
++    0x0400005f, 0x00219012, 0x00000003, 0x00000000, 0x04000065, 0x80102012, 0x00004001, 0x00000004,
++    0x07000036, 0x80102012, 0x00004001, 0x00000004, 0x0021900a, 0x00000000, 0x00000000, 0x0100003e,
++    0x01000073, 0x0400005f, 0x00219022, 0x00000003, 0x00000000, 0x04000065, 0x80102022, 0x00004001,
++    0x00000004, 0x07000036, 0x80102022, 0x00004001, 0x00000004, 0x0021901a, 0x00000000, 0x00000000,
++    0x0100003e, 0x01000073, 0x0400005f, 0x00219042, 0x00000003, 0x00000000, 0x04000065, 0x80102042,
++    0x00004001, 0x00000004, 0x07000036, 0x80102042, 0x00004001, 0x00000004, 0x0021902a, 0x00000000,
++    0x00000000, 0x0100003e, 0x01000073, 0x0400005f, 0x00219082, 0x00000003, 0x00000000, 0x04000065,
++    0x80102082, 0x00004001, 0x00000004, 0x07000036, 0x80102082, 0x00004001, 0x00000004, 0x0021903a,
++    0x00000000, 0x00000000, 0x0100003e, 0x30494653, 0x00000008, 0x00000010, 0x00000000, 0x54415453,
++    0x00000094, 0x0000000d, 0x00000001, 0x00000000, 0x00000004, 0x00000000, 0x00000000, 0x00000000,
++    0x00000006, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000,
++    0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000007, 0x00000000, 0x00000000, 0x00000000,
++    0x0000000a, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000003,
++    0x00000003, 0x00000001, 0x00000002, 0x00000000, 0x00000000, 0x00000000,
++};
++
++#if D3D_COMPILER_VERSION >= 46
++static void check_signature_parameters(ID3D11ShaderReflection *ref11, unsigned int kind,
++        const D3D11_SIGNATURE_PARAMETER_DESC *expected, unsigned int count)
++{
++    D3D11_SIGNATURE_PARAMETER_DESC desc;
++    unsigned int i;
++    HRESULT hr;
++
++    for (i = 0; i < count; ++i)
++    {
++        winetest_push_context("%u", i);
++        memset(&desc, 0xcc, sizeof(desc));
++        if (kind == 0)
++            hr = ref11->lpVtbl->GetInputParameterDesc(ref11, i, &desc);
++        else if (kind == 1)
++            hr = ref11->lpVtbl->GetOutputParameterDesc(ref11, i, &desc);
++        else
++            hr = ref11->lpVtbl->GetPatchConstantParameterDesc(ref11, i, &desc);
++        ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++        ok(!strcmp(desc.SemanticName, expected[i].SemanticName), "Got unexpected SemanticName \"%s\".\n", desc.SemanticName);
++        ok(desc.SemanticIndex == expected[i].SemanticIndex, "Got unexpected SemanticIndex %u.\n", desc.SemanticIndex);
++        ok(desc.Register == expected[i].Register, "Got unexpected Register %u.\n", desc.Register);
++        ok(desc.SystemValueType == expected[i].SystemValueType, "Got unexpected SystemValueType %#x.\n", desc.SystemValueType);
++        ok(desc.ComponentType == expected[i].ComponentType, "Got unexpected ComponentType %#x.\n", desc.ComponentType);
++        ok(desc.Mask == expected[i].Mask, "Got unexpected Mask %#x.\n", desc.Mask);
++        ok(desc.ReadWriteMask == expected[i].ReadWriteMask, "Got unexpected ReadWriteMask %#x.\n", desc.ReadWriteMask);
++        ok(desc.Stream == expected[i].Stream, "Got unexpected Stream %u.\n", desc.Stream);
++        ok(desc.MinPrecision == expected[i].MinPrecision, "Got unexpected MinPrecision %#x.\n", desc.MinPrecision);
++        winetest_pop_context();
++    }
++}
++
++static void test_reflection_min_precision(void)
++{
++    static const D3D11_SIGNATURE_PARAMETER_DESC vs_in[] =
++    {
++        {"POSITION", 0, 0, D3D_NAME_UNDEFINED, D3D_REGISTER_COMPONENT_FLOAT32, 0xf, 0xf, 0, D3D_MIN_PRECISION_FLOAT_16},
++        {"TEXCOORD", 0, 1, D3D_NAME_UNDEFINED, D3D_REGISTER_COMPONENT_UINT32, 0x3, 0x3, 0, D3D_MIN_PRECISION_UINT_16},
++        {"TEXCOORD", 1, 2, D3D_NAME_UNDEFINED, D3D_REGISTER_COMPONENT_FLOAT32, 0x3, 0x3, 0, D3D_MIN_PRECISION_DEFAULT},
++        {"SV_InstanceID", 0, 3, D3D_NAME_INSTANCE_ID, D3D_REGISTER_COMPONENT_UINT32, 0x1, 0x1, 0, D3D_MIN_PRECISION_DEFAULT},
++    };
++    static const D3D11_SIGNATURE_PARAMETER_DESC vs_out[] =
++    {
++        {"SV_Position", 0, 0, D3D_NAME_POSITION, D3D_REGISTER_COMPONENT_FLOAT32, 0xf, 0x0, 0, D3D_MIN_PRECISION_DEFAULT},
++        {"TEXCOORD", 0, 1, D3D_NAME_UNDEFINED, D3D_REGISTER_COMPONENT_FLOAT32, 0x3, 0xc, 0, D3D_MIN_PRECISION_FLOAT_16},
++        {"TEXCOORD", 1, 2, D3D_NAME_UNDEFINED, D3D_REGISTER_COMPONENT_SINT32, 0x3, 0xc, 0, D3D_MIN_PRECISION_SINT_16},
++    };
++    static const D3D11_SIGNATURE_PARAMETER_DESC hs_in[] =
++    {
++        {"POSITION", 0, 0, D3D_NAME_UNDEFINED, D3D_REGISTER_COMPONENT_FLOAT32, 0xf, 0xf, 0, D3D_MIN_PRECISION_DEFAULT},
++    };
++    static const D3D11_SIGNATURE_PARAMETER_DESC hs_out[] =
++    {
++        {"POSITION", 0, 0, D3D_NAME_UNDEFINED, D3D_REGISTER_COMPONENT_FLOAT32, 0xf, 0x0, 0, D3D_MIN_PRECISION_DEFAULT},
++    };
++    static const D3D11_SIGNATURE_PARAMETER_DESC hs_patch[] =
++    {
++        {"SV_TessFactor", 0, 0, D3D_NAME_FINAL_TRI_EDGE_TESSFACTOR, D3D_REGISTER_COMPONENT_FLOAT32, 0x1, 0xe, 0, D3D_MIN_PRECISION_DEFAULT},
++        {"SV_TessFactor", 1, 1, D3D_NAME_FINAL_TRI_EDGE_TESSFACTOR, D3D_REGISTER_COMPONENT_FLOAT32, 0x1, 0xe, 0, D3D_MIN_PRECISION_DEFAULT},
++        {"SV_TessFactor", 2, 2, D3D_NAME_FINAL_TRI_EDGE_TESSFACTOR, D3D_REGISTER_COMPONENT_FLOAT32, 0x1, 0xe, 0, D3D_MIN_PRECISION_DEFAULT},
++        {"SV_InsideTessFactor", 0, 3, D3D_NAME_FINAL_TRI_INSIDE_TESSFACTOR, D3D_REGISTER_COMPONENT_FLOAT32, 0x1, 0xe, 0, D3D_MIN_PRECISION_DEFAULT},
++        {"TEXCOORD", 0, 4, D3D_NAME_UNDEFINED, D3D_REGISTER_COMPONENT_FLOAT32, 0xf, 0x0, 0, D3D_MIN_PRECISION_FLOAT_16},
++    };
++    ID3D11ShaderReflection *ref11;
++    D3D11_SHADER_DESC sdesc;
++    ULONG count;
++    HRESULT hr;
++
++    hr = call_reflect(test_reflection_min_precision_vs_blob, test_reflection_min_precision_vs_blob[6],
++            &IID_ID3D11ShaderReflection, (void **)&ref11);
++    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++    hr = ref11->lpVtbl->GetDesc(ref11, &sdesc);
++    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++    ok(sdesc.InputParameters == ARRAY_SIZE(vs_in), "Got unexpected InputParameters %u.\n", sdesc.InputParameters);
++    ok(sdesc.OutputParameters == ARRAY_SIZE(vs_out), "Got unexpected OutputParameters %u.\n", sdesc.OutputParameters);
++    ok(!sdesc.PatchConstantParameters, "Got unexpected PatchConstantParameters %u.\n", sdesc.PatchConstantParameters);
++    winetest_push_context("vs in");
++    check_signature_parameters(ref11, 0, vs_in, min(sdesc.InputParameters, ARRAY_SIZE(vs_in)));
++    winetest_pop_context();
++    winetest_push_context("vs out");
++    check_signature_parameters(ref11, 1, vs_out, min(sdesc.OutputParameters, ARRAY_SIZE(vs_out)));
++    winetest_pop_context();
++    count = ref11->lpVtbl->Release(ref11);
++    ok(!count, "Got unexpected count %lu.\n", count);
++
++    hr = call_reflect(test_reflection_min_precision_hs_blob, test_reflection_min_precision_hs_blob[6],
++            &IID_ID3D11ShaderReflection, (void **)&ref11);
++    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++    hr = ref11->lpVtbl->GetDesc(ref11, &sdesc);
++    ok(hr == S_OK, "Got unexpected hr %#lx.\n", hr);
++    ok(sdesc.InputParameters == ARRAY_SIZE(hs_in), "Got unexpected InputParameters %u.\n", sdesc.InputParameters);
++    ok(sdesc.OutputParameters == ARRAY_SIZE(hs_out), "Got unexpected OutputParameters %u.\n", sdesc.OutputParameters);
++    ok(sdesc.PatchConstantParameters == ARRAY_SIZE(hs_patch), "Got unexpected PatchConstantParameters %u.\n",
++            sdesc.PatchConstantParameters);
++    winetest_push_context("hs in");
++    check_signature_parameters(ref11, 0, hs_in, min(sdesc.InputParameters, ARRAY_SIZE(hs_in)));
++    winetest_pop_context();
++    winetest_push_context("hs out");
++    check_signature_parameters(ref11, 1, hs_out, min(sdesc.OutputParameters, ARRAY_SIZE(hs_out)));
++    winetest_pop_context();
++    winetest_push_context("hs patch");
++    check_signature_parameters(ref11, 2, hs_patch, min(sdesc.PatchConstantParameters, ARRAY_SIZE(hs_patch)));
++    winetest_pop_context();
++    count = ref11->lpVtbl->Release(ref11);
++    ok(!count, "Got unexpected count %lu.\n", count);
++}
++#endif
++
+ START_TEST(reflection)
+ {
+ #if D3D_COMPILER_VERSION
+@@ -2266,4 +2515,7 @@ START_TEST(reflection)
+             test_reflection_bound_resources_sm51_result,
+             ARRAY_SIZE(test_reflection_bound_resources_sm51_result), 0x501);
+     test_reflection_constant_buffer();
++#if D3D_COMPILER_VERSION >= 46
++    test_reflection_min_precision();
++#endif
+ }
+-- 
+2.56.0
+
