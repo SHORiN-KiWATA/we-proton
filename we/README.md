@@ -18,6 +18,7 @@
 | `wine/0004-server-Follow-Windows-connect-semantics-for-datagram` | UDP socket `connect()` 到全零地址的 Windows 语义 |
 | `wine/0005-ntdll-Report-written-write-copy-pages-as-read-write` | 写过的写时复制页报告 `PAGE_READWRITE` |
 | `wine/0006-win32u-Don-t-activate-WS_EX_NOACTIVATE-windows-in-pl` | 活动窗口消失后不把 `WS_EX_NOACTIVATE` 窗口设成前台 |
+| `wine/0007-win32u-Draw-layered-child-windows-into-their-parent-` | 分层子窗口（`WS_CHILD` + `WS_EX_LAYERED`）画进父窗口，不再变成单独的顶层窗口 |
 | `vkd3d-proton/0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
 
 每个补丁的现象、根因、Windows 实测、验证和排查过程见 `we/fixes/`。
@@ -30,6 +31,7 @@
 - `udp_connect_poll`、`udp_wakeup_probe`、`udp_connect_err_probe`、`udp_connect_err_probe2`（0004）：UDP `connect()` 的各种情况。`*.windows.txt` 是 Windows 11 26200 上的实测输出，`*.wine3.txt` 是修复后的输出
 - `writecopy_probe`、`writecopy_probe2`（0005）：写时复制页写前写后报告的保护属性、代码页打补丁、区域边界
 - `noactivate_probe`（0006）：普通窗口隐藏、最小化、销毁时谁接手前台，`WS_EX_NOACTIVATE` 窗口在同一进程和另一个进程两种情况；要在有显示的环境里跑（Xvfb 即可）
+- `layered_child_probe`（0007）：用 `UpdateLayeredWindow` 更新的分层子窗口画在哪里、跟不跟父窗口走。用 `layered_child_grab.py` 在 Xvfb 上跑（`DISPLAY=:N layered_child_grab.py <runner>/files/bin/wine layered_child_probe.exe [pos]`），它从 X 根窗口读像素，需要没有合成器的 X 服务器
 - `dxil-spirv/run.sh`（vkd3d-proton 0001）：用 dxil-spirv 的 `structurize-test` 跑 `*.st` 控制流图，检查生成的 SPIR-V 能通过校验。源码取 `build/overlay/src-vkd3d-proton`（先跑 `overlay-build.sh`）；`--unpatched` 用未打补丁的子模块，应该失败
 
 Wine 自己的测试：用 `build/overlay/src-wine` 另配一个 `--enable-tests` 的构建目录，编 `dlls/kernel32/tests`、`dlls/ntdll/tests`、`dlls/user32/tests`，用新旧 runner 各跑一遍、逐条比对失败项（0005、0006 就是这样验证的）。
