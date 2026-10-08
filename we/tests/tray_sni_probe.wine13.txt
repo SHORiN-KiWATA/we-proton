@@ -18,7 +18,7 @@ host:   48x48 ARGB: left ffff0000, right top 8000ff00, right bottom 00000000
 probe: modify tip 1
 probe: balloon 1
 host: notification app 'probe tip 2 中文' summary 'balloon title' body 'balloon text' timeout 10000
-host: signals NewIcon NewTitle NewToolTip
+host: signals NewTitle NewToolTip
 host: ToolTip title now 'probe tip 2 中文', Title 'probe tip 2 中文'
 host: watcher restarted, item registered again
 host: Activate(100, 200)

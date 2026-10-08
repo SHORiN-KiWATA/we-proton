@@ -1,4 +1,4 @@
-From 3f01a379f197ae0a9aca41c42ed9f5caf2fc8363 Mon Sep 17 00:00:00 2001
+From 86e7f102e0bf49de50cca3ad1aa7616fa008b4da Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Thu, 8 Oct 2026 20:59:38 +0900
 Subject: [PATCH] qcap: Clear pUnk in media types returned to 32-bit callers.

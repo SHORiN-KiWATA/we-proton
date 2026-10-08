@@ -1,4 +1,4 @@
-From c2a1d397570de0ba1383a14b98e02221d97a975e Mon Sep 17 00:00:00 2001
+From 9ac7a64c887caa195bda0860fb37cd3fbd11b845 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Thu, 8 Oct 2026 20:43:24 +0900
 Subject: [PATCH] explorer: Show systray icons as StatusNotifierItems.
@@ -16,10 +16,10 @@ StatusNotifierWatcher on the session bus the icons are docked as before.
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
 ---
  programs/explorer/Makefile.in |   4 +
- programs/explorer/sni.c       | 760 ++++++++++++++++++++++++++++++++++
- programs/explorer/systray.c   | 274 +++++++++++-
+ programs/explorer/sni.c       | 778 ++++++++++++++++++++++++++++++++++
+ programs/explorer/systray.c   | 280 +++++++++++-
  programs/explorer/unixlib.h   |  79 ++++
- 4 files changed, 1116 insertions(+), 1 deletion(-)
+ 4 files changed, 1140 insertions(+), 1 deletion(-)
  create mode 100644 programs/explorer/sni.c
  create mode 100644 programs/explorer/unixlib.h
 
@@ -47,10 +47,10 @@ index e6668da7e99..78bd5732fb4 100644
  	systray.c
 diff --git a/programs/explorer/sni.c b/programs/explorer/sni.c
 new file mode 100644
-index 00000000000..3f72e66b542
+index 00000000000..3b17345de53
 --- /dev/null
 +++ b/programs/explorer/sni.c
-@@ -0,0 +1,760 @@
+@@ -0,0 +1,778 @@
 +/*
 + * Notification icons as StatusNotifierItems
 + *
@@ -281,24 +281,40 @@ index 00000000000..3f72e66b542
 +    return NULL;
 +}
 +
-+static BOOL set_item_data( struct sni_item *item, const struct sni_icon_params *params )
++#define SNI_CHANGED_ICON    0x01
++#define SNI_CHANGED_TITLE   0x02
++#define SNI_CHANGED_TOOLTIP 0x04
++
++static BOOL set_item_data( struct sni_item *item, const struct sni_icon_params *params, unsigned int *changed )
 +{
 +    const char *id = param_ptr( params->id ), *title = param_ptr( params->title );
 +    const char *tooltip = param_ptr( params->tooltip );
 +    unsigned int i, count = 0;
 +    UINT *pixels = NULL;
 +
++    if (!id) id = "";
++    if (!title) title = "";
++    if (!tooltip) tooltip = "";
++
 +    for (i = 0; i < SNI_MAX_SIZES && params->sizes[i]; i++) count += params->sizes[i] * params->sizes[i];
 +    if (count && !(pixels = malloc( count * sizeof(*pixels) ))) return FALSE;
 +    if (count) memcpy( pixels, param_ptr( params->pixels ), count * sizeof(*pixels) );
++
++    /* applications often set the same icon again when they only change the tip */
++    *changed = 0;
++    if (memcmp( item->sizes, params->sizes, sizeof(item->sizes) ) ||
++        (count && memcmp( item->pixels, pixels, count * sizeof(*pixels) )))
++        *changed |= SNI_CHANGED_ICON;
++    if (!item->title || strcmp( item->title, title )) *changed |= SNI_CHANGED_TITLE;
++    if (!item->tooltip || strcmp( item->tooltip, tooltip )) *changed |= SNI_CHANGED_TOOLTIP;
 +
 +    free( item->id );
 +    free( item->title );
 +    free( item->tooltip );
 +    free( item->pixels );
-+    item->id = strdup( id ? id : "" );
-+    item->title = strdup( title ? title : "" );
-+    item->tooltip = strdup( tooltip ? tooltip : "" );
++    item->id = strdup( id );
++    item->title = strdup( title );
++    item->tooltip = strdup( tooltip );
 +    item->pixels = pixels;
 +    memcpy( item->sizes, params->sizes, sizeof(item->sizes) );
 +    return item->id && item->title && item->tooltip;
@@ -570,12 +586,13 @@ index 00000000000..3f72e66b542
 +{
 +    const struct sni_icon_params *params = args;
 +    struct sni_item *item;
++    unsigned int changed;
 +    DBusError error;
 +    int ret;
 +
 +    if (!(item = calloc( 1, sizeof(*item) ))) return STATUS_NO_MEMORY;
 +    item->hwnd = params->hwnd;
-+    if (!set_item_data( item, params ) || !(item->connection = open_connection()))
++    if (!set_item_data( item, params, &changed ) || !(item->connection = open_connection()))
 +    {
 +        free_item( item );
 +        return STATUS_UNSUCCESSFUL;
@@ -611,15 +628,16 @@ index 00000000000..3f72e66b542
 +    const struct sni_icon_params *params = args;
 +    NTSTATUS status = STATUS_NOT_FOUND;
 +    struct sni_item *item;
++    unsigned int changed;
 +
 +    pthread_mutex_lock( &items_mutex );
 +    if ((item = find_item( params->hwnd )))
 +    {
-+        if (set_item_data( item, params ))
++        if (set_item_data( item, params, &changed ))
 +        {
-+            send_item_signal( item, "NewIcon" );
-+            send_item_signal( item, "NewTitle" );
-+            send_item_signal( item, "NewToolTip" );
++            if (changed & SNI_CHANGED_ICON) send_item_signal( item, "NewIcon" );
++            if (changed & SNI_CHANGED_TITLE) send_item_signal( item, "NewTitle" );
++            if (changed & SNI_CHANGED_TOOLTIP) send_item_signal( item, "NewToolTip" );
 +            p_dbus_connection_flush( item->connection );
 +            status = STATUS_SUCCESS;
 +        }
@@ -812,7 +830,7 @@ index 00000000000..3f72e66b542
 +
 +#endif  /* _WIN64 */
 diff --git a/programs/explorer/systray.c b/programs/explorer/systray.c
-index 02fe5078706..cf03e9c753b 100644
+index 02fe5078706..63aa495f286 100644
 --- a/programs/explorer/systray.c
 +++ b/programs/explorer/systray.c
 @@ -30,6 +30,7 @@
@@ -1013,7 +1031,7 @@ index 02fe5078706..cf03e9c753b 100644
  static BOOL notify_owner( struct icon *icon, UINT msg, LPARAM lparam )
  {
      WPARAM wp = icon->id;
-@@ -483,6 +646,60 @@ static BOOL notify_owner( struct icon *icon, UINT msg, LPARAM lparam )
+@@ -483,6 +646,66 @@ static BOOL notify_owner( struct icon *icon, UINT msg, LPARAM lparam )
      return TRUE;
  }
  
@@ -1027,8 +1045,14 @@ index 02fe5078706..cf03e9c753b 100644
 +
 +    TRACE( "id=0x%x, hwnd=%p, type %u at %s\n", icon->id, icon->owner, type, wine_dbgstr_point( &pt ));
 +
-+    /* the click happened on the icon, so that is where the cursor is */
-+    if (pt.x || pt.y) SetCursorPos( pt.x, pt.y );
++    /* the click happened on the icon, so that is where the cursor is; the host
++     * counts from the top left corner of the desktop, not of the primary monitor */
++    if (pt.x || pt.y)
++    {
++        pt.x += GetSystemMetrics( SM_XVIRTUALSCREEN );
++        pt.y += GetSystemMetrics( SM_YVIRTUALSCREEN );
++        SetCursorPos( pt.x, pt.y );
++    }
 +    else GetCursorPos( &pt );
 +    ScreenToClient( hwnd, &pt );
 +    lparam = MAKELPARAM( pt.x, pt.y );
@@ -1074,7 +1098,7 @@ index 02fe5078706..cf03e9c753b 100644
  /* window procedure for the individual tray icon window */
  static LRESULT WINAPI tray_icon_wndproc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam )
  {
-@@ -582,6 +799,14 @@ static LRESULT WINAPI tray_icon_wndproc( HWND hwnd, UINT msg, WPARAM wparam, LPA
+@@ -582,6 +805,14 @@ static LRESULT WINAPI tray_icon_wndproc( HWND hwnd, UINT msg, WPARAM wparam, LPA
          case BALLOON_SHOW_TIMER: balloon_timer( icon ); break;
          }
          return 0;
@@ -1089,7 +1113,7 @@ index 02fe5078706..cf03e9c753b 100644
      }
  
      return DefWindowProcW( hwnd, msg, wparam, lparam );
-@@ -640,6 +865,13 @@ static void show_icon(struct icon *icon)
+@@ -640,6 +871,13 @@ static void show_icon(struct icon *icon)
  
      if (icon->display != ICON_DISPLAY_HIDDEN) return;  /* already displayed */
  
@@ -1103,7 +1127,7 @@ index 02fe5078706..cf03e9c753b 100644
      if (enable_dock)
      {
          DWORD old_exstyle = GetWindowLongW( icon->window, GWL_EXSTYLE );
-@@ -671,6 +903,15 @@ static void hide_icon(struct icon *icon)
+@@ -671,6 +909,15 @@ static void hide_icon(struct icon *icon)
  
      if (icon->display == ICON_DISPLAY_HIDDEN) return;  /* already hidden */
  
@@ -1119,7 +1143,7 @@ index 02fe5078706..cf03e9c753b 100644
      if (enable_dock && NtUserMessageCall( icon->window, WINE_SYSTRAY_DOCK_REMOVE, 0, 0,
                                            NULL, NtUserSystemTrayCall, FALSE ))
      {
-@@ -688,6 +929,8 @@ static void hide_icon(struct icon *icon)
+@@ -688,6 +935,8 @@ static void hide_icon(struct icon *icon)
  /* Modifies an existing icon record */
  static BOOL modify_icon( struct icon *icon, NOTIFYICONDATAW *nid )
  {
@@ -1128,7 +1152,7 @@ index 02fe5078706..cf03e9c753b 100644
      TRACE( "id=0x%x, hwnd=%p\n", nid->uID, nid->hWnd );
  
      /* demarshal the request from the NID */
-@@ -709,6 +952,8 @@ static BOOL modify_icon( struct icon *icon, NOTIFYICONDATAW *nid )
+@@ -709,6 +958,8 @@ static BOOL modify_icon( struct icon *icon, NOTIFYICONDATAW *nid )
  
          if (icon->display >= 0)
              InvalidateRect( icon->window, NULL, TRUE );
@@ -1137,7 +1161,7 @@ index 02fe5078706..cf03e9c753b 100644
          else if (icon->layered)
              paint_layered_icon( icon );
          else if (enable_dock)
-@@ -724,6 +969,7 @@ static BOOL modify_icon( struct icon *icon, NOTIFYICONDATAW *nid )
+@@ -724,6 +975,7 @@ static BOOL modify_icon( struct icon *icon, NOTIFYICONDATAW *nid )
      {
          lstrcpynW( icon->tiptext, nid->szTip, ARRAY_SIZE( icon->tiptext ));
          update_tooltip_text( icon );
@@ -1145,7 +1169,7 @@ index 02fe5078706..cf03e9c753b 100644
      }
      if (nid->uFlags & NIF_INFO && nid->cbSize >= NOTIFYICONDATAA_V2_SIZE)
      {
-@@ -735,8 +981,10 @@ static BOOL modify_icon( struct icon *icon, NOTIFYICONDATAW *nid )
+@@ -735,8 +987,10 @@ static BOOL modify_icon( struct icon *icon, NOTIFYICONDATAW *nid )
          if (icon->info_icon) DestroyIcon( icon->info_icon );
          icon->info_icon = CopyIcon( nid->hBalloonIcon );
  
@@ -1157,7 +1181,7 @@ index 02fe5078706..cf03e9c753b 100644
      if (icon->state & NIS_HIDDEN) hide_icon( icon );
      else show_icon( icon );
      return TRUE;
-@@ -1200,6 +1448,29 @@ void handle_parent_notify( HWND hwnd, WPARAM wp )
+@@ -1200,6 +1454,29 @@ void handle_parent_notify( HWND hwnd, WPARAM wp )
      sync_taskbar_buttons();
  }
  
@@ -1187,7 +1211,7 @@ index 02fe5078706..cf03e9c753b 100644
  /* this function creates the listener window */
  void initialize_systray( BOOL arg_using_root, BOOL arg_enable_shell, BOOL arg_show_systray, BOOL arg_no_tray_items )
  {
-@@ -1218,6 +1489,7 @@ void initialize_systray( BOOL arg_using_root, BOOL arg_enable_shell, BOOL arg_sh
+@@ -1218,6 +1495,7 @@ void initialize_systray( BOOL arg_using_root, BOOL arg_enable_shell, BOOL arg_sh
          show_systray = arg_show_systray;
          enable_taskbar = FALSE;
          enable_dock = TRUE;

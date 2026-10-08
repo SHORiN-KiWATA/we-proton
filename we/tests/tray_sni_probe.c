@@ -1,9 +1,10 @@
 /* What does the owner of a notification icon get when the icon is shown by a
  * StatusNotifierItem host instead of an XEmbed system tray?
  *
- * The program adds an icon, changes its tip, shows a balloon and then prints
- * every callback message with the coordinates it carries and the cursor
- * position, until it gets a middle click; then it deletes the icon and exits.
+ * The program adds an icon, changes its tip (setting the same icon again, as
+ * many programs do), shows a balloon and then prints every callback message
+ * with the coordinates it carries and the cursor position, until it gets a
+ * middle click; then it deletes the icon and exits.
  * sni_host.py plays the panel and does the clicking.
  *
  *   tray_sni_probe.exe        NOTIFYICON_VERSION_4, an icon with alpha
@@ -145,7 +146,7 @@ int main(int argc, char **argv)
     }
 
     Sleep(1000);
-    nid.uFlags = NIF_TIP;
+    nid.uFlags = NIF_ICON | NIF_TIP;  /* the same icon again, only the tip changes */
     wcscpy(nid.szTip, L"probe tip 2 \x4e2d\x6587");
     printf("modify tip %d\n", Shell_NotifyIconW(NIM_MODIFY, &nid));
     nid.uFlags = NIF_INFO;
