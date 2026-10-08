@@ -28,6 +28,7 @@
 | `wine/0014-win32u-Deliver-input-method-text-to-threads-with-the` | 线程被 `ImmDisableIME` 关掉 IME 后，宿主输入法提交的文字以 `WM_IME_CHAR` 送到焦点窗口，不再丢掉 |
 | `wine/0015-iphlpapi-Implement-setting-interfaces-unicast-addres` | 实现 iphlpapi/NSI 的设置通路（改接口参数、加/删地址和路由），底层用 netlink 真正改 Linux 的网络配置 |
 | `wine/0016-wintun-Implement-the-Wintun-userspace-tunnel-driver-` | 用 wintun 接口建虚拟网卡的程序在 Wine 里建不了网卡；内置 wintun.dll 把接口接到 Linux 的 `/dev/net/tun`，出口、LUID 和会话语义按 Windows 实测对齐 |
+| `wine/0017-ntdll-Make-IP_UNICAST_IF-work-for-TCP-sockets-as-wel` | 程序用 `IP_UNICAST_IF` 指定出口网卡时，TCP 也真的从该网卡出去（Linux 的选项只管 UDP）；TUN 类程序“直连”的连接不再被自己的隧道吃掉 |
 | `vkd3d-proton/0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
 
 每个补丁的现象、根因、Windows 实测、验证和排查过程见 `we/fixes/`。

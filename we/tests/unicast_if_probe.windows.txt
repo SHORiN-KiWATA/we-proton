@@ -1,0 +1,9 @@
+adapter 4 "以太网" 192.168.0.80 gw=0
+adapter 1 "Loopback Pseudo-Interface 1" 127.0.0.1 gw=0
+chosen index=4
+tcp baseline connect err=10035
+tcp baseline: source=0.0.0.0 port=9778
+setsockopt(IP_UNICAST_IF, 67108864) ok
+getsockopt(IP_UNICAST_IF) -> 4 (index 67108864)
+tcp with option connect err=10035
+tcp with option: source=0.0.0.0 port=9779

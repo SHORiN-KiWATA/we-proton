@@ -1,0 +1,72 @@
+From 9f1252694fb4c0eebe681e8bf89ba75368b1c3fa Mon Sep 17 00:00:00 2001
+From: SHORiN-KIWATA <shorin@users.noreply.github.com>
+Date: Thu, 8 Oct 2026 23:56:55 +0900
+Subject: [PATCH] ntdll: Make IP_UNICAST_IF work for TCP sockets as well.
+
+Linux's IP_UNICAST_IF only takes effect for UDP, so bind the socket to the
+interface too: TCP then sends from that interface and picks its source
+address instead of following the routing table, which is what an application
+asks for when a tunnel interface has been moved in front of it. The bind
+happens after setting the option, so that the option keeps reading back.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/ntdll/unix/socket.c | 38 +++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 37 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/ntdll/unix/socket.c b/dlls/ntdll/unix/socket.c
+index 0a9ebb87b35..c87943a633c 100644
+--- a/dlls/ntdll/unix/socket.c
++++ b/dlls/ntdll/unix/socket.c
+@@ -1617,6 +1617,42 @@ static NTSTATUS do_setsockopt( HANDLE handle, IO_STATUS_BLOCK *io, int level,
+     return STATUS_SUCCESS;
+ }
+ 
++/* The IP_UNICAST_IF value is an interface index in network byte order. Linux's
++ * IP_UNICAST_IF only takes effect for UDP, so bind the socket to the interface
++ * as well: TCP then sends from that interface and picks its source address
++ * instead of following the routing table, which is what an application expects
++ * when a tunnel interface has been moved in front of it. */
++static NTSTATUS set_unicast_if( HANDLE handle, IO_STATUS_BLOCK *io, const void *in_buffer, ULONG in_size )
++{
++    char name[IFNAMSIZ];
++    int fd, needs_close = FALSE, index;
++    BOOL bound = FALSE, raw = FALSE;
++    NTSTATUS status;
++
++    if (in_size != sizeof(int)) return STATUS_INVALID_PARAMETER;
++    index = ntohl( *(const int *)in_buffer );
++    if (index == 0) name[0] = 0;
++    else if (!if_indextoname( index, name )) return STATUS_INVALID_PARAMETER;
++
++    if ((status = server_get_unix_fd( handle, 0, &fd, &needs_close, NULL, NULL ))) return status;
++
++    if (!setsockopt( fd, IPPROTO_IP, IP_UNICAST_IF, in_buffer, in_size )) raw = TRUE;
++
++#ifdef SO_BINDTODEVICE
++    /* Linux's IP_UNICAST_IF has no effect on TCP sockets, so also bind the
++     * socket to the interface: TCP then sends from that interface and picks
++     * its source address instead of following the routing table. The bind
++     * comes after the option so that the option keeps reading back. */
++    if (!setsockopt( fd, SOL_SOCKET, SO_BINDTODEVICE, name, strlen( name ) )) bound = TRUE;
++#endif
++
++    status = (raw || bound) ? STATUS_SUCCESS : sock_errno_to_status( errno );
++
++    if (needs_close) close( fd );
++    if (io && !status) io->Status = STATUS_SUCCESS;
++    return status;
++}
++
+ 
+ static int get_sock_type( HANDLE handle )
+ {
+@@ -2364,7 +2400,7 @@ NTSTATUS sock_ioctl( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, void *apc
+             return do_getsockopt( handle, io, IPPROTO_IP, IP_UNICAST_IF, out_buffer, out_size );
+ 
+         case IOCTL_AFD_WINE_SET_IP_UNICAST_IF:
+-            return do_setsockopt( handle, io, IPPROTO_IP, IP_UNICAST_IF, in_buffer, in_size );
++            return set_unicast_if( handle, io, in_buffer, in_size );
+ #endif
+ 
+ #ifdef IPV6_ADD_MEMBERSHIP

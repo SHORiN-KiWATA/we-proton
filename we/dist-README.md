@@ -27,6 +27,7 @@ WE-Proton 是 DW-Proton 的一个个人修改版，补了几个 Wine 和 vkd3d-p
 | wine 0014 | 关掉了 IMM、靠 TSF 收输入法文字的程序（例如一些内置 Chromium 的客户端），能看到输入法的候选框，选字后却不上屏 |
 | wine 0015 | 需要给网卡配 IP、加路由的程序（VPN、加速器、TUN 类工具）配置失败，表现为连接或加速不上 |
 | wine 0016 | 用 wintun 接口创建虚拟网卡的程序（VPN、游戏加速器等）建不了网卡，表现为连接/加速在创建适配器一步失败或超时 |
+| wine 0017 | 开 TUN 模式的加速器/VPN 后，程序自己“直连”的连接被虚拟网卡吃掉，整个会话像是断了网 |
 | vkd3d-proton 0001 | 部分 D3D12 着色器被翻译成非法的 SPIR-V，AMD 显卡（Mesa RADV）上直接崩溃 |
 
 补丁源码在 `we-proton-patches/` 的 `wine/` 和 `vkd3d-proton/` 下。
