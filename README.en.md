@@ -18,6 +18,10 @@ The patches added by this project were written and debugged with the help of AI.
 - This project does not adapt to ACE or any other anti-cheat, and does not accept requests or code that bypass anti-cheat or relate to cheating.
 - Linux is not a platform supported by ACE. Even if a game with ACE runs, the account may still be banned for an abnormal environment. You bear the consequences, including bans, of using this project.
 
+## Demo
+
+https://github.com/user-attachments/assets/42438b93-5a36-4557-8a0f-4b65b53d5e07
+
 ## What is fixed
 
 Based on DWProton's official release, with only these files replaced:
