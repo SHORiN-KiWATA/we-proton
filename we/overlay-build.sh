@@ -49,6 +49,7 @@ declare -A TARGETS=(
     [dlls/ntoskrnl.exe]="dlls/ntoskrnl.exe/x86_64-windows/ntoskrnl.exe:x86_64-windows/ntoskrnl.exe"
     [dlls/win32u]="dlls/win32u/win32u.so:x86_64-unix/win32u.so"
     [dlls/rpcrt4]="dlls/rpcrt4/x86_64-windows/rpcrt4.dll:x86_64-windows/rpcrt4.dll dlls/rpcrt4/i386-windows/rpcrt4.dll:i386-windows/rpcrt4.dll"
+    [dlls/winhttp]="dlls/winhttp/x86_64-windows/winhttp.dll:x86_64-windows/winhttp.dll dlls/winhttp/i386-windows/winhttp.dll:i386-windows/winhttp.dll"
 )
 # d3dcompiler_43's sources are built into d3d10 and every other d3dcompiler_*.
 for m in d3d10 d3dcompiler_{33..43} d3dcompiler_46 d3dcompiler_47; do

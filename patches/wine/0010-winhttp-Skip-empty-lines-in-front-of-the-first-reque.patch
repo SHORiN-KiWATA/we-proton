@@ -1,0 +1,104 @@
+From b91ec2a14b1b789acd50871480efd3f5c979349e Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Thu, 8 Oct 2026 20:39:44 +0900
+Subject: [PATCH] winhttp: Skip empty lines in front of the first request
+ header.
+
+WinHttpAddRequestHeaders() and the additional headers of
+WinHttpSendRequest() accept a header block that starts with one or more
+empty lines on Windows: "\r\n", "\n" or "\r" in front of the first
+header is skipped and the headers after it are added. A block that
+consists of empty lines only succeeds without adding anything.
+
+add_request_headers() took everything up to the first line break as the
+first header, so a leading line break produced an empty header that
+parse_header() rejected, and the whole call failed with
+ERROR_WINHTTP_INVALID_HEADER. Applications that prefix their custom
+headers with "\r\n" never got them added and the request was not sent.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/winhttp/request.c       |  4 +++
+ dlls/winhttp/tests/winhttp.c | 50 ++++++++++++++++++++++++++++++++++++
+ 2 files changed, 54 insertions(+)
+
+diff --git a/dlls/winhttp/request.c b/dlls/winhttp/request.c
+index 731e1b2aab2..aef2094102c 100644
+--- a/dlls/winhttp/request.c
++++ b/dlls/winhttp/request.c
+@@ -487,7 +487,11 @@ DWORD add_request_headers( struct request *request, const WCHAR *headers, DWORD
+     if (len == ~0u) len = lstrlenW( headers );
+     if (!len) return ERROR_SUCCESS;
+ 
++    /* empty lines in front of the first header are skipped */
+     p = headers;
++    while (p < headers + len && (*p == '\r' || *p == '\n')) p++;
++    if (p == headers + len) return ERROR_SUCCESS;
++
+     do
+     {
+         const WCHAR *end;
+diff --git a/dlls/winhttp/tests/winhttp.c b/dlls/winhttp/tests/winhttp.c
+index 8c28d89554c..f2789584fb1 100644
+--- a/dlls/winhttp/tests/winhttp.c
++++ b/dlls/winhttp/tests/winhttp.c
+@@ -1050,6 +1050,56 @@ static void test_WinHttpAddHeaders(void)
+     ok(index == 1, "wrong index %lu\n", index);
+     ok(!memcmp(buffer, L"value", sizeof(L"value")), "incorrect string\n");
+ 
++    ret = WinHttpCloseHandle(request);
++    ok(ret == TRUE, "WinHttpCloseHandle failed on closing request, got %d.\n", ret);
++    /* Empty lines in front of the first header are skipped. */
++    request = WinHttpOpenRequest(connection, L"GET", L"/", NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0);
++    ok(request != NULL, "WinHttpOpenRequest failed, error %lu\n", GetLastError());
++
++    ret = WinHttpAddRequestHeaders(request, L"\r\nleading1:one\r\nleading2: two", ~0u,
++            WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE);
++    ok(ret, "got %lu\n", GetLastError());
++    len = sizeof(buffer);
++    ret = WinHttpQueryHeaders(request, WINHTTP_QUERY_CUSTOM | WINHTTP_QUERY_FLAG_REQUEST_HEADERS,
++                              L"leading1", buffer, &len, WINHTTP_NO_HEADER_INDEX);
++    ok(ret, "got %lu\n", GetLastError());
++    ok(!wcscmp(buffer, L"one"), "got %s\n", wine_dbgstr_w(buffer));
++    len = sizeof(buffer);
++    ret = WinHttpQueryHeaders(request, WINHTTP_QUERY_CUSTOM | WINHTTP_QUERY_FLAG_REQUEST_HEADERS,
++                              L"leading2", buffer, &len, WINHTTP_NO_HEADER_INDEX);
++    ok(ret, "got %lu\n", GetLastError());
++    ok(!wcscmp(buffer, L"two"), "got %s\n", wine_dbgstr_w(buffer));
++
++    ret = WinHttpAddRequestHeaders(request, L"\nleading3:three", ~0u, WINHTTP_ADDREQ_FLAG_ADD);
++    ok(ret, "got %lu\n", GetLastError());
++    len = sizeof(buffer);
++    ret = WinHttpQueryHeaders(request, WINHTTP_QUERY_CUSTOM | WINHTTP_QUERY_FLAG_REQUEST_HEADERS,
++                              L"leading3", buffer, &len, WINHTTP_NO_HEADER_INDEX);
++    ok(ret, "got %lu\n", GetLastError());
++    ok(!wcscmp(buffer, L"three"), "got %s\n", wine_dbgstr_w(buffer));
++
++    ret = WinHttpAddRequestHeaders(request, L"\r\n\r\nleading4:four", ~0u, WINHTTP_ADDREQ_FLAG_ADD);
++    ok(ret, "got %lu\n", GetLastError());
++    len = sizeof(buffer);
++    ret = WinHttpQueryHeaders(request, WINHTTP_QUERY_CUSTOM | WINHTTP_QUERY_FLAG_REQUEST_HEADERS,
++                              L"leading4", buffer, &len, WINHTTP_NO_HEADER_INDEX);
++    ok(ret, "got %lu\n", GetLastError());
++    ok(!wcscmp(buffer, L"four"), "got %s\n", wine_dbgstr_w(buffer));
++
++    /* Only an empty line: success, nothing is added. */
++    len = sizeof(check_buffer);
++    ret = WinHttpQueryHeaders(request, WINHTTP_QUERY_RAW_HEADERS_CRLF | WINHTTP_QUERY_FLAG_REQUEST_HEADERS,
++                              WINHTTP_HEADER_NAME_BY_INDEX, check_buffer, &len, WINHTTP_NO_HEADER_INDEX);
++    ok(ret, "got %lu\n", GetLastError());
++    oldlen = len;
++    ret = WinHttpAddRequestHeaders(request, L"\r\n", ~0u, WINHTTP_ADDREQ_FLAG_ADD);
++    ok(ret, "got %lu\n", GetLastError());
++    len = sizeof(buffer);
++    ret = WinHttpQueryHeaders(request, WINHTTP_QUERY_RAW_HEADERS_CRLF | WINHTTP_QUERY_FLAG_REQUEST_HEADERS,
++                              WINHTTP_HEADER_NAME_BY_INDEX, buffer, &len, WINHTTP_NO_HEADER_INDEX);
++    ok(ret, "got %lu\n", GetLastError());
++    ok(len == oldlen && !memcmp(buffer, check_buffer, len), "headers changed to %s\n", wine_dbgstr_w(buffer));
++
+     ret = WinHttpCloseHandle(request);
+     ok(ret == TRUE, "WinHttpCloseHandle failed on closing request, got %d.\n", ret);
+  done:
+-- 
+2.56.0
+

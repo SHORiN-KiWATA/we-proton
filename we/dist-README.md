@@ -4,7 +4,7 @@ WE-Proton 是 DW-Proton 的一个个人修改版，补了几个 Wine 和 vkd3d-p
 
 基于 `@BASE@` 官方发布包，只替换了这些文件：
 
-- Wine：`files/bin/wineserver`、`files/lib/wine/x86_64-unix/ntdll.so`、`files/lib/wine/x86_64-unix/win32u.so`、`files/lib/wine/x86_64-windows/ntoskrnl.exe`、`files/lib/wine/{x86_64,i386}-windows/rpcrt4.dll`，以及同一目录下的 `d3d10.dll` 和 `d3dcompiler_33`～`43`、`46`、`47`
+- Wine：`files/bin/wineserver`、`files/lib/wine/x86_64-unix/ntdll.so`、`files/lib/wine/x86_64-unix/win32u.so`、`files/lib/wine/x86_64-windows/ntoskrnl.exe`、`files/lib/wine/{x86_64,i386}-windows/rpcrt4.dll`、`winhttp.dll`，以及同一目录下的 `d3d10.dll` 和 `d3dcompiler_33`～`43`、`46`、`47`
 - vkd3d-proton（D3D12）：`files/lib/wine/vkd3d-proton/{x86_64,i386}-windows/` 下的 `d3d12.dll`、`d3d12core.dll`
 
 ## 修了什么
@@ -20,6 +20,7 @@ WE-Proton 是 DW-Proton 的一个个人修改版，补了几个 Wine 和 vkd3d-p
 | wine 0007 | 用 `UpdateLayeredWindow` 绘制的子窗口（`WS_CHILD` + `WS_EX_LAYERED`）变成一个单独的窗口，出现在屏幕左上角或被窗口管理器当成另一个窗口，不跟着主窗口走 |
 | wine 0008 | 通过进程外 COM 服务器拿结果的程序（接口按类型库封送、参数没写 `[in]`/`[out]`）拿不回任何结果，表现为初始化失败、登录或认证报错 |
 | wine 0009 | 用到 min16float 等最低精度类型、并按着色器反射结果拼输入布局的 D3D11/D3D12 程序，创建渲染管线失败，常见表现是加载场景时闪退 |
+| wine 0010 | 添加 HTTP 请求头时字符串以空行开头的程序（WinHTTP），请求头加不上、请求发不出去，常见表现是登录或认证后报错、崩溃 |
 | vkd3d-proton 0001 | 部分 D3D12 着色器被翻译成非法的 SPIR-V，AMD 显卡（Mesa RADV）上直接崩溃 |
 
 补丁源码在 `we-proton-patches/` 的 `wine/` 和 `vkd3d-proton/` 下。

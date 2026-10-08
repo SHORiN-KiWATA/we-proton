@@ -21,6 +21,7 @@
 | `wine/0007-win32u-Draw-layered-child-windows-into-their-parent-` | 分层子窗口（`WS_CHILD` + `WS_EX_LAYERED`）画进父窗口，不再变成单独的顶层窗口 |
 | `wine/0008-rpcrt4-Marshal-type-library-parameters-without-a-dir` | 类型库封送把没有 `[in]`/`[out]` 的指针参数按 `[in, out]` 处理，和 Windows 一致 |
 | `wine/0009-d3dcompiler-Handle-the-ISG1-OSG1-and-PSG1-signature-` | d3dcompiler 的反射和 `D3DGetBlobPart` 能读最低精度签名段（ISG1/OSG1/PSG1），和 Windows 一致 |
+| `wine/0010-winhttp-Skip-empty-lines-in-front-of-the-first-reque` | WinHttpAddRequestHeaders 跳过开头的空行（`\r\n` 等），和 Windows 一致 |
 | `vkd3d-proton/0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
 
 每个补丁的现象、根因、Windows 实测、验证和排查过程见 `we/fixes/`。
@@ -38,9 +39,11 @@
 - `minprec_sig_probe`（0009）：用到最低精度类型的着色器，`D3DGetBlobPart` 取各种签名时返回哪些段，`D3DReflect`（D3D11/D3D12 接口）报告哪些参数，包括 `MinPrecision`。参数是 `minprec_vs.dxbc minprec_hs.dxbc`，这两个是在 Windows 上用 d3dcompiler_47 编的，源码在同名的 `.hlsl` 里
 - `sta_thread_exit_probe`（0008 排查时的弯路）：客户端 STA 线程不调 `CoUninitialize` 就退出时，代理的引用什么时候释放；Windows 和 Wine 相同
 - `quit_filter_probe`（0008 排查时的弯路）：`PostQuitMessage` 和 `PostThreadMessage(WM_QUIT)` 遇到各种 `GetMessage`/`PeekMessage` 过滤条件时返回什么；Windows 和 Wine 相同
+- `winhttp_crlf_probe`（0010）：请求头字符串开头或中间有空行时，WinHttpAddRequestHeaders 返回什么、实际加上了哪些头
+- `winhttp_hdr_probe`、`winhttp_state_probe`（0010 排查时的弯路）：Range 类请求头配各种长度和 flag，以及请求句柄处于各种状态时添加请求头的结果。没有找到 Windows 成功而 Wine 失败的情况，但有几处 Windows 比 Wine 更严格的差异，见 0010 报告
 - `dxil-spirv/run.sh`（vkd3d-proton 0001）：用 dxil-spirv 的 `structurize-test` 跑 `*.st` 控制流图，检查生成的 SPIR-V 能通过校验。源码取 `build/overlay/src-vkd3d-proton`（先跑 `overlay-build.sh`）；`--unpatched` 用未打补丁的子模块，应该失败
 
-Wine 自己的测试：用 `build/overlay/src-wine` 另配一个 `--enable-tests` 的构建目录，编 `dlls/kernel32/tests`、`dlls/ntdll/tests`、`dlls/user32/tests`（0008 是 `dlls/oleaut32/tests`、`dlls/rpcrt4/tests`，0009 是 `dlls/d3dcompiler_47/tests`、`dlls/d3dcompiler_43/tests`、`dlls/d3d10/tests`），用新旧 runner 各跑一遍、逐条比对失败项（0005 起都这样验证）。
+Wine 自己的测试：用 `build/overlay/src-wine` 另配一个 `--enable-tests` 的构建目录，编 `dlls/kernel32/tests`、`dlls/ntdll/tests`、`dlls/user32/tests`（0008 是 `dlls/oleaut32/tests`、`dlls/rpcrt4/tests`，0009 是 `dlls/d3dcompiler_47/tests`、`dlls/d3dcompiler_43/tests`、`dlls/d3d10/tests`，0010 是 `dlls/winhttp/tests`（winhttp:winhttp）），用新旧 runner 各跑一遍、逐条比对失败项（0005 起都这样验证）。
 
 ## 诊断
 

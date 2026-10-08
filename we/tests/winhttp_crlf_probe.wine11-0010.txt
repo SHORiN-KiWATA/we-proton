@@ -1,0 +1,78 @@
+h00 \r\nX-A:one\r\nX-B:k1=v1&k2=v2 len -1 flags 0xa0000000 -> 1 err 0 | X-A: one\r\nX-B: k1=v1&k2=v2\r\n\r\n
+h00 \r\nX-A:one\r\nX-B:k1=v1&k2=v2 len exact flags 0xa0000000 -> 1 err 0 | X-A: one\r\nX-B: k1=v1&k2=v2\r\n\r\n
+h00 \r\nX-A:one\r\nX-B:k1=v1&k2=v2 len -1 flags 0x20000000 -> 1 err 0 | X-A: one\r\nX-B: k1=v1&k2=v2\r\n\r\n
+h00 \r\nX-A:one\r\nX-B:k1=v1&k2=v2 len exact flags 0x20000000 -> 1 err 0 | X-A: one\r\nX-B: k1=v1&k2=v2\r\n\r\n
+h00 \r\nX-A:one\r\nX-B:k1=v1&k2=v2 len -1 flags 0 -> 1 err 0 | X-A: one\r\nX-B: k1=v1&k2=v2\r\n\r\n
+h00 \r\nX-A:one\r\nX-B:k1=v1&k2=v2 len exact flags 0 -> 1 err 0 | X-A: one\r\nX-B: k1=v1&k2=v2\r\n\r\n
+h01 \r\nX-A:one\r\nX-B:k1=v1&k2=v2\r\n len -1 flags 0xa0000000 -> 1 err 0 | X-A: one\r\nX-B: k1=v1&k2=v2\r\n\r\n
+h01 \r\nX-A:one\r\nX-B:k1=v1&k2=v2\r\n len exact flags 0xa0000000 -> 1 err 0 | X-A: one\r\nX-B: k1=v1&k2=v2\r\n\r\n
+h01 \r\nX-A:one\r\nX-B:k1=v1&k2=v2\r\n len -1 flags 0x20000000 -> 1 err 0 | X-A: one\r\nX-B: k1=v1&k2=v2\r\n\r\n
+h01 \r\nX-A:one\r\nX-B:k1=v1&k2=v2\r\n len exact flags 0x20000000 -> 1 err 0 | X-A: one\r\nX-B: k1=v1&k2=v2\r\n\r\n
+h01 \r\nX-A:one\r\nX-B:k1=v1&k2=v2\r\n len -1 flags 0 -> 1 err 0 | X-A: one\r\nX-B: k1=v1&k2=v2\r\n\r\n
+h01 \r\nX-A:one\r\nX-B:k1=v1&k2=v2\r\n len exact flags 0 -> 1 err 0 | X-A: one\r\nX-B: k1=v1&k2=v2\r\n\r\n
+h02 \r\nX-A: one\r\nX-B: two len -1 flags 0xa0000000 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h02 \r\nX-A: one\r\nX-B: two len exact flags 0xa0000000 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h02 \r\nX-A: one\r\nX-B: two len -1 flags 0x20000000 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h02 \r\nX-A: one\r\nX-B: two len exact flags 0x20000000 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h02 \r\nX-A: one\r\nX-B: two len -1 flags 0 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h02 \r\nX-A: one\r\nX-B: two len exact flags 0 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h03 \r\n\r\nX-A:one len -1 flags 0xa0000000 -> 1 err 0 | X-A: one\r\n\r\n
+h03 \r\n\r\nX-A:one len exact flags 0xa0000000 -> 1 err 0 | X-A: one\r\n\r\n
+h03 \r\n\r\nX-A:one len -1 flags 0x20000000 -> 1 err 0 | X-A: one\r\n\r\n
+h03 \r\n\r\nX-A:one len exact flags 0x20000000 -> 1 err 0 | X-A: one\r\n\r\n
+h03 \r\n\r\nX-A:one len -1 flags 0 -> 1 err 0 | X-A: one\r\n\r\n
+h03 \r\n\r\nX-A:one len exact flags 0 -> 1 err 0 | X-A: one\r\n\r\n
+h04 \nX-A:one len -1 flags 0xa0000000 -> 1 err 0 | X-A: one\r\n\r\n
+h04 \nX-A:one len exact flags 0xa0000000 -> 1 err 0 | X-A: one\r\n\r\n
+h04 \nX-A:one len -1 flags 0x20000000 -> 1 err 0 | X-A: one\r\n\r\n
+h04 \nX-A:one len exact flags 0x20000000 -> 1 err 0 | X-A: one\r\n\r\n
+h04 \nX-A:one len -1 flags 0 -> 1 err 0 | X-A: one\r\n\r\n
+h04 \nX-A:one len exact flags 0 -> 1 err 0 | X-A: one\r\n\r\n
+h05 \rX-A:one len -1 flags 0xa0000000 -> 1 err 0 | X-A: one\r\n\r\n
+h05 \rX-A:one len exact flags 0xa0000000 -> 1 err 0 | X-A: one\r\n\r\n
+h05 \rX-A:one len -1 flags 0x20000000 -> 1 err 0 | X-A: one\r\n\r\n
+h05 \rX-A:one len exact flags 0x20000000 -> 1 err 0 | X-A: one\r\n\r\n
+h05 \rX-A:one len -1 flags 0 -> 1 err 0 | X-A: one\r\n\r\n
+h05 \rX-A:one len exact flags 0 -> 1 err 0 | X-A: one\r\n\r\n
+h06 X-A:one\r\n\r\nX-B:two len -1 flags 0xa0000000 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h06 X-A:one\r\n\r\nX-B:two len exact flags 0xa0000000 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h06 X-A:one\r\n\r\nX-B:two len -1 flags 0x20000000 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h06 X-A:one\r\n\r\nX-B:two len exact flags 0x20000000 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h06 X-A:one\r\n\r\nX-B:two len -1 flags 0 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h06 X-A:one\r\n\r\nX-B:two len exact flags 0 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h07 X-A:one\r\n\r\n len -1 flags 0xa0000000 -> 1 err 0 | X-A: one\r\n\r\n
+h07 X-A:one\r\n\r\n len exact flags 0xa0000000 -> 1 err 0 | X-A: one\r\n\r\n
+h07 X-A:one\r\n\r\n len -1 flags 0x20000000 -> 1 err 0 | X-A: one\r\n\r\n
+h07 X-A:one\r\n\r\n len exact flags 0x20000000 -> 1 err 0 | X-A: one\r\n\r\n
+h07 X-A:one\r\n\r\n len -1 flags 0 -> 1 err 0 | X-A: one\r\n\r\n
+h07 X-A:one\r\n\r\n len exact flags 0 -> 1 err 0 | X-A: one\r\n\r\n
+h08 \r\n len -1 flags 0xa0000000 -> 1 err 0 | \r\n
+h08 \r\n len exact flags 0xa0000000 -> 1 err 0 | \r\n
+h08 \r\n len -1 flags 0x20000000 -> 1 err 0 | \r\n
+h08 \r\n len exact flags 0x20000000 -> 1 err 0 | \r\n
+h08 \r\n len -1 flags 0 -> 1 err 0 | \r\n
+h08 \r\n len exact flags 0 -> 1 err 0 | \r\n
+h09  len -1 flags 0xa0000000 -> 1 err 0 | \r\n
+h09  len exact flags 0xa0000000 -> 0 err 87 | \r\n
+h09  len -1 flags 0x20000000 -> 1 err 0 | \r\n
+h09  len exact flags 0x20000000 -> 0 err 87 | \r\n
+h09  len -1 flags 0 -> 1 err 0 | \r\n
+h09  len exact flags 0 -> 0 err 87 | \r\n
+h10  \r\nX-A:one len -1 flags 0xa0000000 -> 0 err 12153 | \r\n
+h10  \r\nX-A:one len exact flags 0xa0000000 -> 0 err 12153 | \r\n
+h10  \r\nX-A:one len -1 flags 0x20000000 -> 0 err 12153 | \r\n
+h10  \r\nX-A:one len exact flags 0x20000000 -> 0 err 12153 | \r\n
+h10  \r\nX-A:one len -1 flags 0 -> 0 err 12153 | \r\n
+h10  \r\nX-A:one len exact flags 0 -> 0 err 12153 | \r\n
+h11 X-A:one\r\nX-B:two len -1 flags 0xa0000000 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h11 X-A:one\r\nX-B:two len exact flags 0xa0000000 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h11 X-A:one\r\nX-B:two len -1 flags 0x20000000 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h11 X-A:one\r\nX-B:two len exact flags 0x20000000 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h11 X-A:one\r\nX-B:two len -1 flags 0 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h11 X-A:one\r\nX-B:two len exact flags 0 -> 1 err 0 | X-A: one\r\nX-B: two\r\n\r\n
+h12 X-A:one len -1 flags 0xa0000000 -> 1 err 0 | X-A: one\r\n\r\n
+h12 X-A:one len exact flags 0xa0000000 -> 1 err 0 | X-A: one\r\n\r\n
+h12 X-A:one len -1 flags 0x20000000 -> 1 err 0 | X-A: one\r\n\r\n
+h12 X-A:one len exact flags 0x20000000 -> 1 err 0 | X-A: one\r\n\r\n
+h12 X-A:one len -1 flags 0 -> 1 err 0 | X-A: one\r\n\r\n
+h12 X-A:one len exact flags 0 -> 1 err 0 | X-A: one\r\n\r\n
