@@ -113,6 +113,15 @@ if [ "$(cat "$OBJ/.src-stamp" 2>/dev/null)" != "$STAMP" ]; then
     echo "$STAMP" > "$OBJ/.src-stamp"
 fi
 
+# A patch that a later one reverts leaves its directory as upstream has it:
+# keep the official binaries for it instead of rebuilding them.
+for dir in "${!WANT[@]}"; do
+    if diff -rq "$ROOT/wine/$dir" "$SRC/$dir" >/dev/null 2>&1; then
+        log "unchanged after all patches, keeping the official binaries: $dir"
+        unset "WANT[$dir]"
+    fi
+done
+
 # --- build only what the patches touch ---------------------------------------
 # The SDK image and the compiler flags are the ones Makefile.in uses for wine:
 # HOST_CFLAGS/CCOS_CFLAGS/<arch>_CFLAGS/CFLAGS for gcc, WINE_CFLAGS and
