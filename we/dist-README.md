@@ -6,7 +6,7 @@ WE-Proton 是 DW-Proton 的一个个人修改版，补了几个 Wine 和 vkd3d-p
 
 - `bin/wineserver`
 - `lib/wine/x86_64-unix/` 下的 `ntdll.so`、`win32u.so`、`qcap.so`、`nsiproxy.so`，以及新增的 `explorer.so`、`wintun.so`
-- `lib/wine/x86_64-windows/` 下的 `ntoskrnl.exe`、`nsiproxy.sys`
+- `lib/wine/x86_64-windows/` 下的 `nsiproxy.sys`
 - `lib/wine/{x86_64,i386}-windows/` 下的 `ntdll.dll`、`kernelbase.dll`、`kernel32.dll`、`rpcrt4.dll`、`winhttp.dll`、`iphlpapi.dll`、`nsi.dll`、`explorer.exe`、`d3d10.dll`、`d3dcompiler_33`～`43`、`46`、`47`，以及新增的 `wintun.dll`
 - vkd3d-proton（D3D12）：`lib/wine/vkd3d-proton/{x86_64,i386}-windows/` 下的 `d3d12.dll`、`d3d12core.dll`
 
@@ -16,7 +16,7 @@ Unix 侧只换了 64 位的库（`x86_64-unix`）。32 位程序要在 WoW64 模
 
 | 补丁 | 修之前 |
 |---|---|
-| wine 0001 | 一些第三方内核驱动加载失败，或运行一段时间后因为调用未实现的函数被结束 |
+| wine 0001 | 已由 wine 0018 撤回，不再生效 |
 | wine 0002 | wineserver 崩溃，前缀里的所有程序一起消失，还会留下占着显示连接的残留进程 |
 | wine 0003 | 直接执行 `syscall` 指令、并在栈指针下方存数据的代码，返回后数据被改坏而崩溃 |
 | wine 0004 | 靠 UDP `connect(0.0.0.0)` 唤醒 `select()` 的程序，每次都要等满超时，网络请求极慢 |
@@ -33,6 +33,7 @@ Unix 侧只换了 64 位的库（`x86_64-unix`）。32 位程序要在 WoW64 模
 | wine 0015 | 需要给网卡配 IP、加路由的程序（VPN、加速器、TUN 类工具）配置失败，表现为连接或加速不上 |
 | wine 0016 | 用 wintun 接口创建虚拟网卡的程序（VPN、游戏加速器等）建不了网卡，表现为连接/加速在创建适配器一步失败或超时 |
 | wine 0017 | 开 TUN 模式的加速器/VPN 后，程序自己“直连”的连接被虚拟网卡吃掉，整个会话像是断了网 |
+| wine 0018 | 撤回 wine 0001：带上它时有程序报运行环境异常 |
 | vkd3d-proton 0001 | 部分 D3D12 着色器被翻译成非法的 SPIR-V，AMD 显卡（Mesa RADV）上直接崩溃 |
 
 补丁源码在 `we-proton-patches/` 的 `wine/` 和 `vkd3d-proton/` 下。

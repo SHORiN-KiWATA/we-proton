@@ -1,5 +1,19 @@
 # 0001：第三方 KMDF 驱动在 Wine 的 ntoskrnl 下加载失败
 
+**2026-10-09 已撤回。** 《鸣潮》在 WE-Proton 下报运行环境异常，排查结果：
+
+- 官方 `dwproton-11.0-14`：不报
+- 官方包只加这个补丁（只有 `ntoskrnl.exe` 不同，在 SDK 里用同一套源码编译）：报，问题复现
+
+据此撤回：`patches/wine/0018-Revert-ntoskrnl-Implement-a-few-functions-needed-by-.patch` 把这个补丁的改动反过来，补丁文件本身保留。打完全部补丁后 `dlls/ntoskrnl.exe` 和上游一样，`we/overlay-build.sh` 就不再重编它，runner 里用的是官方的 `ntoskrnl.exe`。
+
+没有验证的：
+
+- 「release 17 去掉这个补丁」没有单独测过
+- 这个补丁当初要修的那个驱动，撤回后是否又加载失败
+
+下面是当初的记录。
+
 补丁：`patches/wine/0001-ntoskrnl-Implement-a-few-functions-needed-by-third-p.patch`（`dlls/ntoskrnl.exe/ntoskrnl.c`、`ntoskrnl.exe.spec`，约 100 行）。2026-10-04 修复。
 
 ## 现象
