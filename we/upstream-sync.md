@@ -205,9 +205,9 @@ we/sync/dup-titles.py wine we-base..we-dw
    we/sync/dup-titles.py --remove wine we-base..we-dw
    ```
 
-2. 在 `we/ge-dw-merge-commits.txt` 里，用上一步打印的每个标题搜索对应的行（行首是 `合入:<四位数>` 或 `移植:<四位数>`），把行首那一段改成 `跳过:GE有同名补丁（<新GE>起）`。
+2. 对上一步打印的每个标题，运行 `grep -nF -- '<标题>' we/ge-dw-merge-commits.txt` 找到对应的行（行首是 `合入:<四位数>` 或 `移植:<四位数>`），只把行首的 `合入:<四位数>` 或 `移植:<四位数>` 换成 `跳过:GE有同名补丁（<新GE>起）`，后面的哈希和标题不动。
 3. 再运行 `we/sync/wine-dev.sh`（和 A3 同一条命令，结果的处理也按 A3 的表）。
-4. 再运行 `we/sync/dup-titles.py wine we-base..we-dw`（不带 `--remove`）。最后一行是 `0 of N commits …` 就继续 A5，否则回到本节第 1 步。
+4. 再运行 `we/sync/dup-titles.py wine we-base..we-dw`（不带 `--remove`）。最后一行是 `0 of N commits …` 就继续 A5；不是的话，从本节第 1 步起把 1–4 再做一遍，直到是 `0 of N commits …`。
 
 ### A5. 导出补丁
 
@@ -302,9 +302,9 @@ we/sync/dup-titles.py ~/src/wine-dwproton $OLD..$NEW > build/dw-dup.txt; tail -1
 
 ### B3. 逐个决定要不要
 
-先运行一次 `we/sync/wine-dev.sh`（下面查 GE-Proton 有没有某个提交要用到 `wine/` 的 `we-base` 分支）。
+先运行 `we/sync/wine-dev.sh`，得到 `wine/` 的 `we-base` 分支（下面「撤销提交怎么查」要用它）。
 
-对 `build/dw-new.txt` 的每一行（按顺序），从上往下对照下表，**用第一条符合的规则**。改了哪些文件用这条命令看：
+对 `build/dw-new.txt` 的每一行（按顺序），按表格的顺序一行一行检查，采用**第一条符合**的规则，后面的行不再看。改了哪些文件用这条命令看：
 
 ```
 git -C ~/src/wine-dwproton show --stat --format=%s <提交>
@@ -319,7 +319,7 @@ git -C ~/src/wine-dwproton show --stat --format=%s <提交>
 | 列出的文件里有 `dlls/mf/`、`dlls/mfreadwrite/`、`dlls/evr/`、`dlls/mfplat/`、`dlls/quartz/` 开头的 | **停下**（视频相关，要判断） |
 | 其他 | 要（B4 打上） |
 
-撤销提交怎么查：标题是 `Revert "<原标题>"`，取出引号里的 `<原标题>`，运行
+撤销提交怎么查：标题形如 `Revert "<原标题>"`。`<原标题>` 是 `Revert "` 后面、到最后一个 `"` 为止的部分，例如 `Revert "win32u: Clear WS_EX_TOOLWINDOW."` 的原标题是 `win32u: Clear WS_EX_TOOLWINDOW.`。运行
 
 ```
 git -C wine log --oneline --fixed-strings --grep='<原标题>' we-base
@@ -346,7 +346,7 @@ git -C wine cherry-pick <提交>          # 对 build/dw-plan.txt 里每个「�
 | 在 `dlls/winewayland.drv/` 里 | `git -C wine cherry-pick --abort`，这个提交改记成 `跳过:冲突（Wayland 用 GE-Proton 的）` |
 | 其他 | `git -C wine cherry-pick --abort`，**停下**（要移植，需要判断）。把提交和冲突的文件告诉用户 |
 
-没有冲突的 `cherry-pick` 什么都不用做，接着下一个。全部打完后，把 WE-Proton 的补丁接上去：
+没有冲突的 `cherry-pick` 会自己完成提交，直接运行下一个提交的 `cherry-pick`。所有「要」的提交都处理完后，把 WE-Proton 的补丁接上去：
 
 ```
 git -C wine checkout -B we-dev we-dw
@@ -363,7 +363,7 @@ for s in dxvk vkd3d-proton protonfixes; do echo "$s $(git ls-tree <旧DW> $s | a
 ```
 
 - `patches/protonfixes/` 有变化：**停下**（要看是不是游戏修复，再决定怎么放进 `patches/protonfixes/0003` 之后）
-- `patches/dxvk/0001-dxvk-Implement-support-for-HDR-detection-via-NtUserD.patch` 有变化：用新版本替换 `patches/dxvk/dw-hdr-detection-via-displayconfig.patch`
+- `patches/dxvk/0001-dxvk-Implement-support-for-HDR-detection-via-NtUserD.patch` 有变化：`git show <新DW>:patches/dxvk/0001-dxvk-Implement-support-for-HDR-detection-via-NtUserD.patch > patches/dxvk/dw-hdr-detection-via-displayconfig.patch`。DW-Proton 的这个文件改了名字或删掉了：**停下**
 - 子模块版本变了（某一行的两个哈希不同）：拿 DW-Proton 新版本用的提交（第二个哈希）和我们现在用的（`git ls-tree HEAD <子模块>`）比，做法和 A2 的「子模块版本」一样，只是把那里的 GE 换成这里的 DW-Proton 新提交：DW-Proton 的更新（我们的提交是它的祖先）就换成它的；我们的更新就不动；分叉就**停下**
 
 ### B6. 导出、构建、测试
