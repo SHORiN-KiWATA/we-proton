@@ -41,7 +41,7 @@ wintun 不是必须依赖内核驱动才能提供的接口：它是 WireGuard �
 
 ## 已知差异（有意或环境造成）
 
-- 适配器在 `GetAdaptersAddresses` 里的描述/IfType/OperStatus 与 Windows 不同：Wine 的 NDIS 表按 Linux 接口名和 ARPHRD 生成（描述=接口名，IfType 被映射成 23=PPP，OperStatus=1）。如果程序按"描述"找网卡，还要在 nsiproxy 那侧加一处映射，目前没做（未确认引擎是否需要）。
+- 适配器的 IfType/OperStatus 与 Windows 不同：Wine 的 NDIS 表按 ARPHRD 生成（IfType 被映射成 23=PPP，OperStatus=1；Windows 的 wintun 是 53/2）。描述已由 0048 按 Windows 的 `<tunnel type> Tunnel` 报出（建网卡时写进接口 alias，nsiproxy 读回来）。如果还有程序按 IfType 找网卡，再单独映射。
 - 驱动版本是进程内状态：Windows 上驱动装了就一直在（换进程也是 0x0e），Wine 里每个进程从 0 开始、第一次建适配器后变成 0x0e。两者都会让程序走到 `WintunCreateAdapter`。
 - `WintunSetLogger` 只保存回调，不像 Windows 那样打安装/创建消息。
 - Wine 下新建的 TUN 上内核会先发几个 IPv6 路由器请求（probe 排空阶段能看到 48 字节的 ICMPv6 包），Windows 的适配器此时没有流量。环境差异，不影响。

@@ -54,6 +54,7 @@
 | `wine/0040-win32u-Restore-Return-to-Krondor-s-text-bitmap-readb` | （GE，按游戏）Return to Krondor 的文字位图读回 |
 | `wine/0041-win32u-Keep-Black-Desert-fullscreen-across-applicati` | （GE，按游戏）黑色沙漠失去焦点时保持全屏 |
 | `wine/0042-winex11-Shaped-and-real-alpha-transparency-for-layer` | （GE，默认关闭）桌面覆盖类游戏的分层窗口做形状或真透明 |
+| `wine/0048-wintun-Report-the-adapter-description-Windows-prog` | 内置 wintun 把 Windows 风格的网卡描述（`<tunnel type> Tunnel`）写进接口 alias，nsiproxy 报给 `GetAdaptersInfo`/`GetAdaptersAddresses`；按描述找自己建的虚拟网卡的程序（网易 UU 的路由模式，报 50004）不再找不到网卡 |
 | `vkd3d-proton/0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
 | `vkd3d-proton/0002-vkd3d-bound-present-waits-during-swapchain-drain` | （GE）销毁交换链时等待呈现有上限，不再卡死 |
 | `dxvk/0002`–`0007` | （GE）分层覆盖窗口的 DXVK 一半、获取图像受阻时保留交换链、《最终幻想14》多屏失焦不缩窗（三个）、黑色沙漠的 DXVK 一半；接在 DWProton 的 `dxvk/0001` 后面 |
