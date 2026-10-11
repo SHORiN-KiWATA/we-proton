@@ -13,7 +13,7 @@
 #   we/overlay-build.sh [--release N] [--install] [--jobs N]
 #
 #   --release N   WE-Proton release number (default 1) -> we-proton-<base>-N
-#   --install     also copy the result to ~/.local/share/proton/runners/WE-Proton
+#   --install     also copy the result to ~/.local/share/proton/runners/WE-Proton Latest
 #   --jobs N      make -j (default: nproc)
 set -euo pipefail
 
@@ -310,7 +310,7 @@ tar -C "$OBJ" -cJf "$ROOT/build/$NAME-source.tar.xz" "${src_args[@]}" \
 log "done: build/$NAME, build/$NAME.tar.xz, build/$NAME.sha512sum, build/$NAME-source.tar.xz"
 
 if [ "$INSTALL" = 1 ]; then
-    rm -rf "$RUNNERS/WE-Proton"
-    cp -a --reflink=auto "$DIST" "$RUNNERS/WE-Proton"
-    log "installed to $RUNNERS/WE-Proton"
+    rm -rf "$RUNNERS/WE-Proton Latest"
+    cp -a --reflink=auto "$DIST" "$RUNNERS/WE-Proton Latest"
+    log "installed to $RUNNERS/WE-Proton Latest"
 fi

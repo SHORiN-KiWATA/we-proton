@@ -91,7 +91,7 @@ we/overlay-build.sh --install
 3. 在 `Makefile.in` 指定的 Steam Linux Runtime 4.0 SDK 镜像里（docker）配置、编译 Wine，编译参数照抄 `Makefile.in`（`-march=nocona`、禁用 AVX、`-mcmodel=small` 等），unix 库只依赖运行时里有的库（在宿主机上编会链接宿主机的 `libunwind`，进不了运行时）。只编补丁动到的东西：`dlls/ntdll/unix` → `ntdll.so`，`server` → `wineserver`，`dlls/ntoskrnl.exe` → `ntoskrnl.exe`，`dlls/win32u` → `win32u.so`，`dlls/rpcrt4` → 64 位和 32 位的 `rpcrt4.dll`（所以配置了 i386 和 x86_64 两个 PE 架构），`dlls/d3dcompiler_43` → 共用这份源码的 `d3d10.dll` 和 `d3dcompiler_33`～`43`、`46`、`47`（两个架构）。补丁动到别的目录时脚本会报错，要先在 `TARGETS` 里加映射（`*/tests/*` 不发布，跳过）
 4. `patches/vkd3d-proton/` 有补丁时：同步 `vkd3d-proton/` 源码到 `build/overlay/src-vkd3d-proton`，打补丁，用 meson 交叉编译 x86_64 和 i386 的 `d3d12.dll`、`d3d12core.dll`，编译参数照抄 `Makefile.in`（`-march=nocona`、禁用 AVX、`-O3`、静态 libstdc++）。需要 `git submodule update --init --recursive vkd3d-proton`；widl 用 overlay 里 wine 编出来的
 5. 替换进发布包，改名为 `we-proton-11.0-14-<N>`，输出到 `build/`，再生成三个发布文件：`<名字>.tar.xz`（runner）、`<名字>.sha512sum`、`<名字>-source.tar.xz`（构建用的、打好补丁的 Wine 和 vkd3d-proton 源码，满足 LGPL 提供源码的要求）
-6. `--install` 时复制到 `~/.local/share/proton/runners/WE-Proton`
+6. `--install` 时复制到 `~/.local/share/proton/runners/WE-Proton Latest`
 
 `--release N` 改发布号，`--jobs N` 改并行数。
 

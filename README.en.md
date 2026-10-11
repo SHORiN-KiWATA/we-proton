@@ -49,7 +49,7 @@ cd we-proton
 git submodule update --init wine Vulkan-Headers
 git submodule update --init --recursive vkd3d-proton
 we/overlay-build.sh --release <N>             # output in build/
-we/overlay-build.sh --release <N> --install   # also install to ~/.local/share/proton/runners/WE-Proton
+we/overlay-build.sh --release <N> --install   # also install to "~/.local/share/proton/runners/WE-Proton Latest"
 ```
 
 The script's steps, the test programs, the diagnostic tools and how to follow new upstream releases are described in [`we/README.md`](we/README.md) (in Chinese).

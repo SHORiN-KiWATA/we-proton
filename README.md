@@ -51,7 +51,7 @@ cd we-proton
 git submodule update --init wine Vulkan-Headers
 git submodule update --init --recursive vkd3d-proton
 we/overlay-build.sh --release <N>             # 输出到 build/
-we/overlay-build.sh --release <N> --install   # 同时安装到 ~/.local/share/proton/runners/WE-Proton
+we/overlay-build.sh --release <N> --install   # 同时安装到「~/.local/share/proton/runners/WE-Proton Latest」
 ```
 
 脚本的详细步骤、测试程序、诊断工具以及跟进上游新版本的方法见 [`we/README.md`](we/README.md)。
