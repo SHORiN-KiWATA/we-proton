@@ -21,6 +21,8 @@ apply_all_in_dir() {
     pushd dxvk
     git reset --hard HEAD
     git clean -xdf
+    # DW-Proton: report HDR support through NtUserDisplayConfigGetDeviceInfo.
+    apply_patch "../patches/dxvk/dw-hdr-detection-via-displayconfig.patch"
     patch -Np1 < ../patches/dxvk/layered-overlay-dxvk.patch
     # Keep child-rendering backpressure from repeatedly recreating launcher swapchains.
     apply_patch "../patches/dxvk/dxvk-preserve-swapchain-on-acquire-backpressure.patch"
@@ -47,7 +49,7 @@ apply_all_in_dir() {
     pushd protonfixes
     git reset --hard HEAD
     git clean -xdf
-    echo "PROTONFIXES: add optiscaler support"
+    echo "PROTONFIXES: add optiscaler support and DW-Proton game fixes"
     apply_all_in_dir "../patches/protonfixes/"
     popd
 
