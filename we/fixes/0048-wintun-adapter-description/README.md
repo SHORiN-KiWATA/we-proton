@@ -36,8 +36,8 @@
    - 加速中的网络命名空间里 `UU` 网卡 UP，`alias UU Wintun Tunnel`，地址 `172.19.84.237/24`，收发计数在走（说明隧道真的在传包）；
    - 至此不再报 50004。
    - 同一次运行里 `uunetfilter`（c0000142）、`uupacket`（c0000001）仍然加载失败，但路由模式照样成功：对 PC 路由模式这俩不是硬依赖，DNS 劫持/抓包 uufp 的缺失没有拦住加速（只影响对应的可选能力）。
+5. **雷神模式三回归通过**（同一天，安装后的 runner）：它的追踪是 `trace:wintun:WintunCreateAdapter L"utun233", L"utun233"` → `created utun233` → `WintunStartSession 67108864`，加速正常。雷神网卡名和 tunnel type 同名，描述从 `utun233` 变成 `utun233 Tunnel`；它按 LUID/接口名找网卡、不看描述，所以不受影响。
 
 ## 未验证
 
-- 雷神模式三（同样用内置 wintun）要回归一遍：描述从接口名变成 `<tunnel type> Tunnel` 之后，它的网卡查找（按 LUID/接口名，不看描述）理论上不受影响。
 - IfType/OperStatus 仍按 Linux/ARPHRD 生成（23=PPP、1），和 Windows 的 53/2 不同；UU 这次没查这两项，其它程序需要时再单独映射。
