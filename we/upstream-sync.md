@@ -8,6 +8,7 @@
 - 先读一遍仓库根目录的 `AGENTS.md`。补丁、提交信息里不写游戏名、平台名、反作弊名。
 - 不要手改 `patches/dwproton/`、`patches/wine/` 里的补丁文件：在 Wine 开发分支上改，再用脚本导出（见下面的步骤）。
 - 所有命令都在仓库根目录运行，除非写明 `cd`。
+- `we/build.sh` 和 `we/sync/wine-dev.sh` 都会重置、重新打补丁所有子模块：同一时间只跑一个，构建没结束前不要跑别的。
 
 ## 0. 背景：这个仓库是怎么叠起来的
 
@@ -27,7 +28,7 @@ protonprep 在 `make_requests` 之前依次打 `patches/dwproton/` 和 `patches/
 |---|---|
 | `we/sync/wine-dev.sh` | 重置并打好所有子模块，在 `wine/` 里建三个分支：`we-base`（GE-Proton 打完补丁，一个提交）、`we-dw`（+ `patches/dwproton/`）、`we-dev`（+ `patches/wine/`，检出这个） |
 | `we/sync/export-patches.py [--new NNNN]...` | 把 `we-base..we-dw` 写回 `patches/dwproton/`（从 0001 重新编号），把 `we-dw..we-dev` 写回 `patches/wine/`（按标题沿用原来的编号；新补丁用 `--new` 给编号）。生成文件自动排除。只差 From 行的文件保持不动 |
-| `we/sync/dup-titles.py <仓库> <范围>` | 列出范围里标题和 GE-Proton 补丁或 wine-staging 补丁相同的提交（GE-Proton 已经带着的） |
+| `we/sync/dup-titles.py [--remove] <仓库> <范围>` | 列出范围里标题和 GE-Proton 补丁或 wine-staging 补丁相同的提交（GE-Proton 已经带着的）；`--remove` 同时删掉 `patches/dwproton/` 里同标题的补丁文件 |
 | `we/build.sh --name <名字>` | 完整构建，输出到 `build/` |
 | `we/tests/build.sh` | 编测试程序（mingw） |
 | `we/tests/regress.sh <runner> <输出目录>` | 在 Steam Linux Runtime 4.0 里跑回归探测；`--compare <旧目录> <新目录>` 比较 |
@@ -138,8 +139,10 @@ git merge <新GE>
 grep -c 'dw-hdr-detection-via-displayconfig' patches/protonprep-valve-staging.sh       # 1
 grep -c 'git submodule foreach --recursive --quiet' patches/protonprep-valve-staging.sh # 1
 grep -c 'DW-PROTON AND WE-PROTON PATCHES' patches/protonprep-valve-staging.sh          # 2
-grep -n 'DW-PROTON AND WE-PROTON\|RUN AUTOCONF' patches/protonprep-valve-staging.sh     # 两个 DW-PROTON 行在 RUN AUTOCONF 前面
+grep -n 'DW-PROTON AND WE-PROTON\|RUN AUTOCONF' patches/protonprep-valve-staging.sh
 ```
+
+前三条分别输出 `1`、`1`、`2`。第四条输出三行，形如 `475:### (2-8) DW-PROTON…`、`486:### END DW-PROTON…`、`488:    echo "WINE: RUN AUTOCONF…"`：前两行的行号都要比 `RUN AUTOCONF` 那一行小。
 
 GE-Proton 已经没有 `layered-overlay-dxvk.patch` 这一行、没有 `pushd vkd3d-proton`、或者没有 `RUN AUTOCONF` 这一行时：**停下**。
 
@@ -194,13 +197,17 @@ we/sync/dup-titles.py wine we-base..we-dw
 
 **检查**：最后一行是 `0 of N commits ...` 就继续 A5。
 
-有输出时，每一行开头的四位数就是 `patches/dwproton/` 里的补丁编号。把这些补丁文件删掉：
+有输出时（最后一行不是 `0 of …`），按顺序做：
 
-```
-git rm patches/dwproton/<编号>-*.patch      # 每个编号一次
-```
+1. 删掉这些补丁文件（脚本按标题找到 `patches/dwproton/` 里对应的文件并 `git rm`，打印 `removed …`）：
 
-在 `we/ge-dw-merge-commits.txt` 里，把对应的行（用补丁标题搜，行首是 `合入:<编号>` 或 `移植:<编号>`）的行首改成 `跳过:GE有同名补丁（<新GE>起）`。然后回到 A3 重新跑 `we/sync/wine-dev.sh`，再跑一遍 A4，直到是 0。
+   ```
+   we/sync/dup-titles.py --remove wine we-base..we-dw
+   ```
+
+2. 在 `we/ge-dw-merge-commits.txt` 里，用上一步打印的每个标题搜索对应的行（行首是 `合入:<四位数>` 或 `移植:<四位数>`），把行首那一段改成 `跳过:GE有同名补丁（<新GE>起）`。
+3. 再运行 `we/sync/wine-dev.sh`（和 A3 同一条命令，结果的处理也按 A3 的表）。
+4. 再运行 `we/sync/dup-titles.py wine we-base..we-dw`（不带 `--remove`）。最后一行是 `0 of N commits …` 就继续 A5，否则回到本节第 1 步。
 
 ### A5. 导出补丁
 
@@ -208,11 +215,19 @@ git rm patches/dwproton/<编号>-*.patch      # 每个编号一次
 we/sync/export-patches.py
 ```
 
-**检查**：输出的数量和 `we-base..we-dw`、`we-dw..we-dev` 的提交数对得上；`removed`/`new` 的文件是你预期的（A4 删掉的补丁、`git am` 时跳过的补丁）。
+**检查**：
+
+1. 第一行形如 `patches/dwproton: N patches, patches/wine: M patches`。`git -C wine rev-list --count we-base..we-dw` 输出的数等于 N，`git -C wine rev-list --count we-dw..we-dev` 输出的数等于 M。
+2. 下面列出的 `removed`、`new`：`patches/dwproton/` 删掉了补丁之后，后面的补丁编号都会往前挪，所以会看到成对的 `removed 0040-xxx` / `new 0039-xxx`（标题相同、编号小了），这是正常的。除此之外，`removed` 的标题只能是 A4 删掉的、或者 `git am --skip` 跳过的补丁；`patches/wine/` 下不应该有 `removed`，`new` 只能是你用 `--new` 加的。不符合就**停下**。
 
 ### A6. 构建
 
-名字：`we-proton-ge<新GE 去掉 GE-Proton>-<N>`，`N` 是上一个发布号加 1（看 `git tag -l 'we-proton-*' | sort -V | tail -1`，或者问用户）。例如 GE-Proton11-8、上一个是 25：`we-proton-ge11-8-26`。
+名字的格式是 `we-proton-ge<X>-<N>`：
+
+- `<X>`：新 GE 版本号去掉开头的 `GE-Proton`。例如 `GE-Proton11-8` → `11-8`
+- `<N>`：上一次发布的号加 1。上一次发布的名字用 `git tag -l 'we-proton-*' | sort -V | tail -1` 看（例如 `we-proton-ge11-7-25` → 上一次是 25，这次是 26）；看不到 tag 就问用户
+
+例：`we-proton-ge11-8-26`。下面的 `<名字>` 都指这个。
 
 ```
 we/build.sh --name <名字> --jobs 8
@@ -221,6 +236,8 @@ we/build.sh --name <名字> --jobs 8
 一个多小时。失败时看最后的输出和 `build/make.log`（`grep -n ': error: \|\*\*\* \[' build/make.log | head`），按下面「构建报错对照」处理。
 
 ### A7. 测试
+
+`<名字>` 是 A6 用的名字（例如 `we-proton-ge11-8-26`）。
 
 ```
 we/tests/build.sh
@@ -247,7 +264,7 @@ grep -rn '<旧GE>' README.md README.en.md we/README.md we/dist-README.md
 
 ```
 git add -A patches we README.md README.en.md
-git status --short | grep -v '^ [mM] '     # 看一遍要提交的文件
+git status --short | grep -v '^ [mM] '     # 去掉子模块的行（行首 " m"/" M"），看一遍要提交的文件
 git commit -m "Follow <新GE>."
 ```
 
@@ -267,7 +284,8 @@ git ls-remote --tags dwproton 'dwproton-*' | grep -v '\^{}' | awk -F/ '{print $3
 ### B2. 找出 DW-Proton 新增的 Wine 提交
 
 ```
-git fetch dwproton tag <旧DW> tag <新DW> --no-tags
+git fetch dwproton tag <旧DW> --no-tags
+git fetch dwproton tag <新DW> --no-tags
 OLD=$(git ls-tree <旧DW> wine | awk '{print $3}')
 NEW=$(git ls-tree <新DW> wine | awk '{print $3}')
 git -C ~/src/wine-dwproton fetch origin
@@ -284,16 +302,30 @@ we/sync/dup-titles.py ~/src/wine-dwproton $OLD..$NEW > build/dw-dup.txt; tail -1
 
 ### B3. 逐个决定要不要
 
-对 `build/dw-new.txt` 的每一行（按顺序），用下表决定。查一个提交改了哪些文件：`git -C ~/src/wine-dwproton show --stat --format=%s <提交>`。
+先运行一次 `we/sync/wine-dev.sh`（下面查 GE-Proton 有没有某个提交要用到 `wine/` 的 `we-base` 分支）。
+
+对 `build/dw-new.txt` 的每一行（按顺序），从上往下对照下表，**用第一条符合的规则**。改了哪些文件用这条命令看：
+
+```
+git -C ~/src/wine-dwproton show --stat --format=%s <提交>
+```
 
 | 情况 | 处理 |
 |---|---|
-| 出现在 `build/dw-dup.txt` 里 | 跳过（GE-Proton 已有） |
-| 改了 `dlls/winegstreamer/`、`dlls/winedmo/`，或标题里有 `media-converter` | 跳过（视频用 GE-Proton 的方案） |
-| 改了 `dlls/mf/`、`dlls/mfreadwrite/`、`dlls/evr/`、`dlls/mfplat/`、`dlls/quartz/` | **停下**（视频相关，要判断） |
-| 标题以 `Revert "` 开头 | 查被撤销的那个提交在不在 GE-Proton 里（`we/sync/dup-titles.py` 对它所在的范围，或者在 `wine` 的 `we-base` 里 `git log --oneline --grep`）：在就跳过（撤销会删掉 GE-Proton 的东西）；不在就**停下** |
+| 这个提交出现在 `build/dw-dup.txt` 里 | 跳过（GE-Proton 已有） |
 | 标题里有 `CachyOS` | 跳过 |
-| 其他 | 要（下一步打上） |
+| 标题以 `Revert "` 开头 | 见表下面的「撤销提交怎么查」 |
+| 上面那条 `show --stat` 列出的文件里有 `dlls/winegstreamer/` 或 `dlls/winedmo/` 开头的，或者标题里有 `media-converter` | 跳过（视频用 GE-Proton 的方案） |
+| 列出的文件里有 `dlls/mf/`、`dlls/mfreadwrite/`、`dlls/evr/`、`dlls/mfplat/`、`dlls/quartz/` 开头的 | **停下**（视频相关，要判断） |
+| 其他 | 要（B4 打上） |
+
+撤销提交怎么查：标题是 `Revert "<原标题>"`，取出引号里的 `<原标题>`，运行
+
+```
+git -C wine log --oneline --fixed-strings --grep='<原标题>' we-base
+```
+
+有输出：GE-Proton 带着被撤销的那个提交，撤销它会删掉 GE-Proton 的东西，跳过。没有输出：**停下**。
 
 把决定写进 `build/dw-plan.txt`，每行 `要|跳过:<原因> <提交> <标题>`。
 
@@ -310,11 +342,11 @@ git -C wine cherry-pick <提交>          # 对 build/dw-plan.txt 里每个「�
 
 | 冲突在哪里 | 处理 |
 |---|---|
-| 只在 `include/wine/server_protocol.h`、`server/request_handlers.h`、`server/request_trace.h` | `(cd wine && git checkout --ours include/wine/server_protocol.h server/request_handlers.h server/request_trace.h && tools/make_requests && git add -A && git cherry-pick --continue --no-edit)` |
+| 只在 `include/wine/server_protocol.h`、`server/request_handlers.h`、`server/request_trace.h` | 运行下面这一整行（括号里先 `cd wine`，所以 `tools/make_requests` 是 `wine/tools/make_requests`）：`(cd wine && git checkout --ours include/wine/server_protocol.h server/request_handlers.h server/request_trace.h && tools/make_requests && git add -A && git cherry-pick --continue --no-edit)` |
 | 在 `dlls/winewayland.drv/` 里 | `git -C wine cherry-pick --abort`，这个提交改记成 `跳过:冲突（Wayland 用 GE-Proton 的）` |
 | 其他 | `git -C wine cherry-pick --abort`，**停下**（要移植，需要判断）。把提交和冲突的文件告诉用户 |
 
-全部打完后，把 WE-Proton 的补丁接上去：
+没有冲突的 `cherry-pick` 什么都不用做，接着下一个。全部打完后，把 WE-Proton 的补丁接上去：
 
 ```
 git -C wine checkout -B we-dev we-dw
@@ -332,7 +364,7 @@ for s in dxvk vkd3d-proton protonfixes; do echo "$s $(git ls-tree <旧DW> $s | a
 
 - `patches/protonfixes/` 有变化：**停下**（要看是不是游戏修复，再决定怎么放进 `patches/protonfixes/0003` 之后）
 - `patches/dxvk/0001-dxvk-Implement-support-for-HDR-detection-via-NtUserD.patch` 有变化：用新版本替换 `patches/dxvk/dw-hdr-detection-via-displayconfig.patch`
-- 子模块版本变了：按 A2 的「子模块版本」规则比较 DW-Proton 新版本的提交和我们现在用的
+- 子模块版本变了（某一行的两个哈希不同）：拿 DW-Proton 新版本用的提交（第二个哈希）和我们现在用的（`git ls-tree HEAD <子模块>`）比，做法和 A2 的「子模块版本」一样，只是把那里的 GE 换成这里的 DW-Proton 新提交：DW-Proton 的更新（我们的提交是它的祖先）就换成它的；我们的更新就不动；分叉就**停下**
 
 ### B6. 导出、构建、测试
 
@@ -372,7 +404,9 @@ git -C wine am --show-current-patch=diff | head -20      # 哪个补丁
 git -C wine status --short | grep '^UU\|^AA\|^DU\|^UD'   # 冲突的文件
 ```
 
-**停在 `patches/dwproton`**（`wine/` 在 `we-dw` 分支上）：
+先看停在哪一层：输出是 `git am stopped in patches/dwproton`，`wine/` 在 `we-dw` 分支上；输出是 `git am stopped in patches/wine`，`wine/` 在 `we-dev` 分支上。
+
+**停在 `patches/dwproton`**：
 
 | 情况 | 处理 |
 |---|---|
