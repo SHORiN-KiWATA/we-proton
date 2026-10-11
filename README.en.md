@@ -67,7 +67,6 @@ The script fetches the submodules, patches them with `patches/protonprep-valve-s
 ## Source and licenses
 
 - Proton's top-level contents: BSD-3-Clause (Valve Corporation, see [`LICENSE`](LICENSE) and [`LICENSE.proton`](LICENSE.proton))
-- vkd3d-proton: upstream vkd3d-proton plus the patches in `patches/vkd3d-proton/`, LGPL-2.1; its dxil-spirv subproject, and the patches to it, are MIT
 - Wine: Valve's Wine plus the patches in `patches/`, LGPL-2.1
 - vkd3d-proton: upstream vkd3d-proton plus the patches in `patches/vkd3d-proton/`, LGPL-2.1; the dxil-spirv subproject and the patch to it are MIT
 - Other components: see the `LICENSE` / `COPYING` files in their directories, and `LICENSE`, `LICENSE.OFL` and `PATENTS.AV1` in the release package

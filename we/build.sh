@@ -13,6 +13,9 @@
 #   --jobs N      make -j (default: nproc)
 #   --skip-prep   don't update and re-patch the submodules (they are patched already)
 #
+# Without --skip-prep the submodules are reset to the commits this tree pins and
+# re-patched: uncommitted changes in them are lost.
+#
 # Output: build/NAME/ (the runner), build/NAME.tar.xz, build/NAME.sha512sum and
 # build/NAME-source.tar.xz (the patched Wine, vkd3d-proton and dxvk sources).
 set -euo pipefail
@@ -27,7 +30,7 @@ while [ $# -gt 0 ]; do
         --install) INSTALL=1; shift ;;
         --jobs) JOBS=$2; shift 2 ;;
         --skip-prep) PREP=0; shift ;;
-        -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,21p' "$0"; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -41,19 +44,27 @@ RUNNERS=$HOME/.local/share/proton/runners
 log() { printf '\033[1m::\033[0m %s\n' "$*"; }
 mkdir -p "$OUT"
 
+PATCHED="wine dxvk vkd3d-proton protonfixes dxvk-nvapi wineopenxr vklayers/low_latency_layer
+    steam_helper umu_helper lsteamclient"
+# patch(1), git apply (staging's patchinstall) and git revert report failures this way
+FAILURES='FAILED|can.t find file to patch|^error: |Failed to apply|^patch: \*\*\*\*|Only garbage|malformed patch'
 if [ "$PREP" = 1 ]; then
-    log "updating submodules"
-    git -C "$ROOT" submodule update --init --filter=tree:0 --recursive
-    log "patching (log: build/protonprep.log)"
-    # protonprep stops only when wine-mono can't be prepared; a patch that doesn't
-    # apply leaves a .rej file and a FAILED line, so check for those here.
-    (cd "$ROOT" && ./patches/protonprep-valve-staging.sh) > "$OUT/protonprep.log" 2>&1 \
+    log "updating submodules (log: build/protonprep.log)"
+    # --force: the submodules were patched in place by the last run
+    git -C "$ROOT" submodule update --init --force --filter=tree:0 --recursive > "$OUT/protonprep.log" 2>&1 \
         || { tail -20 "$OUT/protonprep.log" >&2; exit 1; }
-    rejects=$(cd "$ROOT" && find wine dxvk vkd3d-proton protonfixes dxvk-nvapi wineopenxr \
-        vklayers/low_latency_layer steam_helper umu_helper lsteamclient -name '*.rej' 2>/dev/null || true)
-    if [ -n "$rejects" ] || grep -qE 'FAILED|can.t find file to patch' "$OUT/protonprep.log"; then
-        echo "some patches did not apply:" >&2
-        grep -E 'FAILED|can.t find file to patch' "$OUT/protonprep.log" >&2 || true
+    # protonprep only checks out the files it patches in these top-level directories
+    (cd "$ROOT" && find steam_helper umu_helper lsteamclient \( -name '*.rej' -o -name '*.orig' \) -delete)
+    log "patching"
+    # protonprep goes on when a patch doesn't apply and stops only when wine-mono
+    # can't be prepared, so look for failures in its output. English messages for
+    # the patterns, and no terminal for patch(1) to ask questions on.
+    (cd "$ROOT" && LC_ALL=C setsid -w ./patches/protonprep-valve-staging.sh < /dev/null) >> "$OUT/protonprep.log" 2>&1 \
+        || { tail -20 "$OUT/protonprep.log" >&2; exit 1; }
+    rejects=$(cd "$ROOT" && find $PATCHED -name '*.rej' 2>/dev/null || true)
+    if [ -n "$rejects" ] || grep -qE "$FAILURES" "$OUT/protonprep.log"; then
+        echo "some patches did not apply (build/protonprep.log):" >&2
+        grep -E "$FAILURES" "$OUT/protonprep.log" >&2 || true
         [ -z "$rejects" ] || printf '  %s\n' $rejects >&2
         exit 1
     fi
@@ -76,7 +87,7 @@ mv "$OBJ/$NAME" "$DIST"
 rm -f "$OBJ/$NAME.tar.gz" "$OBJ/$NAME.sha512sum"
 # Makefile.in writes `git describe --tags`; launchers read the name from here
 echo "$(date +%s) $NAME" > "$DIST/version"
-dirty() { git -C "$ROOT" diff --quiet HEAD -- patches && echo "" || echo "-dirty"; }
+dirty() { [ -z "$(git -C "$ROOT" status --porcelain -- patches)" ] || echo "-dirty"; }
 {
     echo "name: $NAME"
     echo "we-proton: $(git -C "$ROOT" rev-parse HEAD)$(dirty)"
@@ -101,6 +112,7 @@ tar -C "$ROOT" -cJf "$OUT/$NAME-source.tar.xz" --exclude=.git --exclude='*.orig'
 log "done: build/$NAME, build/$NAME.tar.xz, build/$NAME.sha512sum, build/$NAME-source.tar.xz"
 
 if [ "$INSTALL" = 1 ]; then
+    mkdir -p "$RUNNERS"
     rm -rf "$RUNNERS/WE-Proton Latest"
     cp -a --reflink=auto "$DIST" "$RUNNERS/WE-Proton Latest"
     log "installed to $RUNNERS/WE-Proton Latest"

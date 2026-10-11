@@ -1,4 +1,4 @@
-From a13647fe9b9153055b32e9ec73348f0ac9878ae5 Mon Sep 17 00:00:00 2001
+From 579683b58546888e50c64f4d6e7ed53d5a042d08 Mon Sep 17 00:00:00 2001
 From: SHORiN-KIWATA <shorin@users.noreply.github.com>
 Date: Fri, 9 Oct 2026 02:21:21 +0900
 Subject: [PATCH] ntoskrnl: Implement InbvAcquireDisplayOwnership and

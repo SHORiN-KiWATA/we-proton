@@ -1,0 +1,48 @@
+From cadb592232d3cc859608267e1d17a84a9c91f0d2 Mon Sep 17 00:00:00 2001
+From: Michel Weinachter <michel@weinachter.com>
+Date: Wed, 2 Sep 2026 11:30:08 +0200
+Subject: [PATCH] ntoskrnl.exe: Implement MmBuildMdlForNonPagedPool().
+
+A driver's non-paged pool is ordinary resident memory in the driver host
+process here, so there are no page frame numbers to fill in; recording
+MDL_SOURCE_IS_NONPAGED_POOL and the mapped address is all a caller can
+observe, and it is what lets a driver go on to call MmMapLockedPages() on the
+descriptor.
+
+(cherry picked from commit 35e62fc2c5e2b9d57f99b4fc20f646fcb2b71e2c)
+---
+ dlls/ntoskrnl.exe/ntoskrnl.c     | 5 ++++-
+ dlls/ntoskrnl.exe/tests/driver.c | 4 ++--
+ 2 files changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.c b/dlls/ntoskrnl.exe/ntoskrnl.c
+index eaaabfbf4a0..2eac1644781 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.c
++++ b/dlls/ntoskrnl.exe/ntoskrnl.c
+@@ -3077,7 +3077,10 @@ PMDL WINAPI MmAllocatePagesForMdl(PHYSICAL_ADDRESS lowaddress, PHYSICAL_ADDRESS
+  */
+ void WINAPI MmBuildMdlForNonPagedPool(MDL *mdl)
+ {
+-    FIXME("stub: %p\n", mdl);
++    TRACE("%p\n", mdl);
++
++    mdl->MdlFlags |= MDL_SOURCE_IS_NONPAGED_POOL;
++    mdl->MappedSystemVa = (char *)mdl->StartVa + mdl->ByteOffset;
+ }
+ 
+ /***********************************************************************
+diff --git a/dlls/ntoskrnl.exe/tests/driver.c b/dlls/ntoskrnl.exe/tests/driver.c
+index 4f4f50cde6f..afd36709ee7 100644
+--- a/dlls/ntoskrnl.exe/tests/driver.c
++++ b/dlls/ntoskrnl.exe/tests/driver.c
+@@ -325,8 +325,8 @@ static void test_mdl_map(void)
+     ok(!(mdl->MdlFlags & MDL_SOURCE_IS_NONPAGED_POOL), "got flags %#x\n", mdl->MdlFlags);
+ 
+     MmBuildMdlForNonPagedPool(mdl);
+-    todo_wine ok(mdl->MdlFlags & MDL_SOURCE_IS_NONPAGED_POOL, "got flags %#x\n", mdl->MdlFlags);
+-    todo_wine ok(mdl->MappedSystemVa == (char *)mdl->StartVa + mdl->ByteOffset,
++    ok(mdl->MdlFlags & MDL_SOURCE_IS_NONPAGED_POOL, "got flags %#x\n", mdl->MdlFlags);
++    ok(mdl->MappedSystemVa == (char *)mdl->StartVa + mdl->ByteOffset,
+        "got %p, expected %p\n", mdl->MappedSystemVa, (char *)mdl->StartVa + mdl->ByteOffset);
+     ok(!(mdl->MdlFlags & MDL_PAGES_LOCKED), "got flags %#x\n", mdl->MdlFlags);
+     ok(!(mdl->MdlFlags & MDL_MAPPED_TO_SYSTEM_VA), "got flags %#x\n", mdl->MdlFlags);

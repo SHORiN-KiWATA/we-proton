@@ -1,4 +1,4 @@
-From 1b155b10ca1ab84b8d016a1abe6a8bebef9e1c2b Mon Sep 17 00:00:00 2001
+From e06fa034c0cba6c0126736833cc9621bac66d28f Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Sun, 11 Oct 2026 22:07:47 +0900
 Subject: [PATCH] winex11: Keep pointer input for click-through regular windows

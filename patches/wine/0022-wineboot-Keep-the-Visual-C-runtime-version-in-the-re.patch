@@ -1,4 +1,4 @@
-From 2fec78627034e9788e54f1571a2dc4f135f9137a Mon Sep 17 00:00:00 2001
+From dbd87b598efec2ce2a5c95f102cac41ffb6acde2 Mon Sep 17 00:00:00 2001
 From: SHORiN-KIWATA <shorin@users.noreply.github.com>
 Date: Sun, 11 Oct 2026 19:19:52 +0900
 Subject: [PATCH] wineboot: Keep the Visual C++ runtime version in the registry

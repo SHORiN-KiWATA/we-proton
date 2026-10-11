@@ -1,4 +1,4 @@
-From c0f479249d72735e316ff31293b433fa4f0c61ba Mon Sep 17 00:00:00 2001
+From b6f165309689383f609fff80c85ded4ad60a0b5e Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Thu, 8 Oct 2026 18:58:06 +0900
 Subject: [PATCH] rpcrt4: Marshal type library parameters without a direction

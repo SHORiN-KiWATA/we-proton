@@ -1,0 +1,27 @@
+From d1919e1a85099d9894d55997ef4265de1b2eb035 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Stefan=20D=C3=B6singer?= <stefan@codeweavers.com>
+Date: Tue, 17 Mar 2026 12:25:04 +0300
+Subject: [PATCH] ddraw/tests: Fix vertex winding in test_texture_wrong_caps.
+
+(cherry picked from commit 5a8bcdb228e01f551f38ae4016ae9091fa7f57a9)
+---
+ dlls/ddraw/tests/ddraw1.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/ddraw/tests/ddraw1.c b/dlls/ddraw/tests/ddraw1.c
+index 390b42055b5..f9f9de96fdf 100644
+--- a/dlls/ddraw/tests/ddraw1.c
++++ b/dlls/ddraw/tests/ddraw1.c
+@@ -15459,10 +15459,10 @@ static void test_texture_wrong_caps(const GUID *device_guid)
+ {
+     static D3DTLVERTEX quad[] =
+     {
+-        {{  0.0f}, {480.0f}, {0.0f}, {1.0f}, {0xffffffff}, {0x00000000}, {0.0f}, {0.0f}},
+         {{  0.0f}, {  0.0f}, {0.0f}, {1.0f}, {0xffffffff}, {0x00000000}, {0.0f}, {1.0f}},
+-        {{640.0f}, {480.0f}, {0.0f}, {1.0f}, {0xffffffff}, {0x00000000}, {1.0f}, {0.0f}},
+         {{640.0f}, {  0.0f}, {0.0f}, {1.0f}, {0xffffffff}, {0x00000000}, {1.0f}, {1.0f}},
++        {{  0.0f}, {480.0f}, {0.0f}, {1.0f}, {0xffffffff}, {0x00000000}, {0.0f}, {0.0f}},
++        {{640.0f}, {480.0f}, {0.0f}, {1.0f}, {0xffffffff}, {0x00000000}, {1.0f}, {0.0f}},
+     };
+     static DDPIXELFORMAT fmt =
+     {

@@ -1,0 +1,76 @@
+From c28657c299755f6260a750836acbcc3bd79ee505 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 27 Feb 2025 19:36:33 -0800
+Subject: [PATCH] server: Determine the highest resolution epoll_wait function
+ to use at run-time.
+
+For Linux, using a weakly declared epoll_pwait2. This will allow a Wine built on Linux 5.11+
+to work on a Linux 5.10 kernel without epoll_pwait2 available, and vice versa.
+
+There's no precedent for __attribute__((weak)) in Wine, but this should work
+even for ancient toolchains. Even GCC 4 supports it.
+
+An extension to https://gitlab.winehq.org/wine/wine/-/merge_requests/7392 to
+enable the use of epoll_pwait2 for e.g. SLR SDK builds. (alt)
+
+(cherry picked from commit 0fce4cadfbb25fb6d3b7b3c86235ff108b1dd942)
+---
+ configure.ac |  1 -
+ server/fd.c  | 20 +++++++-------------
+ 2 files changed, 7 insertions(+), 14 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index e7723ab8ad3..c54f048a71d 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -2147,7 +2147,6 @@ AC_CHECK_FUNCS(\
+         dladdr1 \
+ 	dlinfo \
+ 	epoll_create \
+-	epoll_pwait2 \
+ 	fstatfs \
+ 	futimens \
+ 	futimes \
+diff --git a/server/fd.c b/server/fd.c
+index 4440f7ead83..fa1026c6bd2 100644
+--- a/server/fd.c
++++ b/server/fd.c
+@@ -589,14 +589,16 @@ static inline void remove_epoll_user( struct fd *fd, int user )
+     }
+ }
+ 
++__attribute__((weak)) int epoll_pwait2( int, struct epoll_event *, int, const struct timespec *, const sigset_t * );
++
+ static inline void main_loop_epoll(void)
+ {
+     int i, ret, timeout;
+     struct timespec ts;
+     struct epoll_event events[128];
+-#ifdef HAVE_EPOLL_PWAIT2
+-    static int failed_epoll_pwait2 = 0;
+-#endif
++    int use_epoll_pwait2 = !!epoll_pwait2;
++    if (use_epoll_pwait2 && epoll_pwait2( -1, events, 0, NULL, NULL ) == -1 && errno == ENOSYS)
++        use_epoll_pwait2 = 0;
+ 
+     assert( POLLIN == EPOLLIN );
+     assert( POLLOUT == EPOLLOUT );
+@@ -612,16 +614,8 @@ static inline void main_loop_epoll(void)
+         if (!active_users) break;  /* last user removed by a timeout */
+         if (epoll_fd == -1) break;  /* an error occurred with epoll */
+ 
+-#ifdef HAVE_EPOLL_PWAIT2
+-        if (!failed_epoll_pwait2)
+-        {
+-            ret = epoll_pwait2( epoll_fd, events, ARRAY_SIZE( events ), timeout == -1 ? NULL : &ts, NULL );
+-            if (ret == -1 && errno == ENOSYS)
+-                failed_epoll_pwait2 = 1;
+-        }
+-        if (failed_epoll_pwait2)
+-#endif
+-            ret = epoll_wait( epoll_fd, events, ARRAY_SIZE( events ), timeout );
++        if (use_epoll_pwait2) ret = epoll_pwait2( epoll_fd, events, ARRAY_SIZE( events ), timeout == -1 ? NULL : &ts, NULL );
++        else ret = epoll_wait( epoll_fd, events, ARRAY_SIZE( events ), timeout );
+ 
+         set_current_time();
+ 

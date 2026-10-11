@@ -1,4 +1,4 @@
-From db79c7fa8d98ff891b1a60575fdaaa201c202079 Mon Sep 17 00:00:00 2001
+From 3081e71ca6c0353e4831e245e7548c080ecd9acd Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Thu, 8 Oct 2026 20:39:44 +0900
 Subject: [PATCH] winhttp: Skip empty lines in front of the first request

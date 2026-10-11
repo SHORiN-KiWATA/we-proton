@@ -21,13 +21,13 @@ WE-Proton 从 `we-proton-ge11-7-*` 起以 GE-Proton 为底，合入 DW-Proton �
 
 | 处理 | 数量 | 说明 |
 |---|---|---|
-| GE-Proton 的补丁或 staging 里有同名补丁 | 134 | 用 GE-Proton 的 |
+| GE-Proton 的补丁或 staging 里有同名补丁 | 140 | 用 GE-Proton 的。其中 6 个是 review 时才补上的：GE-Proton 补丁的长标题在 `Subject:` 里折了行，第一次只比了第一行；它们已经被干净地打上去了，有一个造成 winewayland 里函数重复定义 |
 | 打上后没有改动 | 51 | GE-Proton 已经有了，只是标题不同 |
 | 冲突，丢弃 | 136 | 85 个在 GE-Proton 里有同名补丁；其余是 GE-Proton 换了实现（视频、Wayland 的离屏渲染等）、Valve/上游的回移（GE-Proton 跟进 Valve 时会带上）、CachyOS 字样之类 |
 | 冲突，移植 | 8 | 二次元游戏相关，GE-Proton 没有，见下 |
 | 能打上，但按规则剔除 | 13 | 见「视频」和下面两条 |
-| 编译时发现，剔除 | 6 | GE-Proton 构建用 `--enable-werror` |
-| 合入 | 156 | 其中 2 个改过，见下 |
+| 编译和 review 时发现，剔除 | 7 | 见下 |
+| 合入 | 149 | 其中 2 个改过，见下 |
 
 逐个提交怎么处理的见 [`ge-dw-merge-commits.txt`](ge-dw-merge-commits.txt)。
 
@@ -37,10 +37,11 @@ WE-Proton 从 `we-proton-ge11-7-*` 起以 GE-Proton 为底，合入 DW-Proton �
 - 撤销《神力科莎》字体权宜修改：打上会删掉 GE-Proton 里的对应改动
 - rgb 字体平滑：DW-Proton 加了又自己撤了，两个一起去掉
 
-编译时发现、剔除的 6 个：
+编译和 review 时发现、剔除的 7 个：
 
-- 5 个是 GE-Proton 已有、只是标题不同的实现，打上后变成重复定义或类型冲突：token 的内核对象、`KeRegisterBugCheckReasonCallback`、`KeDeregisterBugCheckReasonCallback`、`KeCapturePersistentThreadState`、`MmGetVirtualForPhysical`
+- 5 个是 GE-Proton 已有、只是标题不同的实现，打上后变成重复定义或类型冲突（GE-Proton 构建用 `--enable-werror`）：token 的内核对象、`KeRegisterBugCheckReasonCallback`、`KeDeregisterBugCheckReasonCallback`、`KeCapturePersistentThreadState`、`MmGetVirtualForPhysical`
 - `d2d1: Forward geometry group methods to the path representing the group.`：依赖丢弃了的「几何组内部建路径」。GE-Proton 用的是 staging 的几何组绘制实现
+- `HACK: user32: Also force X11 for launchers using webview2.`：接在「跨进程启动器在 Wine-Wayland 下改用 X11」后面。后者 GE-Proton 有同名补丁但有意没打：GE-Proton 的 Wayland 驱动能直接画跨进程的启动器窗口，强制走 X11 反而会让内嵌网页进程和游戏分属两个驱动。两个都不要
 
 ## 视频
 
@@ -76,6 +77,7 @@ GE-Proton 去掉了 GStreamer 后端，视频全走 winedmo（FFmpeg 8.1），WM
 - 用 GE-Proton 的顶层和构建（`configure.sh` + `make redist`）
 - DW-Proton 的 protonfixes 游戏修复：`patches/protonfixes/0003`–`0005`（NIKKE、hololive Dreams、按可执行文件自动套用）
 - DW-Proton 的 dxvk HDR 检测：`patches/dxvk/dw-hdr-detection-via-displayconfig.patch`，排在 GE-Proton 的 dxvk 补丁前面；Wine 那一侧（`NtUserDisplayConfigGetDeviceInfo`）已经有了
+- 7zip：hololive Dreams 的 protonfix 要用 `files/utils/7zz` 从 Windows 镜像里解出 `version.dll`，GE-Proton 不编它。照 DW-Proton 的 `steamrtdeps/build-sevenzip.mk` 加了 `7zip` 子模块（DW-Proton 用的同一个提交）和 `Makefile.in` 里的构建规则
 - 不要：DW-Proton 的额外组件（dxvk-sarek、低延迟版 dxvk/vkd3d、自编 GStreamer 等）、proton 脚本里 DW-Proton 独有的选项（`PROTON_DXVK_SAREK` 等，大多数选项 GE-Proton 有同名的）、8 个 Valve 回移
 
 ### 子模块
@@ -86,7 +88,7 @@ Valve 在 09-23 用的 dxvk、vkd3d-proton、vkd3d、FEX、dxvk-nvapi 比两边�
 |---|---|---|---|---|
 | dxvk | v3.1-19 | v3.1.1-27 | DW-Proton | 包含 GE-Proton 的版本；多 3.1.1 正式版、VK_EXT_present_timing（可用配置关掉）、几个修复；GE-Proton 的 dxvk 补丁都能打上 |
 | vkd3d-proton | v3.0.1-402 | v3.0.1-424 | DW-Proton | 包含 GE-Proton 的版本；多 GPU 信号顺序竞争修复、Agility SDK 619.5 紧凑对齐等；GE-Proton 和 WE-Proton 的补丁都能打上 |
-| protonfixes | 27f5c70 | 73c5586 | DW-Proton | 包含 GE-Proton 的版本，多 3 个游戏修复 |
+| protonfixes | 27f5c70 | 73c5586 | DW-Proton | 包含 GE-Proton 的版本，多 2 个游戏修复和 1 个子模块地址修正 |
 | vkd3d | 2.1-26 | 2.1-64 | GE-Proton | 多的主要是着色器编译器内部重构和测试 |
 | ffmpeg | n8.1 | n7.1.3 | GE-Proton | GE-Proton 的构建配置和视频改造按 8.1 做的 |
 | OpenXR-SDK | 1.1.36 | 1.1.63 | GE-Proton | 和 wineopenxr 的版本绑定，GE-Proton 的是旧版 wineopenxr |
@@ -99,7 +101,18 @@ Valve 在 09-23 用的 dxvk、vkd3d-proton、vkd3d、FEX、dxvk-nvapi 比两边�
 - 改过：0003（GE-Proton 换了一套系统调用拦截，新的 SIGSYS 处理函数里有同样的问题，改在那里）、0016（格式串在 `-Werror` 下报错）、0023（和 GE-Proton 覆盖层窗口的条件合并）
 - 编号沿用原来的，`patches/wine/` 里的空号就是去掉的
 
+## 换底座带来的行为变化
+
+这些不是合并时的选择，是换成 GE-Proton 底座后随之而来的，要实测：
+
+- 以前 WE-Proton 导入 GE-Proton 的补丁时特意没合的几个，现在随 GE-Proton 一起生效：「WM_ACTIVATEAPP 的 lparam 不为零」的通用版（原来只对一个游戏生效，现在对所有程序生效，包括 WeGame）；和反作弊有关的几个 GE-Proton 补丁（环境变量开关，或只对特定游戏生效）
+- DW-Proton 的 dxvk HDR 检测：宿主机开了 HDR 时，dxvk 自动报告 HDR10，不用再设 `DXVK_HDR=1`（`DXVK_NO_HDR=1` 可以关掉）
+- 托盘图标由 GE-Proton 的 StatusNotifierItem 实现显示（代替 WE 0011）
+- 视频走 GE-Proton 的 winedmo + FFmpeg
+- DW-Proton 的「不按分层父窗口裁剪其他进程的子窗口」（server）和 GE-Proton 在 winex11 里裁剪客户区（`mark_direct_draw_child()`）同时作用；《Return to Krondor》的文字位图两边各有一个修复。都没有冲突，但没有实测
+
 ## 验证
 
-- 在干净的检出上跑 protonprep：所有补丁都打上，没有 `.rej`；结果和 Wine 开发分支逐文件相同（只差 `SERVER_PROTOCOL_VERSION`，那是 `make_requests` 跑的次数不同）
-- 单独编 Wine（SDK 镜像，`--enable-werror`，不带 Wayland 和 FFmpeg）：第一次编出 12 处错误，即上面剔除的 6 个和改过的 3 个（2 个 DW-Proton 提交和 WE 0016）。改完后编译错误全部消失，只剩缺 FFmpeg（winedmo）和 OpenXR 加载器（wineopenxr）库的链接错误，这两个库由完整构建先编出来
+- 在干净的检出上跑 protonprep：所有补丁都打上，没有 `.rej`；结果和 Wine 开发分支逐文件相同，只差 `SERVER_PROTOCOL_VERSION`（`make_requests` 跑的次数不同）和 `dlls/wineopenxr`（建开发分支的起点时只跑了 protonprep 的 Wine 部分，wineopenxr 没打 GE-Proton 的补丁；DW-Proton 和 WE-Proton 的补丁都不碰它）
+- 单独编 Wine（SDK 镜像，`--enable-werror`，**不带 Wayland、FFmpeg、OpenXR**）：第一次编出的错误来自 9 个提交，即编译时剔除的 6 个和改过的 3 个（2 个 DW-Proton 提交和 WE 0016）。改完后编译错误全部消失，只剩缺 FFmpeg 和 OpenXR 加载器库的链接错误。因为没编 Wayland 驱动，winewayland 里的重复定义没抓到
+- review：逐个比对完整标题，又找出 6 个和 GE-Proton 同名、已经打上的提交，以及上面那个强制 X11 的提交，都去掉了

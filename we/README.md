@@ -57,7 +57,7 @@
 | `wine/0042-winex11-Shaped-and-real-alpha-transparency-for-layer` | （这一版没有：GE-Proton 直接带着原版）（GE，默认关闭）桌面覆盖类游戏的分层窗口做形状或真透明 |
 | `vkd3d-proton/we-0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
 | `vkd3d-proton/0002-vkd3d-bound-present-waits-during-swapchain-drain` | （这一版没有：GE-Proton 直接带着原版）（GE）销毁交换链时等待呈现有上限，不再卡死 |
-| `dxvk/0002`–`0007` | （这一版没有：GE-Proton 直接带着原版）（GE）分层覆盖窗口的 DXVK 一半、获取图像受阻时保留交换链、《最终幻想14》多屏失焦不缩窗（三个）、黑色沙漠的 DXVK 一半；接在 DWProton 的 `dxvk/0001` 后面 |
+| `dxvk/0002`–`0007` | （这一版没有：GE-Proton 直接带着原版）（GE）分层覆盖窗口的 DXVK 一半、获取图像受阻时保留交换链、《最终幻想14》多屏失焦不缩窗（三个）、黑色沙漠的 DXVK 一半 |
 
 每个补丁的现象、根因、Windows 实测、验证和排查过程见 `we/fixes/`。
 

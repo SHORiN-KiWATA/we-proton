@@ -1,6 +1,6 @@
 # vkd3d-proton 0001：dxil-spirv 生成非法的结构化控制流
 
-补丁：`patches/vkd3d-proton/0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-.patch`（`subprojects/dxil-spirv/cfg_structurizer.cpp`，约 20 行）。不在 Wine 里：vkd3d-proton 把 D3D12 着色器（DXIL）经 dxil-spirv 翻译成 SPIR-V，再交给 Vulkan 驱动。
+补丁：`patches/vkd3d-proton/we-0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-.patch`（基于 DW-Proton 时叫 `0001-…`）（`subprojects/dxil-spirv/cfg_structurizer.cpp`，约 20 行）。不在 Wine 里：vkd3d-proton 把 D3D12 着色器（DXIL）经 dxil-spirv 翻译成 SPIR-V，再交给 Vulkan 驱动。
 
 ## 现象
 

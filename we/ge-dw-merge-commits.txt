@@ -1,5 +1,5 @@
 # DW-Proton dwproton-11.0-14 的 Wine 提交：46b29104e..b585905ec92，504 个非合并提交，按拓扑序
-# 每行：处理 提交 标题。合入、移植的写出 patches/dwproton/ 里的编号；第 0165 个是删掉 wdfldr 的私有头文件，不对应 DW 的提交
+# 每行：处理 提交 标题。合入、移植的写出 patches/dwproton/ 里的编号；最后一个补丁是删掉 wdfldr 的私有头文件，不对应 DW 的提交
 合入:0001 6cf7facdb81 win32u: HACK: Clear WS_EX_TOOLWINDOW for EA launcher splash on Gamescope.
 合入:0002 69b4ccbae6d ntdll: Rename some builtin unixlib functions to reflect current usage.
 合入:0003 72163d47fde ntdll: Add a helper to retrieve a builtin module.
@@ -40,8 +40,8 @@
 合入:0032 3cacee560d2 d2d1: Warn in d2d_device_context_set_error().
 合入:0033 ebfc59dd72f win32u: Also print hwnd in set_window_text() trace.
 跳过:GE已有（打上后无改动） 6c15204d833 windowscodecs: Add support for converting 8bpp indexed to 24bpp format.
-合入:0034 62702927f3f windowscodecs: Support trivial cases for copying 1bpp indexed data.
-合入:0035 e1555bed741 windowscodecs: Remove optimization for 1bpp pixel formats from WICConvertBitmapSource().
+跳过:GE有同名补丁（第一次比对漏了：GE的标题折行） 62702927f3f windowscodecs: Support trivial cases for copying 1bpp indexed data.
+跳过:GE有同名补丁（第一次比对漏了：GE的标题折行） e1555bed741 windowscodecs: Remove optimization for 1bpp pixel formats from WICConvertBitmapSource().
 跳过:冲突 9abf939e3f4 windowscodecs: Add support for converting from 32bpp RGBA to 64bpp RGBA.
 跳过:GE已有（打上后无改动） 160cbc3dd74 windowscodecs: Fix conversion from 64bpp RGBA to 32bpp BGRA.
 跳过:GE已有（打上后无改动） e8e0c9fe31a windowscodecs: Add fallback path to copypixels_to_64bppRGBA().
@@ -51,52 +51,52 @@
 跳过:冲突 6ba3e3879f0 ntoskrnl.exe/tests: Add tests for directory kernel objects.
 跳过:GE有同名补丁 b1e94e0178c ntoskrnl.exe: Implement FsRtlGetFileSize().
 跳过:GE有同名补丁 0296568f3d4 ntoskrnl.exe/tests: Add tests for FsRtlGetFileSize().
-合入:0036 07ca537c556 d2d1/tests: Add some more tests for geometry groups.
-合入:0037 2b4b9af10eb d2d1: Store original segment data when building paths.
-合入:0038 f0f502d3e8e d2d1: Implement Stream() method for paths.
+合入:0034 07ca537c556 d2d1/tests: Add some more tests for geometry groups.
+合入:0035 2b4b9af10eb d2d1: Store original segment data when building paths.
+合入:0036 f0f502d3e8e d2d1: Implement Stream() method for paths.
 跳过:冲突 be14ebe2730 d2d1: Add a way to stream any type of geometry internally.
 跳过:冲突 fd1625db59e d2d1: Create a path internally for the geometry group.
 跳过:冲突 c10e89a1a10 d2d1: Correct arc rotation angles for ellipse segments.
-合入:0039 2b0571479ba d2d1: Implement arc approximation with Bezier segments.
-合入:0040 efc59045b30 d2d1: Return S_OK for d2d_device_context_Flush().
-跳过:依赖被丢弃的 d2d1 提交（GE 用 staging 的几何组实现） d884bfbb244 d2d1: Forward geometry group methods to the path representing the group.
-合入:0041 6d6444428f9 d2d1/tests: Add another test for transformed geometry behavior.
-合入:0042 41b46c1a506 d2d1: Use non-multiplied transform when forwarding transformed geometry methods.
-合入:0043 cc4d1c678d4 d2d1/tests: Test brushes with out of range opacity values.
-合入:0044 51022aa3300 d2d1: Clamp opacity value for brushes.
-合入:0045 881bad71479 d2d1: Do not reference layer objects when recording to the command list.
+合入:0037 2b0571479ba d2d1: Implement arc approximation with Bezier segments.
+合入:0038 efc59045b30 d2d1: Return S_OK for d2d_device_context_Flush().
+跳过:依赖被丢弃的d2d1提交（GE用staging的几何组实现） d884bfbb244 d2d1: Forward geometry group methods to the path representing the group.
+合入:0039 6d6444428f9 d2d1/tests: Add another test for transformed geometry behavior.
+合入:0040 41b46c1a506 d2d1: Use non-multiplied transform when forwarding transformed geometry methods.
+合入:0041 cc4d1c678d4 d2d1/tests: Test brushes with out of range opacity values.
+合入:0042 51022aa3300 d2d1: Clamp opacity value for brushes.
+合入:0043 881bad71479 d2d1: Do not reference layer objects when recording to the command list.
 跳过:冲突 172136cddcc d2d1/geometry: Check for null user transform when streaming.
-合入:0046 95bcd88d8b9 d2d1: Allow value NULL in d2d_effect_SetInput.
-合入:0047 e4dfe7c1817 windowscodecs: Add fallback path to copypixels_to_24bppBGR().
-合入:0048 c34b74f5e40 windowscodecs: Fix size check in gif copy_interlaced_pixels.
-合入:0049 a9014a3ce6b windowscodecs: Implement IWICFormatConverter for BlackWhite pixel format.
-合入:0050 17cb29cda8f msvcrt: Ignore negative precision for float args in printf().
-合入:0051 8ef56ca1dde msvcrt: Add wcstoimax/wcstoumax.
-合入:0052 4e58db91736 ucrtbase: Fix scanset character range handling in scanf.
+合入:0044 95bcd88d8b9 d2d1: Allow value NULL in d2d_effect_SetInput.
+合入:0045 e4dfe7c1817 windowscodecs: Add fallback path to copypixels_to_24bppBGR().
+合入:0046 c34b74f5e40 windowscodecs: Fix size check in gif copy_interlaced_pixels.
+合入:0047 a9014a3ce6b windowscodecs: Implement IWICFormatConverter for BlackWhite pixel format.
+合入:0048 17cb29cda8f msvcrt: Ignore negative precision for float args in printf().
+合入:0049 8ef56ca1dde msvcrt: Add wcstoimax/wcstoumax.
+合入:0050 4e58db91736 ucrtbase: Fix scanset character range handling in scanf.
 跳过:GE已有（打上后无改动） 201b51143fd ntoskrnl: Update the security cookie once relocation are applied.
-合入:0053 c8ee1480565 include: Update STORAGE_BUS_TYPE in ntddstor.h.
-合入:0054 939dc4922ef mountmgr.sys: Stub StorageDeviceTrimProperty query.
-合入:0055 622674d9547 kernel32/tests: Add tests of StorageDeviceTrimProperty query.
-合入:0056 1ff3c679e30 ddraw: Enumerate the ramp device.
-合入:0057 8bee4ac65e3 ddraw: Pass the active device to material_activate.
+合入:0051 c8ee1480565 include: Update STORAGE_BUS_TYPE in ntddstor.h.
+合入:0052 939dc4922ef mountmgr.sys: Stub StorageDeviceTrimProperty query.
+合入:0053 622674d9547 kernel32/tests: Add tests of StorageDeviceTrimProperty query.
+合入:0054 1ff3c679e30 ddraw: Enumerate the ramp device.
+合入:0055 8bee4ac65e3 ddraw: Pass the active device to material_activate.
 跳过:冲突 7b0f4c52924 wined3d: Access the right pixel format in swapchain_gl_present().
-合入:0058 fec58339d39 wined3d: Remove the "iPixelFormat" field from struct wined3d_pixel_format.
-合入:0059 22066eb4ea4 d3d8: Build a valid box in d3d8_vertexbuffer_Lock.
-合入:0060 8af86b28486 d3d8: Build a valid box in d3d8_indexbuffer_Lock.
-合入:0061 945df8ed41f ddraw: Fix caps tracing in IDirectDraw7::GetCaps().
-合入:0062 3f18b02df1a ddraw/tests: Fix vertex winding in test_ck_rgba.
-合入:0063 81131df6286 ddraw/tests: Fix vertex winding in test_zenable.
-合入:0064 12657bb5053 ddraw/tests: Fix vertex winding in test_texture_wrong_caps.
-合入:0065 86073ebaaf9 ddraw/tests: Cap test_map_synchronisation to 64k vertices.
-合入:0066 58742a0e832 ddraw/tests: Fix nested designated initializers in test_caps().
-合入:0067 82bbe398fa1 ddraw/tests: Try harder to hide the window in test_window_style().
+合入:0056 fec58339d39 wined3d: Remove the "iPixelFormat" field from struct wined3d_pixel_format.
+合入:0057 22066eb4ea4 d3d8: Build a valid box in d3d8_vertexbuffer_Lock.
+合入:0058 8af86b28486 d3d8: Build a valid box in d3d8_indexbuffer_Lock.
+合入:0059 945df8ed41f ddraw: Fix caps tracing in IDirectDraw7::GetCaps().
+合入:0060 3f18b02df1a ddraw/tests: Fix vertex winding in test_ck_rgba.
+合入:0061 81131df6286 ddraw/tests: Fix vertex winding in test_zenable.
+合入:0062 12657bb5053 ddraw/tests: Fix vertex winding in test_texture_wrong_caps.
+合入:0063 86073ebaaf9 ddraw/tests: Cap test_map_synchronisation to 64k vertices.
+合入:0064 58742a0e832 ddraw/tests: Fix nested designated initializers in test_caps().
+合入:0065 82bbe398fa1 ddraw/tests: Try harder to hide the window in test_window_style().
 跳过:冲突 cfdd4205086 ole32/tests: Add test for OLE clipboard reuse across STA threads.
 跳过:GE已有（打上后无改动） d8f99faea1b ole32: Validate cached clipboard window handle in get_clipbrd_window.
-合入:0068 b13ed37c3fd mscms: Add stub for `WcsCreateIccProfile()`.
-合入:0069 838cb5a6ceb dnsapi: Add stub for DnsStartMulticastQuery().
-合入:0070 8f73d59870f dnsapi: Add stub for DnsStopMulticastQuery().
+合入:0066 b13ed37c3fd mscms: Add stub for `WcsCreateIccProfile()`.
+合入:0067 838cb5a6ceb dnsapi: Add stub for DnsStartMulticastQuery().
+合入:0068 8f73d59870f dnsapi: Add stub for DnsStopMulticastQuery().
 跳过:GE已有（打上后无改动） 4b2054da492 wined3d: Clear backup_dc and backup_wnd when deleting them.
-合入:0071 fb709050f4b wined3d: Reset internal_format_set when using the backup DC.
+合入:0069 fb709050f4b wined3d: Reset internal_format_set when using the backup DC.
 跳过:GE已有（打上后无改动） 9bca25d22fe mfsrcsnk: Use SetCurrentPosition() for absolute byte stream seeks.
 跳过:GE有同名补丁 7245abb496f mfsrcsnk: Ignore empty byte stream origin names.
 跳过:GE有同名补丁 be6af5dc5fc ntoskrnl.exe: Implement KeAcquireGuardedMutex.
@@ -108,54 +108,54 @@
 跳过:GE已有（编译时发现类型冲突） eeb572ad5c1 ntoskrnl.exe: Add stub for KeDeregisterBugCheckReasonCallback().
 跳过:冲突 8d73211e959 ntoskrnl.exe: Implement PsGetProcessSessionId.
 跳过:GE已有（打上后无改动） 886e42e74b1 ntoskrnl.exe: Use the cached session id in PsGetCurrentProcessSessionId.
-合入:0072 1d477da5f0a ntoskrnl.exe/tests: Add tests for PsGetProcessSessionId.
+合入:0070 1d477da5f0a ntoskrnl.exe/tests: Add tests for PsGetProcessSessionId.
 跳过:冲突 26becb3fff1 ntoskrnl.exe: Implement PsGetProcessCreateTimeQuadPart.
-合入:0073 7f360264f6b ntoskrnl.exe/tests: Add tests for PsGetProcessCreateTimeQuadPart.
+合入:0071 7f360264f6b ntoskrnl.exe/tests: Add tests for PsGetProcessCreateTimeQuadPart.
 跳过:冲突 088787f0c17 ntoskrnl.exe: Implement PsGetThreadProcess.
-合入:0074 f1685d56da8 ntoskrnl.exe/tests: Add tests for PsGetThreadProcess.
-合入:0075 2d029d06ace ntoskrnl.exe: Implement PsGetProcessPeb.
-合入:0076 f792ce87746 ntoskrnl.exe/tests: Add tests for PsGetProcessPeb.
-合入:0077 b85fe1dd06d ntoskrnl.exe/tests: Add tests for PsGetContextThread.
+合入:0072 f1685d56da8 ntoskrnl.exe/tests: Add tests for PsGetThreadProcess.
+合入:0073 2d029d06ace ntoskrnl.exe: Implement PsGetProcessPeb.
+合入:0074 f792ce87746 ntoskrnl.exe/tests: Add tests for PsGetProcessPeb.
+合入:0075 b85fe1dd06d ntoskrnl.exe/tests: Add tests for PsGetContextThread.
 跳过:GE已有（编译时发现重复定义） b234077648e server: Allow creating token kernel objects.
-合入:0078 b6d3197d03d ntoskrnl.exe/tests: Add tests for token kernel objects.
+合入:0076 b6d3197d03d ntoskrnl.exe/tests: Add tests for token kernel objects.
 跳过:冲突 2b436291222 ntoskrnl.exe: Implement PsReferencePrimaryToken.
 跳过:冲突 244e4ece4a4 ntoskrnl.exe: Implement PsDereferencePrimaryToken.
-合入:0079 09e74ef80ad ntoskrnl.exe/tests: Add tests for PsReferencePrimaryToken.
+合入:0077 09e74ef80ad ntoskrnl.exe/tests: Add tests for PsReferencePrimaryToken.
 跳过:冲突 70cada90c1b ntoskrnl.exe: Implement MmGetPhysicalMemoryRanges.
-合入:0080 57fb6023a57 ntoskrnl.exe/tests: Add tests for MmGetPhysicalMemoryRanges.
+合入:0078 57fb6023a57 ntoskrnl.exe/tests: Add tests for MmGetPhysicalMemoryRanges.
 跳过:冲突 ec05f86e7fd ntoskrnl.exe: Implement SeLocateProcessImageName.
-合入:0081 9df82391466 ntoskrnl.exe/tests: Add tests for SeLocateProcessImageName.
+合入:0079 9df82391466 ntoskrnl.exe/tests: Add tests for SeLocateProcessImageName.
 跳过:GE已有（编译时发现重复定义） 13a723a7cd3 ntoskrnl.exe: Add semi-stub for MmGetVirtualForPhysical.
 跳过:GE已有（编译时发现重复定义） 4684a38c10e ntoskrnl.exe: Add stub for KeCapturePersistentThreadState.
 跳过:冲突 bd8271ec038 ntoskrnl.exe: Implement PsGetProcessImageFileName.
-合入:0082 f29142cbb1a ntoskrnl.exe/tests: Add tests for PsGetProcessImageFileName.
+合入:0080 f29142cbb1a ntoskrnl.exe/tests: Add tests for PsGetProcessImageFileName.
 跳过:冲突 341f17e57e9 winegstreamer/wma_decoder: Implement GetInputCurrentType.
 跳过:冲突 5dadcd9dff2 winegstreamer/wma_decoder: Implement GetOutputCurrentType.
-合入:0083 d49208b7940 dnsapi: Implement DnsServiceConstructInstance() and DnsServiceFreeInstance().
-合入:0084 17e16ec42b8 dnsapi/tests: Add tests for DnsServiceConstructInstance().
-合入:0085 170dd50dccc dnsapi: Add stubs for the DNS-SD service entry points.
-合入:0086 6e4e78875c5 pdh: Avoid access violation in PdhCloseQuery on bad handle.
-合入:0087 0fcbda88ea4 powrprof: Stub PowerReadACValueIndex.
+合入:0081 d49208b7940 dnsapi: Implement DnsServiceConstructInstance() and DnsServiceFreeInstance().
+合入:0082 17e16ec42b8 dnsapi/tests: Add tests for DnsServiceConstructInstance().
+合入:0083 170dd50dccc dnsapi: Add stubs for the DNS-SD service entry points.
+合入:0084 6e4e78875c5 pdh: Avoid access violation in PdhCloseQuery on bad handle.
+合入:0085 0fcbda88ea4 powrprof: Stub PowerReadACValueIndex.
 跳过:冲突 7330e638234 evr: Implement IMFVideoDisplayControl::SetRenderingPrefs().
 跳过:GE已有（打上后无改动） 44848063e00 evr/tests: Add tests for IMFVideoDisplayControl rendering preferences.
-合入:0088 fc1e81734c3 ntoskrnl.exe: Implement MmMapLockedPagesSpecifyCache().
-合入:0089 265dc1c2c1a ntoskrnl.exe/tests: Test the MDL flags maintained by test_mdl_map().
-合入:0090 94b7c719199 ntoskrnl.exe: Implement MmUnmapLockedPages().
-合入:0091 6f6850a5d5d ntoskrnl.exe: Implement MmProbeAndLockPages() and MmUnlockPages().
-合入:0092 e2298dbc41f ntoskrnl.exe/tests: Test MmBuildMdlForNonPagedPool().
-合入:0093 ab39f8dcc3e ntoskrnl.exe: Implement MmBuildMdlForNonPagedPool().
+合入:0086 fc1e81734c3 ntoskrnl.exe: Implement MmMapLockedPagesSpecifyCache().
+合入:0087 265dc1c2c1a ntoskrnl.exe/tests: Test the MDL flags maintained by test_mdl_map().
+合入:0088 94b7c719199 ntoskrnl.exe: Implement MmUnmapLockedPages().
+合入:0089 6f6850a5d5d ntoskrnl.exe: Implement MmProbeAndLockPages() and MmUnlockPages().
+合入:0090 e2298dbc41f ntoskrnl.exe/tests: Test MmBuildMdlForNonPagedPool().
+合入:0091 ab39f8dcc3e ntoskrnl.exe: Implement MmBuildMdlForNonPagedPool().
 跳过:冲突 d5e436399c6 ntoskrnl.exe: Implement PsGetContextThread.
-合入:0094 e56c3ec5ba8 server: Determine the highest resolution epoll_wait function to use at run-time.
-合入:0095 2a3005c60f8 ntdll: Make futex spinlock adaptive.
-合入:0096 58724a12797 ntdll: Increase number of futex queues to 1024.
-合入:0097 df050a35bb1 ntdll: Improve futex queue selection to reduce collisions.
-合入:0098 e9ecfed65c2 gdi32/tests: Add a test for runtime font smoothing changes.
-合入:0099 6b488182bc5 win32u: Respect runtime font smoothing settings.
-合入:0100 2e235269508 winex11.drv: Preserve disabled font smoothing.
+合入:0092 e56c3ec5ba8 server: Determine the highest resolution epoll_wait function to use at run-time.
+合入:0093 2a3005c60f8 ntdll: Make futex spinlock adaptive.
+合入:0094 58724a12797 ntdll: Increase number of futex queues to 1024.
+合入:0095 df050a35bb1 ntdll: Improve futex queue selection to reduce collisions.
+合入:0096 e9ecfed65c2 gdi32/tests: Add a test for runtime font smoothing changes.
+合入:0097 6b488182bc5 win32u: Respect runtime font smoothing settings.
+合入:0098 2e235269508 winex11.drv: Preserve disabled font smoothing.
 跳过:冲突 47dde7d043d ntdll: Add wine-cachyos branding message.
 跳过:冲突 4eca09f67ce winelib: Append '(CachyOS)' at the end of the version string.
-合入:0101 33b020ffae0 fsync: enable fsync by default
-合入:0102 0cceead6733 ntdll: use llvm compatible asm
+合入:0099 33b020ffae0 fsync: enable fsync by default
+合入:0100 0cceead6733 ntdll: use llvm compatible asm
 跳过:冲突 80e21dd812e ntdll: Never use CLOCK_REALTIME_COARSE.
 跳过:冲突 230b74d1237 Revert "winegstreamer/media-converter: Factor videoconv stream discarding into helper function."
 跳过:规则 5bf2be2198f Revert "winedmo/media-converter: Use mark_transcoded_stream()."
@@ -173,28 +173,28 @@
 跳过:规则 39807365842 HACK: winegstreamer: add manual method of forcing winegstreamer and setting video orientation
 跳过:规则 649ad05f62a HACK: winegstreamer: Prevent applying PROTON_GST_VIDEO_ORIENTATION to audio streams.
 跳过:冲突 383bfa293da HACK: winegstreamer: Do not use an opengl context in new wow64 mode
-合入:0103 902ee822db0 loader: fixup for clang when using lto
-合入:0104 d9b10083153 loader: Show dotfiles by default.
-合入:0105 37bf3fecae0 configure: Enforce 4-byte stack alignment on clang for PE builds.
-合入:0106 2c32f1295cf makedep: add per-source cflags and per-program ldflags variables
-合入:0107 af79c761de4 ntdll: fix compilation with link-time optimizations
-合入:0108 c6e5b0967f9 ntdll: Implement RtlAreLongPathsEnabled.
+合入:0101 902ee822db0 loader: fixup for clang when using lto
+合入:0102 d9b10083153 loader: Show dotfiles by default.
+合入:0103 37bf3fecae0 configure: Enforce 4-byte stack alignment on clang for PE builds.
+合入:0104 2c32f1295cf makedep: add per-source cflags and per-program ldflags variables
+合入:0105 af79c761de4 ntdll: fix compilation with link-time optimizations
+合入:0106 c6e5b0967f9 ntdll: Implement RtlAreLongPathsEnabled.
 跳过:冲突 e2ca6e736a6 ntdll: Also trap syscalls in the top-down reserved area
-合入:0109 3e5ea1549cf ntdll: Add SystemPowerInformation semi-stub.
+合入:0107 3e5ea1549cf ntdll: Add SystemPowerInformation semi-stub.
 跳过:冲突 f9d29b5ad4c ntdll: Allow seccomp setup on limited VA systems.
 跳过:GE有同名补丁 5ea54552139 win32u: Add support for VK_NV_low_latency2
 跳过:GE有同名补丁 2708b94ea6b win32u: add env switch to disable wm decorations
 跳过:冲突 58833ece1a3 win32u: fshack: Implement AMD FSR upscaler for fullscreen hack
 跳过:GE有同名补丁 8085ac9b8fd winex11: add Muffin (Cinnamon) to Mutter detection
-合入:0110 f2299635d0d sechost: Add stubs for ControlServiceExA/W
+合入:0108 f2299635d0d sechost: Add stubs for ControlServiceExA/W
 跳过:冲突 7ccbf201604 ws2_32: add environment variable to block certain hosts
-合入:0111 2aa0c0c73ab advapi32: Add semi-stub for RegCreateKeyTransacted[A/W].
+合入:0109 2aa0c0c73ab advapi32: Add semi-stub for RegCreateKeyTransacted[A/W].
 跳过:GE有同名补丁 cf738726329 Import atidxx implementation
 跳过:GE已有（打上后无改动） a83ba58a541 HACK: kernelbase: Don't fail when RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ in dwFlags are set.
 跳过:GE已有（打上后无改动） 130c37b7623 HACK: kernelbase: allow overriding dlls for DLSS, XeSS, FSR4 and FSR3
-合入:0112 e594e636942 HACK: kernelbase: add hack to load optiscaler's dll from an external location
-合入:0113 1ed084cc0cd HACK: kernelbase: remove loaddll_optiscaler_hack from LoadLibraryExW
-合入:0114 fbfff2ca7cb HACK: kernelbase: add WINE_LOADDLL_REDIRECT to handle arbitrary dlls and paths
+合入:0110 e594e636942 HACK: kernelbase: add hack to load optiscaler's dll from an external location
+合入:0111 1ed084cc0cd HACK: kernelbase: remove loaddll_optiscaler_hack from LoadLibraryExW
+合入:0112 fbfff2ca7cb HACK: kernelbase: add WINE_LOADDLL_REDIRECT to handle arbitrary dlls and paths
 跳过:GE有同名补丁 ce3e10e1b7f HACK: ntdll: add optiscaler injection hack
 跳过:GE有同名补丁 0ac0ff70278 HACK: wine.inf: Add override for diabotical
 跳过:GE有同名补丁 876d5d2f886 HACK: wine.inf: Add workaround for WRC9
@@ -203,10 +203,10 @@
 跳过:冲突 e57237da347 HACK: mfplat: Fall back on async bytestream read calls in mfplat
 跳过:冲突 c202eba971a HACK: winegstreamer: Accumulate data in wg media source
 跳过:冲突 becdd4610bd HACK: ntdll: skip file search for Phantasy Star Online 2.
-合入:0115 34517ba2ab5 HACK: ntdll: Add WINE_DISABLE_SFN option. Fixes Yakuza 5 cutscenes.
+合入:0113 34517ba2ab5 HACK: ntdll: Add WINE_DISABLE_SFN option. Fixes Yakuza 5 cutscenes.
 跳过:GE已有（打上后无改动） 9e027599589 HACK: ncrypt: NCryptDecrypt implementation. Fixes PSN Login for Ghost of Tsushima.
 跳过:冲突 78fc9175515 HACK: kernelbase: SetCurrentDirectoryW workaround for Vanguard: Saga of Heroes.
-合入:0116 d22248a87ab HACK: win32u: Fix xinput support for Dragon Age Inquisition.
+合入:0114 d22248a87ab HACK: win32u: Fix xinput support for Dragon Age Inquisition.
 跳过:GE已有（打上后无改动） 7c10c0856dc HACK: Add font workaround for Assetto Corsa hud
 跳过:规则 a90b1ba0565 Revert "HACK: Add font workaround for Assetto Corsa hud"
 跳过:冲突 df8adb3bedf Revert "HACK: winegstreamer: Accumulate data in wg media source"
@@ -216,12 +216,12 @@
 跳过:规则 db6f1eba71f HACK: wine.inf: default to 'rgb' font smoothing
 跳过:规则 d903c9f0d18 Revert "HACK: wine.inf: default to 'rgb' font smoothing"
 跳过:冲突 8b15816a31e HACK: win32u: Substitute non-zero WM_ACTIVATEAPP lparam for Guilty Gear XX Accent Core Plus R.
-合入:0117 38c73b4477b HACK: win32u: Force opaque webviews for Wuthering Waves.
+合入:0115 38c73b4477b HACK: win32u: Force opaque webviews for Wuthering Waves.
 跳过:规则 4b4a75babe9 HACK: winegstreamer: rename PROTON_MEDIA_USE_GST to PROTON_MEDIA_FORCE_GST to disable fixes
-合入:0118 7895e30840b ntdll: Default to Windows 11（改过：RegSetValueExW 传 &win11_maj_ver，原来把数值当指针）
+合入:0116 7895e30840b ntdll: Default to Windows 11（改过：RegSetValueExW 传 &win11_maj_ver，原来把数值当指针）
 跳过:GE有同名补丁 a5b50f8c1da server: Dynamically relocate .exes by default too
 跳过:冲突 aba2072dd43 Revert "server: Dynamically relocate .exes by default too"
-合入:0119 eecf5139337 win32u: Silence NtGdiDdDDIQueryStatistics spam
+合入:0117 eecf5139337 win32u: Silence NtGdiDdDDIQueryStatistics spam
 跳过:冲突 9bba31fc6a1 HACK: proton: winegstreamer: Allow dynamic format changes on raw parser connections.
 跳过:GE已有（打上后无改动） 83e23bfcbbc HACK: winegstreamer: Add semi-stub for GetAttributeIndices/GetAttributeByIndexEx.
 跳过:冲突 8524548641f mfreadwrite: Derive decoded audio block alignment and byte rate from the output format.
@@ -233,10 +233,10 @@
 跳过:GE已有（打上后无改动） 21adab0f822 ntdll: Add support for hiding wine version information from applications.
 跳过:GE有同名补丁 cbbcce3ef3f winepulse: Add aux0 and aux1 channels.
 跳过:GE有同名补丁 9c615acbc73 ntdll/server: Mark drive_c as case-insensitive when created
-合入:0120 1c8a5db0159 mshtml: Add IXMLSerializer implementation.
-合入:0121 fa3b7112cfe libs/xml2: Tolerate embedded XML declarations inside elements.
-合入:0122 02be3be789d mshtml/msxml3/tests: Add tests for XMLSerializer and embedded XML declarations.
-合入:0123 c2f561a1c3a msxml3: Wrap embedded XML content in CDATA for Adobe installer compatibility
+合入:0118 1c8a5db0159 mshtml: Add IXMLSerializer implementation.
+合入:0119 fa3b7112cfe libs/xml2: Tolerate embedded XML declarations inside elements.
+合入:0120 02be3be789d mshtml/msxml3/tests: Add tests for XMLSerializer and embedded XML declarations.
+合入:0121 c2f561a1c3a msxml3: Wrap embedded XML content in CDATA for Adobe installer compatibility
 跳过:GE有同名补丁 ecfbec67c02 loader: Add Keyboard Layouts registry enteries.
 跳过:GE有同名补丁 d449a44005c winecfg: Add staging tab for CSMT.
 跳过:GE有同名补丁 d0d8380dd62 winecfg: Add checkbox to enable/disable vaapi GPU decoder.
@@ -338,7 +338,7 @@
 跳过:GE已有（打上后无改动） a7022ef890b win32u: Reduce log spam of NtUserActivateKeyboardLayout.
 跳过:GE有同名补丁 3163dfa674e winewayland: Require wl_seat version 3.
 跳过:GE有同名补丁 62597f5b11c winewayland: Add missing traces for client surfaces.
-合入:0124 75288d5a657 winewayland: Don't rely on win32u keystate for release_all_keys.
+跳过:GE有同名补丁（第一次比对漏了：GE的标题折行） 75288d5a657 winewayland: Don't rely on win32u keystate for release_all_keys.
 跳过:GE有同名补丁 30ce342ba82 winewayland: Add a third roundtrip during init.
 跳过:GE有同名补丁 1007cbc849b win32u: Add WINE_ENABLE_HARDWARE_SCHEDULING option.
 跳过:GE有同名补丁 542a19a8a2d amdxc: Make IAmdExtD3DFactory a singleton
@@ -360,7 +360,7 @@
 跳过:GE已有（打上后无改动） 843453da936 winewayland: Fix y coordinate of IME cursor rectangle.
 跳过:冲突 dcae050ee56 fixup! winewayland: Do not recursively lock with NtUserExposeWindowSurface.
 跳过:GE有同名补丁 d2c795527af amdxc: Print FSR4 FP16 fixme only once.
-合入:0125 57e1f4f2230 winewayland: Fix race condition with processing and requested config.
+跳过:GE有同名补丁（第一次比对漏了：GE的标题折行） 57e1f4f2230 winewayland: Fix race condition with processing and requested config.
 跳过:GE已有（打上后无改动） 9db16eb4236 winewayland: Set an event queue name for the buffer queue.
 跳过:GE有同名补丁 89265b1a8b5 winewayland: Log protocol errors when they occur.
 跳过:冲突 ba6a3609284 winewayland: Dump exstyle in wayland_win_data_get_config.
@@ -384,7 +384,7 @@
 跳过:冲突 f233cfc8e91 winewayland: Add support for wl_fixes.ack_global_remove.
 跳过:冲突 4b0a0d072ba winewayland: Avoid repositioning client surfaces when unnecessary.
 跳过:冲突 47ec600e5f5 winewayland: Pass wayland_client_surface into wayland_client_surface_attach_image_description.
-合入:0126 799cbc24630 winewayland: Change vulkan debug channel to waylanddrv.
+跳过:GE有同名补丁（第一次比对漏了：GE的标题折行） 799cbc24630 winewayland: Change vulkan debug channel to waylanddrv.
 跳过:GE有同名补丁 da4639986bc atiadlxx: Implement ADL_Adapter_AdapterInfoX2_Get.
 跳过:GE有同名补丁 344ad7924ab atiadlxx: Set Catalyst driver version.
 跳过:GE已有（打上后无改动） c2af72c1751 atiadlxx: Add semi-stub for ADL2_Graphics_VersionsX3_Get.
@@ -457,50 +457,50 @@
 跳过:冲突 a9a07330dba win32u: Check the owner hint window above and to the left seperately.
 跳过:冲突 b07d403d7d8 winewayland: Fix German qwerty scan2vk.
 跳过:冲突 a3b230b3870 winewayland: Add support for steam overlay event.
-合入:0127 93178ca9feb amdxc: Only load amdxc and exports once.
-合入:0128 7988a0dd37c amdxc: Check if mlfg/fsr4 upgrades are enabled in init once routine.
+合入:0122 93178ca9feb amdxc: Only load amdxc and exports once.
+合入:0123 7988a0dd37c amdxc: Check if mlfg/fsr4 upgrades are enabled in init once routine.
 跳过:冲突 4ea1357e7fe fixup! HACK: win32u: Do not cache DC for opwr.
 跳过:冲突 da76c83bff4 winewayland: always unref the dummy buffer immediately.
-合入:0129 2f28f70be58 winewayland: Fix a error path in color management impl.
+合入:0124 2f28f70be58 winewayland: Fix a error path in color management impl.
 跳过:GE有同名补丁 2019ac189d1 server: Store keyboard layout in thread struct.
 跳过:GE有同名补丁 ba82f374d4c win32u: Remove duplicate definition.
 跳过:冲突 28118936887 HACK: kernel32: Spoof GetProcAddress of KiUserApcDispatcher and KiUserCallbackDispatcher.
 跳过:GE有同名补丁 55adb3dc5d8 wdfldr.sys: Add stub dll.
-合入:0130 c820a9de7ce HACK: kernelbase: Delay return for VersionService.exe.
-合入:0131 fbba0cf9827 HACK: winex11: Skip rendering some overlay windows.
+合入:0125 c820a9de7ce HACK: kernelbase: Delay return for VersionService.exe.
+合入:0126 fbba0cf9827 HACK: winex11: Skip rendering some overlay windows.
 跳过:GE已有（打上后无改动） 7a9f39b82a5 ntdll: Implement NtDelayExecution relative wait using QPC.
-合入:0132 aa8ffedc34a HACK: powershell: Return 1 for Netmarble Launcher.
-合入:0133 60f61ec7065 HACK: wintrust: Stub some APIs for some games.
-合入:0134 4b8f59a5dd9 winecrt0: Use movdqu in the x86_64 setjmp/longjmp helpers.
-合入:0135 6ad76326ddf wine.inf.in: Add SystemStartOptions value.
-移植:0136 1df9512dab4 server: Add a request to move a process to another session.
-合入:0137 a2175ef2e23 ntdll: Implement NtSetInformationProcess(ProcessWineSessionId).
-合入:0138 381630deb23 include: Make the service control manager started event global.
-合入:0139 96082b1f995 csrss, lsass: Add stubs.
-合入:0140 a000117363a wineboot: Start the csrss.exe and lsass.exe stubs.
-移植:0141 95f710a924d server: Keep track of loaded kernel modules.
-合入:0142 7cfa427913a ntoskrnl.exe: Register loaded kernel modules with the server.
-合入:0143 9fc5036948a ntdll: Report loaded kernel drivers in SystemModuleInformation.
-合入:0144 b47ee5b9ddc server: Drop the kernel modules of a process that exits.
-合入:0145 6771cde7d74 ntdll/tests: Check that kernel module names are reported.
-合入:0146 6f0322fbc9a services: Optionally run in session 0.
-移植:0147 50b943f1962 wdfldr.sys: Implement component loader.
-移植:0148 c46fe791dc8 wdfldr.sys: Implement WdfRegisterLibrary.
-移植:0149 9b14fc56b86 wdf01000.sys: Add KMDF stub.
-移植:0150 cbca88d92f3 wdf01000.sys: Populate index 201 in the FuncTable.
-合入:0151 b425d141444 wpprecorder.sys: Add stub library.
+合入:0127 aa8ffedc34a HACK: powershell: Return 1 for Netmarble Launcher.
+合入:0128 60f61ec7065 HACK: wintrust: Stub some APIs for some games.
+合入:0129 4b8f59a5dd9 winecrt0: Use movdqu in the x86_64 setjmp/longjmp helpers.
+合入:0130 6ad76326ddf wine.inf.in: Add SystemStartOptions value.
+移植:0131 1df9512dab4 server: Add a request to move a process to another session.
+合入:0132 a2175ef2e23 ntdll: Implement NtSetInformationProcess(ProcessWineSessionId).
+合入:0133 381630deb23 include: Make the service control manager started event global.
+合入:0134 96082b1f995 csrss, lsass: Add stubs.
+合入:0135 a000117363a wineboot: Start the csrss.exe and lsass.exe stubs.
+移植:0136 95f710a924d server: Keep track of loaded kernel modules.
+合入:0137 7cfa427913a ntoskrnl.exe: Register loaded kernel modules with the server.
+合入:0138 9fc5036948a ntdll: Report loaded kernel drivers in SystemModuleInformation.
+合入:0139 b47ee5b9ddc server: Drop the kernel modules of a process that exits.
+合入:0140 6771cde7d74 ntdll/tests: Check that kernel module names are reported.
+合入:0141 6f0322fbc9a services: Optionally run in session 0.
+移植:0142 50b943f1962 wdfldr.sys: Implement component loader.
+移植:0143 c46fe791dc8 wdfldr.sys: Implement WdfRegisterLibrary.
+移植:0144 9b14fc56b86 wdf01000.sys: Add KMDF stub.
+移植:0145 cbca88d92f3 wdf01000.sys: Populate index 201 in the FuncTable.
+合入:0146 b425d141444 wpprecorder.sys: Add stub library.
 跳过:冲突 58ef4a499cf fixup! HACK: kernel32: Spoof GetProcAddress of KiUserApcDispatcher and KiUserCallbackDispatcher.
-合入:0152 e6367dcad8a HACK: ws2_32: Block first internet connection for some games.（改过：声明挪到语句前面，-Werror）
-合入:0153 935ffe3ed9b HACK: winex11: Make WM focus window with WINE_USE_TAKE_FOCUS.
-合入:0154 ef454eaff91 HACK: ws2_32: Allow changing request timeout with WINE_ENABLE_TIMEOUT_FIX=1.
-合入:0155 8bfc3be98b9 crypt32: Don't sort items when updating attributes for verification.
-合入:0156 09a9cb034e5 ntoskrnl.exe: Call DriverInit with bits 48-64 of return address set.
-合入:0157 593daa15ba1 ntoskrnl.exe: Add MmCopyMemory stub.
-合入:0158 4acd1acf8a1 ntoskrnl.exe: Pass only the service name in DriverExtension->ServiceKeyName.
+合入:0147 e6367dcad8a HACK: ws2_32: Block first internet connection for some games.（改过：声明挪到语句前面，-Werror）
+合入:0148 935ffe3ed9b HACK: winex11: Make WM focus window with WINE_USE_TAKE_FOCUS.
+合入:0149 ef454eaff91 HACK: ws2_32: Allow changing request timeout with WINE_ENABLE_TIMEOUT_FIX=1.
+合入:0150 8bfc3be98b9 crypt32: Don't sort items when updating attributes for verification.
+合入:0151 09a9cb034e5 ntoskrnl.exe: Call DriverInit with bits 48-64 of return address set.
+合入:0152 593daa15ba1 ntoskrnl.exe: Add MmCopyMemory stub.
+合入:0153 4acd1acf8a1 ntoskrnl.exe: Pass only the service name in DriverExtension->ServiceKeyName.
 跳过:冲突 d077b3f5c3e ntoskrnl.exe: Add stub for PsGetProcessExitStatus.
-合入:0159 84407729bf2 HACK: ntoskrnl.exe: Keep section views mapped while a locked MDL uses them.
-移植:0160 dac7007ad0a HACK: ntoskrnl.exe: Make PsGetContextThread a thunk around a helper.
-合入:0161 b68fd494028 server: Don't clip other process children to layered windows.
-移植:0162 413c7b116a5 winex11: Implement drawing onto ARGB windows of other processes.
-合入:0163 eea12a66f57 user32: Use X11 for cross-process launcher UIs under Wine-Wayland
-合入:0164 17dcd6721e1 HACK: user32: Also force X11 for launchers using webview2.
+合入:0154 84407729bf2 HACK: ntoskrnl.exe: Keep section views mapped while a locked MDL uses them.
+移植:0155 dac7007ad0a HACK: ntoskrnl.exe: Make PsGetContextThread a thunk around a helper.
+合入:0156 b68fd494028 server: Don't clip other process children to layered windows.
+移植:0157 413c7b116a5 winex11: Implement drawing onto ARGB windows of other processes.
+跳过:GE有同名补丁但有意停用（GE的Wayland驱动直接画跨进程启动器窗口） eea12a66f57 user32: Use X11 for cross-process launcher UIs under Wine-Wayland
+跳过:依赖上一个（跨进程启动器回退到X11），GE有意停用 17dcd6721e1 HACK: user32: Also force X11 for launchers using webview2.

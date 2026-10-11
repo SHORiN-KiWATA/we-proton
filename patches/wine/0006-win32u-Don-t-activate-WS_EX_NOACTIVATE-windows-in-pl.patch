@@ -1,4 +1,4 @@
-From d206d03fbe58765d6b54aa67631f3a24cf4a9389 Mon Sep 17 00:00:00 2001
+From 40db36d75ca8fafb3ed24f665ece9107d5953c57 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Wed, 7 Oct 2026 18:26:38 +0900
 Subject: [PATCH] win32u: Don't activate WS_EX_NOACTIVATE windows in place of a

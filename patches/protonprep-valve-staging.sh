@@ -37,6 +37,9 @@ apply_all_in_dir() {
     pushd vkd3d-proton
     git reset --hard HEAD
     git clean -xdf
+    # WE-Proton's we-* patch changes the nested dxil-spirv submodule, which the
+    # reset above doesn't touch
+    git submodule foreach --recursive --quiet 'git reset --hard -q HEAD && git clean -xdfq'
     echo "VKD3D-PROTON: prevent stalled present waits from deadlocking swapchain teardown"
     apply_all_in_dir "../patches/vkd3d-proton/"
     popd

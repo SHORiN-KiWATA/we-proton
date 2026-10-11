@@ -42,7 +42,7 @@ WE-Proton 是基于 GE-Proton 和 DW-Proton 的个人 Proton：以 GE-Proton（`
 
 然后在启动器里选 `@NAME@`。
 
-它要在 Steam Linux Runtime 4.0 里运行（`toolmanifest.vdf` 里的 `require_tool_appid 4183110`）。Steam、umu、Lutris、wegame-launcher 会自动这样做；在运行时外面直接执行 `proton` 时，自带的 GStreamer 插件等缺少依赖库，视频和音频解码之类的功能会出问题。
+它要在 Steam Linux Runtime 4.0 里运行（`toolmanifest.vdf` 里的 `require_tool_appid 4183110`）。Steam、umu、Lutris、wegame-launcher 会自动这样做；在运行时外面直接执行 `proton` 时，自带的音视频解码库等缺少依赖，视频和音频之类的功能会出问题。
 
 ## 说明
 

@@ -1,0 +1,58 @@
+From 1337fa9d289507f6f023b36c46371922cc0cccd5 Mon Sep 17 00:00:00 2001
+From: Stelios Tsampas <loathingkernel@gmail.com>
+Date: Thu, 9 Apr 2026 15:50:43 +0300
+Subject: [PATCH] HACK: kernelbase: add hack to load optiscaler's dll from an
+ external location
+
+The matching intentionally matches `name.dll` exactly to allow optiscaler
+to load the real dll through the fully qualified path.
+
+(cherry picked from commit 176fbc5fc72e662a6e533856adbd2add9554d2d5)
+---
+ dlls/kernelbase/loader.c | 25 ++++++++++++++++++++++++-
+ 1 file changed, 24 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/kernelbase/loader.c b/dlls/kernelbase/loader.c
+index fc93eda8038..5fa2acd4d34 100644
+--- a/dlls/kernelbase/loader.c
++++ b/dlls/kernelbase/loader.c
+@@ -550,6 +550,26 @@ HMODULE WINAPI DECLSPEC_HOTPATCH LoadLibraryExA( LPCSTR name, HANDLE file, DWORD
+ }
+ 
+ 
++/*
++ * LoadLibraryExW optiscaler hack
++ */
++BOOL loaddll_optiscaler_hack(LPCWSTR name, LPWSTR override, DWORD size)
++{
++    WCHAR dllW[64] = {0};
++    UINT ret;
++
++    ret = GetEnvironmentVariableW( L"WINE_OPTISCALER_NAME", dllW, sizeof(dllW));
++    if ( !ret || ret >= ARRAY_SIZE(dllW) ) return FALSE;
++
++    if ( !wcscmp( name, dllW ) )
++    {
++        swprintf( override, size, L"c:\\windows\\system32\\umu\\%s", dllW );
++        return TRUE;
++    }
++
++    return FALSE;
++}
++
+ /*
+  * LoadLibraryExW upscaler hack
+  */
+@@ -617,8 +637,11 @@ HMODULE WINAPI DECLSPEC_HOTPATCH LoadLibraryExW( LPCWSTR name, HANDLE file, DWOR
+         flags = 0;
+     }
+ 
+-    if ( loaddll_upscaler_hack(name, overrideW) )
++    if ( loaddll_optiscaler_hack(name, overrideW, ARRAY_SIZE(overrideW))
++        || loaddll_upscaler_hack(name, overrideW) )
++    {
+         FIXME( "HACK: redirecting %s to %s\n", debugstr_w(name), debugstr_w(overrideW));
++    }
+ 
+     RtlInitUnicodeString( &str, overrideW[0] ? overrideW : name );
+     if (str.Length && str.Buffer[str.Length/sizeof(WCHAR) - 1] != ' ') return load_library( &str, flags );

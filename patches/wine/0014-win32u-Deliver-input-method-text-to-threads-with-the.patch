@@ -1,4 +1,4 @@
-From 6d5fca68a6258f06b7adc6ea3e42ea7b58fafe6c Mon Sep 17 00:00:00 2001
+From 98cd3175e7be3462b7702be726d8a7995a921431 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Thu, 8 Oct 2026 22:07:17 +0900
 Subject: [PATCH] win32u: Deliver input method text to threads with the IME

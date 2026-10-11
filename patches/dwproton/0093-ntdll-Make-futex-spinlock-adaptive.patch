@@ -1,0 +1,40 @@
+From feeb8e5e785a0d637710b91d81621d08b2fe3007 Mon Sep 17 00:00:00 2001
+From: Marc-Aurel Zent <mzent@codeweavers.com>
+Date: Tue, 21 Apr 2026 12:38:57 +0200
+Subject: [PATCH] ntdll: Make futex spinlock adaptive.
+
+(cherry picked from commit d12616832c7475fcd09d94f150a6c7dbe1fcc30c)
+---
+ dlls/ntdll/sync.c | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/ntdll/sync.c b/dlls/ntdll/sync.c
+index cc54687b7e2..c99e484b08a 100644
+--- a/dlls/ntdll/sync.c
++++ b/dlls/ntdll/sync.c
+@@ -849,8 +849,24 @@ static struct futex_queue *get_futex_queue( const void *addr )
+ 
+ static void spin_lock( LONG *lock )
+ {
+-    while (InterlockedCompareExchange( lock, -1, 0 ))
++    unsigned int i;
++
++    if (!InterlockedCompareExchange( lock, -1, 0 ))
++        return;
++
++    for (i = 0; i < 64; i++)
++    {
+         YieldProcessor();
++        if (!ReadNoFence( lock ) && !InterlockedCompareExchange( lock, -1, 0 ))
++            return;
++    }
++
++    for (;;)
++    {
++        NtYieldExecution();
++        if (!ReadNoFence( lock ) && !InterlockedCompareExchange( lock, -1, 0 ))
++            return;
++    }
+ }
+ 
+ static void spin_unlock( LONG *lock )
