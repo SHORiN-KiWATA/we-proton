@@ -23,6 +23,7 @@
 | wine 0017 | 用 `IP_UNICAST_IF` 指定出口网卡的程序（TUN 模式的加速器/VPN）在 Wine 里 TCP 仍按路由表走，“直连”流量被自己的虚拟网卡吃掉，表现为整个会话断网 | `0017-ip-unicast-if-tcp/` |
 | wine 0018 | 撤回 0001：带上 0001 时有程序报运行环境异常，官方包不报 | `0001-ntoskrnl-driver-functions/` |
 | wine 0019 | 撤回 0001 后《王者万象棋》闪退：驱动调用的 `InbvAcquireDisplayOwnership`/`InbvResetDisplay` 在 Wine 里是会 abort 的 stub，只把这两个空操作加回来 | `0019-ntoskrnl-inbv-display-functions/` |
+| wine 0020 | 《暗区突围：无限》进游戏两分多钟后闪退：查询窗口层级的 `NtUserGetWindowBand` 在 Wine 里是一调用就中止进程的 stub | `0020-win32u-window-band/` |
 | vkd3d-proton 0001 | dxil-spirv 生成非法的结构化控制流，RADV 拒绝后崩溃 | `vkd3d-0001-dxil-spirv-loop-breaks/` |
 
 ## 已知、没修的问题
