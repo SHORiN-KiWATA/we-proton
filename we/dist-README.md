@@ -1,6 +1,6 @@
 # @NAME@
 
-WE-Proton 是基于 GE-Proton 和 DW-Proton 的个人 Proton：以 GE-Proton（`@GE@`）为底，合入 DW-Proton（`dwproton-11.0-14`）的补丁，再补几个 Wine 和 vkd3d-proton 的 bug。**它不是 GE-Proton，也不是 DW-Proton**，遇到问题不要去那两边报告。
+WE-Proton 是基于 GE-Proton 和 DW-Proton 的个人 Proton：以 GE-Proton（`@GE@`）为底，合入 DW-Proton（`@DW@`）的补丁，再补几个 Wine 和 vkd3d-proton 的 bug。**它不是 GE-Proton，也不是 DW-Proton**，遇到问题不要去那两边报告。
 
 这是完整构建（`make redist`），不是在别人的发布包上替换文件。DW-Proton 的补丁怎么挑的、丢了哪些，见源码仓库的 `we/ge-dw-merge.md`。
 
@@ -55,5 +55,5 @@ WE-Proton 是基于 GE-Proton 和 DW-Proton 的个人 Proton：以 GE-Proton（`
 
 - 源码仓库：https://github.com/SHORiN-KiWATA/we-proton （构建用的提交和补丁列表见包里的 `we-proton-build-info`）
 - 打好补丁的 Wine、vkd3d-proton、dxvk 源码：Release 里的 `@NAME@-source.tar.xz`
-- 基于：GE-Proton `@GE@`（https://github.com/GloriousEggroll/proton-ge-custom ）、DW-Proton `dwproton-11.0-14`（https://dawn.wine/dawn-winery/dwproton ）
+- 基于：GE-Proton `@GE@`（https://github.com/GloriousEggroll/proton-ge-custom ）、DW-Proton `@DW@`（https://dawn.wine/dawn-winery/dwproton ）
 - Proton 及其组件（包括 Wine、vkd3d-proton）的许可证见包内的 `LICENSE`、`LICENSE.OFL`、`PATENTS.AV1`

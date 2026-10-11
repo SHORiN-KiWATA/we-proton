@@ -64,6 +64,7 @@ we/build.sh --name we-proton-<版本> --install   # 同时安装到「~/.local/s
 - `we/tests/`：测试程序和修复前后的输出
 - `we/diag/`：诊断补丁和脚本，不进正式构建
 - `we/build.sh`：构建脚本
+- `we/sync/`、`we/upstream-sync.md`：跟进 GE-Proton、DW-Proton 新版本的脚本和操作手册
 - 其余是 GE-Proton / Proton 的原有内容
 
 ## 源码与许可证

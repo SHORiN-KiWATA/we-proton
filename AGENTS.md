@@ -79,6 +79,8 @@ Delta Force or VALORANT) and does not adapt to ACE or any other anti-cheat.
   runs inside the runtime. It re-patches the submodules in place and deletes and
   recreates `build/<name>`, so do not run it while anything is running from that
   directory. Do not patch files of an installed runner by hand.
+- To follow a new GE-Proton or DW-Proton release, follow `we/upstream-sync.md` step by
+  step, including its checks and the places where it says to stop and ask the user.
 - Proton runs inside Steam Linux Runtime 4.0. Test there, not by running `proton`
   directly on the host, where its bundled media libraries are missing.
 - Check for regressions with Wine's own conformance tests (a separate

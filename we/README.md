@@ -88,6 +88,8 @@
 - `vcrt_version_probe`（0021、0022）：打印 `VC\Runtimes\<arch>` 在两个注册表视图里的值和 system32、syswow64 里运行库 DLL 的文件版本，再按“注册表和 `msvcp140_2.dll`、`vcruntime140_1.dll` 的文件版本都不低于最低版本”检查（默认 14.44.35211，参数可改）。`wine24-redist` 是装了官方 14.44.35211 运行库之后的输出
 - `dxil-spirv/run.sh`（vkd3d-proton 0001）：用 dxil-spirv 的 `structurize-test` 跑 `*.st` 控制流图，检查生成的 SPIR-V 能通过校验。源码取打过补丁的 `vkd3d-proton/`（先跑 `we/build.sh` 或 protonprep）；`--unpatched` 用未打补丁的子模块，应该失败
 
+`regress.sh <runner> <输出目录>` 一次跑完上面大部分探测（在 Steam Linux Runtime 4.0 里，和 wegame-launcher 相同的方式）；`regress.sh --compare <旧> <新>` 屏蔽掉句柄和地址后比较。每次发布的结果存在 `regress-<名字>/`，下次和它比。
+
 Wine 自己的测试：用打过补丁的 `wine/`（跑过 protonprep 之后）另配一个 `--enable-tests` 的构建目录，编 `dlls/kernel32/tests`、`dlls/ntdll/tests`、`dlls/user32/tests`（0008 是 `dlls/oleaut32/tests`、`dlls/rpcrt4/tests`，0009 是 `dlls/d3dcompiler_47/tests`、`dlls/d3dcompiler_43/tests`、`dlls/d3d10/tests`，0010 是 `dlls/winhttp/tests`（winhttp:winhttp），0011 是 `dlls/shell32/tests`（shell32:systray，有和没有 watcher 各跑一遍），0012 是 `dlls/qcap/tests`（i386 和 x86_64 都编，`WINEARCH=wow64`，要接着摄像头），0014 是 `dlls/imm32/tests`（imm32:imm32）），用新旧 runner 各跑一遍、逐条比对失败项（0005 起都这样验证）。
 
 ## 诊断
@@ -146,18 +148,11 @@ runner 名字就是 `we-proton-ge…`，wegame-launcher 自动选找到的最新
 
 ## 跟进上游新版本
 
-GE-Proton 出新版：
+照 [`upstream-sync.md`](upstream-sync.md) 一步一步做（写给 AI agent 的操作手册，每一步有命令和检查，判断不了的地方会让你停下问用户）。大致是：
 
-1. `git fetch ge --tags`，`git merge GE-Proton11-<新>`，解决顶层冲突（多半在 `patches/protonprep-valve-staging.sh`、子模块版本）。dxvk、vkd3d-proton、protonfixes 按 `ge-dw-merge.md` 的方法重新比较，GE-Proton 的版本追上了就换回它的
-2. 跑 `we/build.sh` 的打补丁那一步，看 `build/protonprep.log`。DW-Proton 或 WE-Proton 的补丁打不上时，在 Wine 开发分支上解决：
-   - 在新的 Valve Wine commit 上只跑 protonprep 的 Wine 部分、去掉最后的 `patches/dwproton/`、`patches/wine/` 两段，把结果提交成一个「GE-Proton 打完补丁」的提交
-   - 在它上面 `git am patches/dwproton/*.patch`，再 `git am patches/wine/*.patch`，冲突在这里解决；GE-Proton 已经有了的 DW 补丁直接跳过（`git am --skip`）
-   - 重新导出：`git format-patch -N --no-signature -o <目录> <起点>..<终点> -- . ':!include/wine/server_protocol.h' ':!server/request_handlers.h' ':!server/request_trace.h' ':!dlls/ntdll/ntsyscalls.h' ':!dlls/win32u/win32syscalls.h'`。这些生成文件由 protonprep 的 `make_requests` 和 `Makefile.in` 的 `make_specfiles` 重新生成，留在补丁里反而会打不上。WE 的补丁导出后把文件名改回原来的编号
-3. 构建，再跑一遍 `we/tests` 和 `we/tests/dxil-spirv/run.sh`
-
-DW-Proton 出新版：看它在 `dwproton-11.0-14` 之后新增的 Wine 提交，按 `ge-dw-merge.md` 的规则筛（GE-Proton 已有的不要，视频相关的不要），留下的接到 `patches/dwproton/` 末尾。
-
-上游修了同一个问题的话，删掉对应的补丁即可。
+- GE-Proton 出新版：合并 GE-Proton 的新 tag，解决顶层冲突（protonprep 里我们的三处改动、7zip 段、子模块版本）；`we/sync/wine-dev.sh` 在 `wine/` 里重建开发分支（GE-Proton 打完补丁的基底 + `patches/dwproton/` + `patches/wine/`）；`we/sync/dup-titles.py` 找出 GE-Proton 新版本已经带上的 DW-Proton 补丁并删掉；`we/sync/export-patches.py` 导出；构建，`we/tests/regress.sh` 和上一版的基线比较
+- DW-Proton 出新版：在 DW-Proton 的 Wine 仓库里列出新增的提交，按规则（GE-Proton 已有的不要，视频相关的不要，其余能打上的要）cherry-pick 到 `we-dw` 上，再接上 WE-Proton 的补丁，导出、构建、测试，记进 `ge-dw-merge-commits.txt` 和 `dw-proton-version`
+- 上游修了同一个问题：删掉对应的补丁
 
 ## 注意
 

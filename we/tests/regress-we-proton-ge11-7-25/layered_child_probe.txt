@@ -1,0 +1,6 @@
+host 0000000000020058 child 0000000000010060, pptDst NULL
+child rect 200,150-520,350, own X window: 0
+SAMPLE shown 200 150
+SAMPLE moved 400 300
+SAMPLE updated 400 300
+SAMPLE child-moved 400 300

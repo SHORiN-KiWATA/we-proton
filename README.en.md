@@ -62,6 +62,7 @@ The script fetches the submodules, patches them with `patches/protonprep-valve-s
 - `we/tests/`: test programs and their output before and after each fix
 - `we/diag/`: diagnostic patches and scripts, not part of the release build
 - `we/build.sh`: the build script
+- `we/sync/`, `we/upstream-sync.md`: scripts and a step-by-step guide for following new GE-Proton and DW-Proton releases
 - Everything else is GE-Proton's / Proton's own content
 
 ## Source and licenses

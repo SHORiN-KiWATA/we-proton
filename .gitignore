@@ -10,3 +10,7 @@
 # WE-Proton build output (we/build.sh)
 /build/
 /contrib/
+/lsteamclient/*.orig
+/steam_helper/*.orig
+/umu_helper/*.orig
+/wineopenxr/*.orig

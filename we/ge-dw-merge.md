@@ -129,4 +129,6 @@ Valve 在 09-23 用的 dxvk、vkd3d-proton、vkd3d、FEX、dxvk-nvapi 比两边�
 - input_shape_probe（0023，无头 gamescope）：两种模式的输出和 we-proton-11.0-14-25 相同
 - D3D11：DXVK v3.1.1-27 建设备成功（这次是核显 780M，独显没绑驱动）
 - 托盘：`tray_sni_probe` 在 GE-Proton 的 StatusNotifierItem 实现上能注册、显示图标和提示、发通知，单击、右键、双击、删除都正常（`tests/tray_sni_probe.ge25.txt`）。和 0011 的不同：图标只给 32×32 一种尺寸、通知的应用名是 "Wine"、多发 `NIN_SELECT`、`WM_CONTEXTMENU` 回调；waybar 双击时连发三次 Activate，程序收到一次双击外加一次单击
+- 0048（合并后加的）：`wintun_probe32.exe` 在无特权的用户+网络命名空间里，网卡描述报 `Probe Tunnel`，和 Windows 一致；12 个回归探测和加 0048 之前的构建相同
+- 回归结果存成了基线 `tests/regress-we-proton-ge11-7-25/`，以后用 `tests/regress.sh --compare` 比较
 - 没测：WeGame 和游戏的实机运行、WeGame 自绘托盘菜单的位置、Wayland 驱动下的程序

@@ -97,7 +97,7 @@ dirty() { [ -z "$(git -C "$ROOT" status --porcelain -- patches)" ] || echo "-dir
     echo "name: $NAME"
     echo "we-proton: $(git -C "$ROOT" rev-parse HEAD)$(dirty)"
     echo "ge-proton: $(cat "$ROOT/VERSION")"
-    echo "dw-proton: dwproton-11.0-14"
+    echo "dw-proton: $(cat "$ROOT/we/dw-proton-version")"
     for m in wine wine-staging dxvk vkd3d-proton protonfixes; do
         echo "$m: $(git -C "$ROOT/$m" rev-parse HEAD)"
     done
@@ -105,7 +105,7 @@ dirty() { [ -z "$(git -C "$ROOT" status --porcelain -- patches)" ] || echo "-dir
     for p in "$ROOT"/patches/wine/*.patch; do echo "patch: wine/$(basename "$p")"; done
     for p in "$ROOT"/patches/vkd3d-proton/we-*.patch; do echo "patch: vkd3d-proton/$(basename "$p")"; done
 } > "$DIST/we-proton-build-info"
-sed -e "s/@NAME@/$NAME/g" -e "s/@GE@/$(cat "$ROOT/VERSION")/g" "$ROOT/we/dist-README.md" > "$DIST/README-WE-Proton.md"
+sed -e "s/@NAME@/$NAME/g" -e "s/@GE@/$(cat "$ROOT/VERSION")/g" -e "s/@DW@/$(cat "$ROOT/we/dw-proton-version")/g" "$ROOT/we/dist-README.md" > "$DIST/README-WE-Proton.md"
 # files/utils/7zz (for DW-Proton's protonfixes) is 7-Zip: LGPL plus the unRAR restriction
 cp "$ROOT/7zip/DOC/License.txt" "$DIST/LICENSE.7zip"
 cp "$ROOT/7zip/DOC/copying.txt" "$DIST/COPYING.7zip"
