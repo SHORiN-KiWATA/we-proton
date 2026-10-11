@@ -1,0 +1,24 @@
+From ae2b087f02eb4a99824f41b3d9916cd03ff7dad7 Mon Sep 17 00:00:00 2001
+From: Dmitry Timoshkov <dmitry@baikal.ru>
+Date: Fri, 5 Dec 2025 18:51:24 +0300
+Subject: [PATCH] windowscodecs: Support trivial cases for copying 1bpp indexed
+ data.
+
+Signed-off-by: Dmitry Timoshkov <dmitry@baikal.ru>
+(cherry picked from commit 57e711d44d16135964827b3ec27092f429381a59)
+---
+ dlls/windowscodecs/tests/converter.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/dlls/windowscodecs/tests/converter.c b/dlls/windowscodecs/tests/converter.c
+index 8e19367a50c..5635d6de30a 100644
+--- a/dlls/windowscodecs/tests/converter.c
++++ b/dlls/windowscodecs/tests/converter.c
+@@ -363,6 +363,7 @@ static void compare_bitmap_data(const struct bitmap_data *src, const struct bitm
+ 
+     hr = IWICBitmapSource_GetPixelFormat(source, &dst_pixelformat);
+     ok(SUCCEEDED(hr), "GetPixelFormat(%s) failed, hr=%lx\n", name, hr);
++    todo_wine_if(IsEqualGUID(&dst_pixelformat, &GUID_WICPixelFormatBlackWhite) && IsEqualGUID(expect->format, &GUID_WICPixelFormat1bppIndexed))
+     ok(IsEqualGUID(&dst_pixelformat, expect->format), "got unexpected pixel format %s (%s)\n", wine_dbgstr_guid(&dst_pixelformat), name);
+ 
+     prc.X = 0;

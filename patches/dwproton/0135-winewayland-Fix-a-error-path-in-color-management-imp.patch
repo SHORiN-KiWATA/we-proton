@@ -1,0 +1,34 @@
+From 084492e0bec8eade9825885622ddea7184f399ef Mon Sep 17 00:00:00 2001
+From: Etaash Mathamsetty
+ <45927311+Etaash-mathamsetty@users.noreply.github.com>
+Date: Wed, 23 Sep 2026 05:06:13 -0500
+Subject: [PATCH] winewayland: Fix a error path in color management impl.
+
+squash later
+
+(cherry picked from commit 35f47c00c457f1260c7b3c1596d875e39f062297)
+---
+ dlls/winewayland.drv/wayland_surface.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index 6e6712e8cf8..25da39eaa24 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -5276,7 +5276,7 @@ static void wayland_image_description_v1_ready2(void *user_data,
+         if (!surface->wp_color_management_surface_v1)
+         {
+             ERR("Failed to create color management surface for client surface!\n");
+-            return;
++            goto done;
+         }
+     }
+     wp_color_management_surface_v1_set_image_description(
+@@ -5284,6 +5284,7 @@ static void wayland_image_description_v1_ready2(void *user_data,
+         wp_image_description_v1,
+         WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL);
+     wp_image_description_v1_destroy(wp_image_description_v1);
++done:
+     client_surface_release(&surface->client);
+ }
+ 

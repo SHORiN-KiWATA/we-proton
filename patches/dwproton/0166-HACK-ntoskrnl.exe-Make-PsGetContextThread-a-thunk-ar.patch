@@ -1,0 +1,90 @@
+From 526224074138818d4347a4d5bb8a63291bf7ad9d Mon Sep 17 00:00:00 2001
+From: shxrrydw <sherrydrv@gmail.com>
+Date: Fri, 18 Sep 2026 17:19:58 +0200
+Subject: [PATCH] HACK: ntoskrnl.exe: Make PsGetContextThread a thunk around a
+ helper.
+
+App: Goddess of Victory: NIKKE.
+---
+ dlls/ntoskrnl.exe/ntoskrnl.c        | 30 ++++++++++++++++++++++++-----
+ dlls/ntoskrnl.exe/ntoskrnl.exe.spec |  2 +-
+ include/ddk/ntddk.h                 |  1 +
+ 3 files changed, 27 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.c b/dlls/ntoskrnl.exe/ntoskrnl.c
+index 273a3dea67e..19ab92cd7e6 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.c
++++ b/dlls/ntoskrnl.exe/ntoskrnl.c
+@@ -2864,15 +2864,15 @@ HANDLE WINAPI PsGetThreadProcessId( PETHREAD thread )
+     return thread->kthread.id.UniqueProcess;
+ }
+ 
+-/*********************************************************************
+- *           PsGetContextThread    (NTOSKRNL.@)
+- */
+-NTSTATUS WINAPI PsGetContextThread(PETHREAD thread, CONTEXT *context)
++NTSTATUS WINAPI get_context_thread( PETHREAD thread, CONTEXT *context, KPROCESSOR_MODE mode )
+ {
+     NTSTATUS status;
+     HANDLE h;
+ 
+-    TRACE("%p %p\n", thread, context);
++    TRACE("%p %p %u\n", thread, context, mode);
++
++    if (mode == KernelMode)
++        return STATUS_UNSUCCESSFUL;
+ 
+     if ((status = ObOpenObjectByPointer(thread, 0, NULL, THREAD_ALL_ACCESS, NULL, KernelMode, &h)))
+     {
+@@ -2886,6 +2886,26 @@ NTSTATUS WINAPI PsGetContextThread(PETHREAD thread, CONTEXT *context)
+     return status;
+ }
+ 
++/*********************************************************************
++ *           PsGetContextThread    (NTOSKRNL.@)
++ */
++#ifdef __x86_64__
++__ASM_GLOBAL_FUNC( PsGetContextThread,
++                   "subq $0x28,%rsp\n\t"
++                   __ASM_SEH(".seh_stackalloc 0x28\n\t")
++                   __ASM_SEH(".seh_endprologue\n\t")
++                   __ASM_CFI(".cfi_adjust_cfa_offset 0x28\n\t")
++                   "call " __ASM_NAME("get_context_thread") "\n\t"
++                   "addq $0x28,%rsp\n\t"
++                   __ASM_CFI(".cfi_adjust_cfa_offset -0x28\n\t")
++                   "ret" )
++#else
++NTSTATUS WINAPI PsGetContextThread( PETHREAD thread, CONTEXT *context, KPROCESSOR_MODE mode )
++{
++    return get_context_thread( thread, context, mode );
++}
++#endif
++
+ /***********************************************************************
+  *           KeInsertQueue   (NTOSKRNL.EXE.@)
+  */
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+index 56747812b0e..886f367bf3e 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
++++ b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
+@@ -912,7 +912,7 @@
+ @ stdcall PsDereferencePrimaryToken(ptr) ObDereferenceObject
+ @ stub PsDisableImpersonation
+ @ stub PsEstablishWin32Callouts
+-@ stdcall PsGetContextThread(ptr ptr)
++@ stdcall PsGetContextThread(ptr ptr long)
+ @ stdcall PsGetCurrentProcess() IoGetCurrentProcess
+ @ stdcall PsGetCurrentProcessId()
+ @ stdcall PsGetCurrentProcessSessionId()
+diff --git a/include/ddk/ntddk.h b/include/ddk/ntddk.h
+index 038dc36ae2a..eb7b5d33201 100644
+--- a/include/ddk/ntddk.h
++++ b/include/ddk/ntddk.h
+@@ -288,6 +288,7 @@ void      WINAPI DECLSPEC_NORETURN KeBugCheck(ULONG);
+ NTSTATUS  WINAPI KeExpandKernelStackAndCallout(PEXPAND_STACK_CALLOUT,void*,SIZE_T);
+ void      WINAPI KeSetTargetProcessorDpc(PRKDPC,CCHAR);
+ BOOLEAN   WINAPI MmIsAddressValid(void *);
++NTSTATUS  WINAPI PsGetContextThread(PETHREAD,CONTEXT*,KPROCESSOR_MODE);
+ HANDLE    WINAPI PsGetProcessId(PEPROCESS);
+ PEB *     WINAPI PsGetProcessPeb(PEPROCESS);
+ void *    WINAPI PsGetProcessSectionBaseAddress(PEPROCESS);

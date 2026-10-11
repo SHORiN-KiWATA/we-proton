@@ -1,0 +1,31 @@
+From f3c91ffe96573d4ef6d9ff4d2c631f957d4a7b62 Mon Sep 17 00:00:00 2001
+From: Nello De Gregoris <bluechxindv@gmail.com>
+Date: Tue, 1 Sep 2026 15:23:18 +0200
+Subject: [PATCH] ntoskrnl.exe: Add stub for
+ KeRegisterBugCheckReasonCallback().
+
+(cherry picked from commit 7bce51190f378b6312a87232d267cb37aa04a445)
+---
+ dlls/ntoskrnl.exe/ntoskrnl.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.c b/dlls/ntoskrnl.exe/ntoskrnl.c
+index 267b5d06ac3..1e167f74952 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.c
++++ b/dlls/ntoskrnl.exe/ntoskrnl.c
+@@ -2995,6 +2995,15 @@ BOOL WINAPI KeDeregisterBugCheckReasonCallback(void *record)
+     return TRUE;
+ }
+ 
++/***********************************************************************
++ *           KeRegisterBugCheckReasonCallback   (NTOSKRNL.EXE.@)
++ */
++BOOLEAN WINAPI KeRegisterBugCheckReasonCallback(void *record, void *routine, ULONG reason, char *component)
++{
++    FIXME("%p %p %lu %s stub.\n", record, routine, reason, debugstr_a(component));
++    return TRUE;
++}
++
+ /***********************************************************************
+  *           IoRegisterFileSystem   (NTOSKRNL.EXE.@)
+  */

@@ -1,0 +1,128 @@
+From 82546acb03a0be706de4806884ae947b6d235943 Mon Sep 17 00:00:00 2001
+From: Zhiyi Zhang <zzhang@codeweavers.com>
+Date: Mon, 14 Sep 2026 10:26:23 +0800
+Subject: [PATCH] win32u: Add some special cases for CreateCompatibleBitmap()
+ with a display DC.
+
+1. When the bit depth of a display DC or a display compatible DC without a bitmap selected is
+8-bit, create an 8-bit DIB.
+2. When the bit depth of a display DC is 16-bit, create a 32-bit DDB.
+
+The behavior for 16-bit display DCs is needed to fix a regression from 624a73bc for Return to
+Krondor (SteamID: 564960).
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=60296
+CW-Bug-Id: #27702
+(cherry picked from commit 25f928ad0713200939123875e6bb4a5626651339)
+---
+ dlls/user32/tests/monitor.c |  7 -------
+ dlls/win32u/bitmap.c        | 42 ++++++++++++++++++++++++++++++++++---
+ 2 files changed, 39 insertions(+), 10 deletions(-)
+
+diff --git a/dlls/user32/tests/monitor.c b/dlls/user32/tests/monitor.c
+index e964cae3ecc..41b9cd96ea2 100644
+--- a/dlls/user32/tests/monitor.c
++++ b/dlls/user32/tests/monitor.c
+@@ -2781,7 +2781,6 @@ static void test_display_dc(void)
+ 
+             hbitmap = CreateCompatibleBitmap(hdc2, 1, 1);
+             count = GetObjectA(hbitmap, sizeof(dib), &dib);
+-            todo_wine_if(bpps[i] == 8)
+             ok(count == (bpps[i] == 8 ? sizeof(dib) : sizeof(bitmap)), "GetObjectA failed, count %d.\n", count);
+             if (count == sizeof(dib))
+             {
+@@ -2797,7 +2796,6 @@ static void test_display_dc(void)
+                 ok(dib.dsBmih.biClrUsed == 256, "Got unexpected biClrUsed %ld.\n", dib.dsBmih.biClrUsed);
+                 ok(dib.dsBmih.biClrImportant == 256, "Got unexpected biClrImportant %ld.\n", dib.dsBmih.biClrImportant);
+             }
+-            todo_wine_if(bpps[i] == 16)
+             ok(dib.dsBm.bmBitsPixel == (bpps[i] == 16 ? 32 : bpps[i]), "Expected %d, got %d.\n",
+                bpps[i] == 16 ? 32 : bpps[i], dib.dsBm.bmBitsPixel);
+ 
+@@ -2808,7 +2806,6 @@ static void test_display_dc(void)
+             bmi->bmiHeader.biPlanes = 1;
+             bmi->bmiHeader.biBitCount = bpps[i];
+             count = GetDIBits(hdc2, hbitmap, 0, 1, bits_buffer, bmi, DIB_RGB_COLORS);
+-            todo_wine_if(bpps[i] == 8 || bpps[i] == 16)
+             ok(count == 1, "GetDIBits failed.\n");
+             DeleteObject(hbitmap);
+ 
+@@ -2823,9 +2820,7 @@ static void test_display_dc(void)
+ 
+             hbitmap = CreateCompatibleBitmap(mem_dc, 1, 1);
+             count = GetObjectA(hbitmap, sizeof(dib), &dib);
+-            todo_wine_if(bpps[i] == 8)
+             ok(count == (bpps[i] == 8 ? sizeof(dib) : sizeof(bitmap)), "GetObjectA failed, count %d.\n", count);
+-            todo_wine_if(bpps[i] == 8)
+             ok(dib.dsBm.bmBitsPixel == (bpps[i] == 8 ? 8 : 1), "Expected %d, got %d.\n",
+                bpps[i] == 8 ? 8 : 1, dib.dsBm.bmBitsPixel);
+             DeleteObject(hbitmap);
+@@ -2853,9 +2848,7 @@ static void test_display_dc(void)
+             hbitmap = SelectObject(mem_dc, old_hbitmap);
+             hbitmap2 = CreateCompatibleBitmap(mem_dc, 1, 1);
+             count = GetObjectA(hbitmap2, sizeof(dib), &dib);
+-            todo_wine_if(bpps[i] == 8)
+             ok(count == (bpps[i] == 8 ? sizeof(dib) : sizeof(bitmap)), "GetObjectA failed, count %d.\n", count);
+-            todo_wine_if(bpps[i] == 8)
+             ok(dib.dsBm.bmBitsPixel == (bpps[i] == 8 ? 8 : 1), "Expected %d, got %d.\n",
+                bpps[i] == 8 ? 8 : 1, dib.dsBm.bmBitsPixel);
+             DeleteObject(hbitmap2);
+diff --git a/dlls/win32u/bitmap.c b/dlls/win32u/bitmap.c
+index 2fec0a1ed32..8f961600b2a 100644
+--- a/dlls/win32u/bitmap.c
++++ b/dlls/win32u/bitmap.c
+@@ -58,15 +58,51 @@ HBITMAP WINAPI NtGdiCreateCompatibleBitmap( HDC hdc, INT width, INT height )
+     char buffer[FIELD_OFFSET( BITMAPINFO, bmiColors[256] )];
+     BITMAPINFO *bi = (BITMAPINFO *)buffer;
+     DIBSECTION dib;
++    int bpp;
+ 
+     TRACE( "(%p,%d,%d)\n", hdc, width, height );
+ 
+     if (!width || !height) return 0;
+ 
++    bpp = NtGdiGetDeviceCaps( hdc, BITSPIXEL );
++    /* 8-bit and 16-bit display modes are emulated */
++    if (NtGdiGetDeviceCaps( hdc, TECHNOLOGY ) == DT_RASDISPLAY && (bpp == 8 || bpp == 16))
++    {
++        BOOL is_display_dc = FALSE, is_default_bitmap = FALSE;
++        DC *dc;
++
++        if ((dc = get_dc_ptr( hdc )))
++        {
++            is_display_dc = dc->is_display;
++            is_default_bitmap = dc->hBitmap == GetStockObject( DEFAULT_BITMAP );
++            release_dc_ptr( dc );
++        }
++
++        /* An 8-bit display DC or a display compatible memory DC with DEFAULT_BITMAP selected
++         * -> Create an 8-bit DIB */
++        if (bpp == 8 && (is_display_dc || is_default_bitmap))
++        {
++            memset( buffer, 0, sizeof(buffer) );
++            bi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
++            bi->bmiHeader.biWidth = width;
++            bi->bmiHeader.biHeight = height;
++            bi->bmiHeader.biPlanes = 1;
++            bi->bmiHeader.biBitCount = 8;
++            bi->bmiHeader.biCompression = BI_RGB;
++            bi->bmiHeader.biClrUsed = 256;
++            bi->bmiHeader.biClrImportant = 256;
++            NtGdiDoPalette( hdc, 0, 256, bi->bmiColors, NtGdiGetDIBColorTable, FALSE );
++            return NtGdiCreateDIBSection( hdc, NULL, 0, bi, DIB_RGB_COLORS, 0, 0, 0, NULL );
++        }
++        /* A 16-bit display DC -> Create a 32-bit DDB */
++        else if (bpp == 16 && is_display_dc)
++        {
++            return NtGdiCreateBitmap( width, height, NtGdiGetDeviceCaps( hdc, PLANES ), 32, NULL );
++        }
++    }
++
+     if (get_gdi_object_type( hdc ) != NTGDI_OBJ_MEMDC)
+-        return NtGdiCreateBitmap( width, height,
+-                                  NtGdiGetDeviceCaps( hdc, PLANES ),
+-                                  NtGdiGetDeviceCaps( hdc, BITSPIXEL ), NULL );
++        return NtGdiCreateBitmap( width, height, NtGdiGetDeviceCaps( hdc, PLANES ), bpp, NULL );
+ 
+     switch (NtGdiExtGetObjectW( NtGdiGetDCObject( hdc, NTGDI_OBJ_SURF ),
+                                 sizeof(dib), &dib ))

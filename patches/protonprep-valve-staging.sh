@@ -469,6 +469,19 @@ apply_all_in_dir() {
         apply_patch "$patch"
     done
 
+### (2-8) DW-PROTON AND WE-PROTON PATCHES ###
+
+    # DW-Proton commits that GE-Proton doesn't carry. Generated files
+    # (server protocol, syscall tables) are left out of these patches and
+    # regenerated below and by Makefile.in.
+    echo "WINE: -DW-PROTON- apply DW-Proton patches"
+    apply_all_in_dir "../patches/dwproton/"
+
+    echo "WINE: -WE-PROTON- apply WE-Proton patches"
+    apply_all_in_dir "../patches/wine/"
+
+### END DW-PROTON AND WE-PROTON PATCHES ###
+
     echo "WINE: RUN AUTOCONF TOOLS/MAKE_REQUESTS"
     autoreconf -f
     ./tools/make_requests

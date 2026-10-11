@@ -1,0 +1,59 @@
+From 0d4ceb43d734fcf5fcd0f953d3346e142477ff04 Mon Sep 17 00:00:00 2001
+From: Nello De Gregoris <bluechxindv@gmail.com>
+Date: Wed, 23 Sep 2026 10:43:48 +0200
+Subject: [PATCH] rsaenh: Allow any implemented hash algorithm for HMAC.
+
+Wine-Bug: https://bugs.winehq.org/show_bug.cgi?id=60345
+(cherry picked from commit 4352d975bea6bd4d453b7d4e8875cc4b2335cfc4)
+
+CW-Bug-Id: #27698
+---
+ dlls/rsaenh/implglue.h |  5 +++++
+ dlls/rsaenh/rsaenh.c   | 15 ++++++---------
+ 2 files changed, 11 insertions(+), 9 deletions(-)
+
+diff --git a/dlls/rsaenh/implglue.h b/dlls/rsaenh/implglue.h
+index b0a518830ac..222809b8367 100644
+--- a/dlls/rsaenh/implglue.h
++++ b/dlls/rsaenh/implglue.h
+@@ -61,6 +61,11 @@ BOOL decrypt_block_impl(ALG_ID aiAlgid, DWORD dwKeySpec, KEY_CONTEXT *pKeyContex
+                         BYTE *pbOut);
+ BOOL encrypt_stream_impl(ALG_ID aiAlgid, KEY_CONTEXT *pKeyContext, BYTE *pbInOut, DWORD dwLen);
+ 
++static inline DWORD hash_len_impl(const struct hash *hash)
++{
++    return hash->desc->hashsize;
++}
++
+ BOOL export_public_key_impl(BYTE *pbDest, const KEY_CONTEXT *pKeyContext, DWORD dwKeyLen,
+                             DWORD *pdwPubExp);
+ BOOL import_public_key_impl(const BYTE *pbSrc, KEY_CONTEXT *pKeyContext, DWORD dwKeyLen,
+diff --git a/dlls/rsaenh/rsaenh.c b/dlls/rsaenh/rsaenh.c
+index b696fed529d..b9b4ed37274 100644
+--- a/dlls/rsaenh/rsaenh.c
++++ b/dlls/rsaenh/rsaenh.c
+@@ -686,18 +686,15 @@ static inline BOOL init_hash(CRYPTHASH *pCryptHash) {
+     {
+         case CALG_HMAC:
+             if (pCryptHash->pHMACInfo) { 
+-                const PROV_ENUMALGS_EX *pAlgInfo;
+-                
+-                pAlgInfo = get_algid_info(pCryptHash->hProv, pCryptHash->pHMACInfo->HashAlgid);
+-                if (!pAlgInfo)
++                /* the algorithm doesn't have to be listed by the provider */
++                init_hash_impl(pCryptHash->pHMACInfo->HashAlgid, &pCryptHash->hash);
++                if (!pCryptHash->hash.desc)
+                 {
+-                    /* A number of hash algorithms (e. g., _SHA256) are supported for HMAC even for providers
+-                     * which don't list the algorithm, so print a fixme here. */
+-                    FIXME("Hash algroithm %#x not found.\n", pCryptHash->pHMACInfo->HashAlgid);
++                    SetLastError(NTE_BAD_ALGID);
+                     return FALSE;
+                 }
+-                pCryptHash->dwHashSize = pAlgInfo->dwDefaultLen >> 3;
+-                init_hash_impl(pCryptHash->pHMACInfo->HashAlgid, &pCryptHash->hash);
++
++                pCryptHash->dwHashSize = hash_len_impl(&pCryptHash->hash);
+                 update_hash_impl(&pCryptHash->hash, pCryptHash->pHMACInfo->pbInnerString,
+                                  pCryptHash->pHMACInfo->cbInnerString);
+             }

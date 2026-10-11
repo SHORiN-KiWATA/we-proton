@@ -1,0 +1,115 @@
+From 09e9a2a0607d115aba55afffad442651db657a32 Mon Sep 17 00:00:00 2001
+From: Torge Matthies <openglfreak@googlemail.com>
+Date: Wed, 11 Sep 2024 20:42:20 +0300
+Subject: [PATCH] ntdll: fix compilation with link-time optimizations
+
+(cherry picked from commit 4d05d3a843974f0031cd28db47477e08fc1b2cd2)
+---
+ dlls/ntdll/unix/signal_arm.c    |  2 +-
+ dlls/ntdll/unix/signal_arm64.c  |  2 +-
+ dlls/ntdll/unix/signal_i386.c   |  2 +-
+ dlls/ntdll/unix/signal_x86_64.c |  2 +-
+ loader/preloader.c              | 10 +++++-----
+ 5 files changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/dlls/ntdll/unix/signal_arm.c b/dlls/ntdll/unix/signal_arm.c
+index a5de319a6d5..bfcf4a92c29 100644
+--- a/dlls/ntdll/unix/signal_arm.c
++++ b/dlls/ntdll/unix/signal_arm.c
+@@ -1116,7 +1116,7 @@ void signal_init_process(void)
+ /***********************************************************************
+  *           init_syscall_frame
+  */
+-void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
++__attribute__((used)) void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
+ {
+     struct syscall_frame *frame = ((struct ntdll_thread_data *)&teb->GdiTebBatch)->syscall_frame;
+     CONTEXT *ctx, context = { CONTEXT_ALL };
+diff --git a/dlls/ntdll/unix/signal_arm64.c b/dlls/ntdll/unix/signal_arm64.c
+index b27e795c16b..8bcfff0fd8d 100644
+--- a/dlls/ntdll/unix/signal_arm64.c
++++ b/dlls/ntdll/unix/signal_arm64.c
+@@ -1597,7 +1597,7 @@ void syscall_dispatcher_return_slowpath(void)
+ /***********************************************************************
+  *           init_syscall_frame
+  */
+-void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
++__attribute__((used)) void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
+ {
+     struct syscall_frame *frame = ((struct ntdll_thread_data *)&teb->GdiTebBatch)->syscall_frame;
+     CONTEXT *ctx, context = { CONTEXT_ALL };
+diff --git a/dlls/ntdll/unix/signal_i386.c b/dlls/ntdll/unix/signal_i386.c
+index b8ada12063e..690ab331fee 100644
+--- a/dlls/ntdll/unix/signal_i386.c
++++ b/dlls/ntdll/unix/signal_i386.c
+@@ -2483,7 +2483,7 @@ void signal_init_process(void)
+ /***********************************************************************
+  *           init_syscall_frame
+  */
+-void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
++__attribute__((used)) void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
+ {
+     struct x86_thread_data *thread_data = (struct x86_thread_data *)&teb->GdiTebBatch;
+     struct syscall_frame *frame = ((struct ntdll_thread_data *)&teb->GdiTebBatch)->syscall_frame;
+diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
+index 6b29981923f..7d2fa62fa79 100644
+--- a/dlls/ntdll/unix/signal_x86_64.c
++++ b/dlls/ntdll/unix/signal_x86_64.c
+@@ -3166,7 +3166,7 @@ void set_thread_teb( TEB *teb )
+ /***********************************************************************
+  *           init_syscall_frame
+  */
+-void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
++__attribute__((used)) void init_syscall_frame( LPTHREAD_START_ROUTINE entry, void *arg, BOOL suspend, TEB *teb )
+ {
+     struct amd64_thread_data *thread_data = (struct amd64_thread_data *)&teb->GdiTebBatch;
+     struct syscall_frame *frame = ((struct ntdll_thread_data *)&teb->GdiTebBatch)->syscall_frame;
+diff --git a/loader/preloader.c b/loader/preloader.c
+index 37c01e95564..afb0e4d3197 100644
+--- a/loader/preloader.c
++++ b/loader/preloader.c
+@@ -185,7 +185,7 @@ void __bb_init_func(void) { return; }
+ 
+ /* data for setting up the glibc-style thread-local storage in %gs */
+ 
+-static int thread_data[256];
++static int thread_data[256] __attribute__((used));
+ 
+ struct
+ {
+@@ -200,7 +200,7 @@ struct
+     unsigned int  seg_not_present : 1;
+     unsigned int  usable : 1;
+     unsigned int  garbage : 25;
+-} thread_ldt = { -1, (unsigned long)thread_data, 0xfffff, 1, 0, 0, 1, 0, 1, 0 };
++} thread_ldt __attribute__((used)) = { -1, (unsigned long)thread_data, 0xfffff, 1, 0, 0, 1, 0, 1, 0 };
+ 
+ 
+ /*
+@@ -341,7 +341,7 @@ static inline int wld_prctl( int code, long arg )
+ 
+ #elif defined(__x86_64__)
+ 
+-void *thread_data[256];
++void *thread_data[256] __attribute__((used));
+ 
+ /*
+  * The _start function is the entry and exit point of this program
+@@ -430,7 +430,7 @@ SYSCALL_NOERR( wld_getegid, 108 /* SYS_getegid */ );
+ 
+ #elif defined(__aarch64__)
+ 
+-void *thread_data[256];
++void *thread_data[256] __attribute__((used));
+ 
+ /*
+  * The _start function is the entry and exit point of this program
+@@ -1436,7 +1436,7 @@ static void init_r_debug( struct wld_auxv *av )
+  *  Load the binary and then its ELF interpreter.
+  *  Note, we assume that the binary is a dynamically linked ELF shared object.
+  */
+-void* wld_start( void **stack )
++__attribute__((used)) void* wld_start( void **stack )
+ {
+     long i, *pargc;
+     char **argv, **p;

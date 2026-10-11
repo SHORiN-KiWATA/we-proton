@@ -1,0 +1,25 @@
+From 80fc807b6ef8bc7a59cb846b94c286deb6949500 Mon Sep 17 00:00:00 2001
+From: Etaash Mathamsetty
+ <45927311+Etaash-mathamsetty@users.noreply.github.com>
+Date: Sun, 12 Jul 2026 19:33:22 -0400
+Subject: [PATCH] winewayland: Fix race condition with processing and requested
+ config.
+
+(cherry picked from commit b482b9784f41ad310715eaae8a684385428936bf)
+---
+ dlls/winewayland.drv/wayland_surface.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index 1f447654b2b..9ce964aa009 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -4158,6 +4158,8 @@ static BOOL wayland_surface_reconfigure_xdg(struct wayland_surface *surface, REC
+         surface->current = surface->requested;
+         memset(&surface->processing, 0, sizeof(surface->processing));
+         memset(&surface->requested, 0, sizeof(surface->requested));
++        /* clear stale processing config since the requested one is always newer */
++        memset(&surface->processing, 0, sizeof(surface->processing));
+         xdg_surface_ack_configure(surface->xdg_surface, surface->current.serial);
+ 
+         /* Acking a fullscreen configure from the requested state bypasses

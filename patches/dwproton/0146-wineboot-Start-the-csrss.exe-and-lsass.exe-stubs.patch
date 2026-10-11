@@ -1,0 +1,61 @@
+From 4a20316be6c4e4711155ce506e49fc79057a01db Mon Sep 17 00:00:00 2001
+From: shxrrydw <sherrydrv@gmail.com>
+Date: Thu, 6 Aug 2026 13:28:38 +0200
+Subject: [PATCH] wineboot: Start the csrss.exe and lsass.exe stubs.
+
+App: Hololive Dreams (4282500).
+---
+ programs/lsass/main.c        |  3 +++
+ programs/wineboot/wineboot.c | 16 ++++++++++++++++
+ 2 files changed, 19 insertions(+)
+
+diff --git a/programs/lsass/main.c b/programs/lsass/main.c
+index cf576e4bd24..4fc73319679 100644
+--- a/programs/lsass/main.c
++++ b/programs/lsass/main.c
+@@ -23,8 +23,11 @@
+ 
+ int __cdecl main( int argc, char *argv[] )
+ {
++    ULONG session_id = 0;
+     HANDLE exit_event = NULL;
+ 
++    NtSetInformationProcess( GetCurrentProcess(), ProcessWineSessionId,
++                             &session_id, sizeof(session_id) );
+     NtSetInformationProcess( GetCurrentProcess(), ProcessWineMakeProcessSystem,
+                              &exit_event, sizeof(HANDLE *) );
+     if (exit_event) WaitForSingleObject( exit_event, INFINITE );
+diff --git a/programs/wineboot/wineboot.c b/programs/wineboot/wineboot.c
+index a140565eb48..0f57577dc39 100644
+--- a/programs/wineboot/wineboot.c
++++ b/programs/wineboot/wineboot.c
+@@ -1455,6 +1455,20 @@ static int ProcessWindowsFileProtection(void)
+     return 1;
+ }
+ 
++static void start_stub_process(const WCHAR *path)
++{
++    PROCESS_INFORMATION pi;
++    STARTUPINFOW si = { sizeof(si) };
++
++    if (!CreateProcessW(path, NULL, NULL, NULL, FALSE, DETACHED_PROCESS, NULL, NULL, &si, &pi))
++    {
++        WINE_ERR("Couldn't start %s: error %lu\n", wine_dbgstr_w(path), GetLastError());
++        return;
++    }
++    CloseHandle(pi.hThread);
++    CloseHandle(pi.hProcess);
++}
++
+ static BOOL start_services_process(void)
+ {
+     static const WCHAR svcctl_started_event[] = SVCCTL_STARTED_EVENT;
+@@ -2005,6 +2019,8 @@ int __cdecl main( int argc, char *argv[] )
+     {
+         ProcessRunKeys( HKEY_LOCAL_MACHINE, L"RunServices", FALSE, FALSE );
+         start_services_process();
++        start_stub_process( L"C:\\windows\\system32\\csrss.exe" );
++        start_stub_process( L"C:\\windows\\system32\\lsass.exe" );
+     }
+     if (init || update) update_wineprefix( update );
+ 

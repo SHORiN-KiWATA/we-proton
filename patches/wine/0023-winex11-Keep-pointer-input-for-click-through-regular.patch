@@ -1,0 +1,92 @@
+From e9b5f2d97a23bc559e8e127f3ce70860fb88b3b3 Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Sun, 11 Oct 2026 22:07:47 +0900
+Subject: [PATCH] winex11: Keep pointer input for click-through regular windows
+ under XWayland.
+
+A WS_EX_TRANSPARENT window gets an empty X input shape and no pointer
+events, so that the mouse goes through it. Under XWayland the X server
+only learns where the pointer is while it is over an X window that
+takes input, so nothing tells Wine where the cursor went after that.
+
+Programs that make an ordinary window click-through while the cursor is
+over its transparent parts, and watch the cursor to take input again,
+then never see it come back, and the window can't be used until its
+style happens to change. Electron's setIgnoreMouseEvents() with
+forwarding does this through a low-level mouse hook; Wine only calls the
+hook for the pointer input the X server sends it. On X11 the server
+always sees the pointer.
+
+Under XWayland, keep the input shape and the pointer events of managed,
+non-topmost windows. Hit testing still skips them, so clicks go to the
+window underneath. Topmost and unmanaged windows (overlays, desktop
+pets) stay click-through.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/winex11.drv/window.c | 31 ++++++++++++++++++++++++++++---
+ 1 file changed, 28 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 50688be8baa..29295d4cc70 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -575,6 +575,29 @@ static unsigned long get_mwm_decorations( struct x11drv_win_data *data, DWORD st
+ }
+ 
+ 
++/***********************************************************************
++ *              keep_pointer_input
++ *
++ * Under XWayland the X server only learns where the pointer is while it is
++ * over an X window that takes input. Programs that make an ordinary window
++ * click-through (WS_EX_TRANSPARENT) while the cursor is over its transparent
++ * parts, and watch the cursor to take input again (Electron's
++ * setIgnoreMouseEvents() with forwarding, which relies on a low-level mouse
++ * hook, or GetCursorPos() polling), would never see the cursor come back and
++ * the window would stay unusable. Keep pointer input for such windows there;
++ * hit testing still skips them, so clicks go to the window underneath.
++ * Topmost and unmanaged windows (overlays, desktop pets) stay click-through.
++ */
++static BOOL keep_pointer_input( struct x11drv_win_data *data, DWORD ex_style )
++{
++    static int xwayland = -1;
++
++    if (!(ex_style & WS_EX_TRANSPARENT) || (ex_style & WS_EX_TOPMOST) || !data->managed) return FALSE;
++    if (xwayland == -1) xwayland = X11DRV_HasWindowManager( "xwayland" );
++    return xwayland;
++}
++
++
+ /***********************************************************************
+  *              get_window_attributes
+  *
+@@ -595,8 +618,8 @@ static int get_window_attributes( struct x11drv_win_data *data, XSetWindowAttrib
+                                FocusChangeMask | KeymapStateMask | StructureNotifyMask | PropertyChangeMask);
+     /* for transparent windows, exclude mouse events to allow mouse pass-through
+        (overlay-shape mode keeps input so the shaped overlay stays interactive) */
+-    if (!(ex_style & WS_EX_TRANSPARENT) || overlay) attr->event_mask |= (PointerMotionMask | ButtonPressMask |
+-                                                                       ButtonReleaseMask | EnterWindowMask);
++    if (!(ex_style & WS_EX_TRANSPARENT) || overlay || keep_pointer_input( data, ex_style ))
++        attr->event_mask |= (PointerMotionMask | ButtonPressMask | ButtonReleaseMask | EnterWindowMask);
+ 
+     return (CWSaveUnder | CWColormap | CWBorderPixel | CWBackPixel |
+             CWEventMask | CWBitGravity | CWBackingStore);
+@@ -632,7 +655,7 @@ static void sync_window_input_shape( struct x11drv_win_data *data )
+      */
+     if ((sgi = getenv( "SteamGameId" )) && !strcmp( sgi, "3678970" )) return;
+ 
+-    if ((ex_style & WS_EX_TRANSPARENT) && !overlay)
++    if ((ex_style & WS_EX_TRANSPARENT) && !overlay && !keep_pointer_input( data, ex_style ))
+     {
+         /* For transparent windows, set an empty input shape to allow mouse pass-through */
+         static XRectangle empty_rect;
+@@ -1982,6 +2005,8 @@ static void window_set_managed( struct x11drv_win_data *data, BOOL new_managed )
+     TRACE( "window %p/%lx, requesting override-redirect %u -> %u serial %lu\n", data->hwnd, data->whole_window,
+            !old_managed, !new_managed, NextRequest( data->display ) );
+     XChangeWindowAttributes( data->display, data->whole_window, CWOverrideRedirect, &attr );
++    /* click-through windows may keep pointer input now, see keep_pointer_input() */
++    if (NtUserGetWindowLongW( data->hwnd, GWL_EXSTYLE ) & WS_EX_TRANSPARENT) sync_window_style( data );
+ 
+     window_set_wm_state( data, wm_state, activate ); /* queue another WM_STATE request with the desired state */
+ }

@@ -1,0 +1,198 @@
+From 858768040a2ebe4da91fa01038a0561bbb8d27fa Mon Sep 17 00:00:00 2001
+From: SHORiN-KIWATA <shorin@users.noreply.github.com>
+Date: Sun, 11 Oct 2026 15:19:13 +0900
+Subject: [PATCH] win32u: Implement NtUserGetWindowBand.
+
+It was a syscall stub, so any program that asks for a window's z-order
+band was terminated with an unimplemented function exception. Windows
+keeps top-level windows in bands; everything an application creates is
+in the desktop band (ZBID_DESKTOP), the only one Wine has, so report that
+for any valid window. Invalid handles fail with ERROR_INVALID_WINDOW_HANDLE
+and a missing output pointer with ERROR_NOACCESS, like
+NtUserGetWindowDisplayAffinity. Also add the wow64 thunk and export
+GetWindowBand from user32.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/user32/tests/win.c | 32 ++++++++++++++++++++++++++++++++
+ dlls/user32/user32.spec |  2 +-
+ dlls/win32u/main.c      |  5 +++++
+ dlls/win32u/win32u.spec |  2 +-
+ dlls/win32u/window.c    | 25 +++++++++++++++++++++++++
+ dlls/wow64win/user.c    |  8 ++++++++
+ include/ntuser.h        |  1 +
+ 7 files changed, 73 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/user32/tests/win.c b/dlls/user32/tests/win.c
+index 9ec0654bb7d..d1c5cd59b84 100644
+--- a/dlls/user32/tests/win.c
++++ b/dlls/user32/tests/win.c
+@@ -57,6 +57,7 @@ static BOOL (WINAPI *pSetProcessDefaultLayout)( DWORD layout );
+ static BOOL (WINAPI *pFlashWindow)( HWND hwnd, BOOL bInvert );
+ static BOOL (WINAPI *pFlashWindowEx)( PFLASHWINFO pfwi );
+ static BOOL (WINAPI *pMirrorRgn)(HWND hwnd, HRGN hrgn);
++static BOOL (WINAPI *pGetWindowBand)(HWND hwnd, DWORD *band);
+ static BOOL (WINAPI *pGetWindowDisplayAffinity)(HWND hwnd, DWORD *affinity);
+ static BOOL (WINAPI *pSetWindowDisplayAffinity)(HWND hwnd, DWORD affinity);
+ static BOOL (WINAPI *pAdjustWindowRectExForDpi)(LPRECT,DWORD,BOOL,DWORD,UINT);
+@@ -12574,6 +12575,35 @@ static void test_topmost(void)
+     DestroyWindow(owner);
+ }
+ 
++static void test_window_band( HWND win )
++{
++    DWORD band;
++    BOOL ret;
++
++    if (!pGetWindowBand)
++    {
++        win_skip("GetWindowBand missing\n");
++        return;
++    }
++
++    SetLastError(0xdeadbeef);
++    band = 0xdeadbeef;
++    ret = pGetWindowBand(NULL, &band);
++    ok(!ret, "GetWindowBand succeeded\n");
++    ok(GetLastError() == ERROR_INVALID_WINDOW_HANDLE, "Expected ERROR_INVALID_WINDOW_HANDLE, got %lu\n", GetLastError());
++    ok(band == 0xdeadbeef, "band changed to %#lx\n", band);
++
++    SetLastError(0xdeadbeef);
++    ret = pGetWindowBand((HWND)0xdeadbeef, &band);
++    ok(!ret, "GetWindowBand succeeded\n");
++    ok(GetLastError() == ERROR_INVALID_WINDOW_HANDLE, "Expected ERROR_INVALID_WINDOW_HANDLE, got %lu\n", GetLastError());
++
++    band = 0xdeadbeef;
++    ret = pGetWindowBand(win, &band);
++    ok(ret, "GetWindowBand failed with %lu\n", GetLastError());
++    ok(band == 1 /* ZBID_DESKTOP */, "Expected ZBID_DESKTOP, got %lu\n", band);
++}
++
+ static void test_display_affinity( HWND win )
+ {
+     DWORD affinity;
+@@ -14812,6 +14842,7 @@ START_TEST(win)
+     pFlashWindow = (void *)GetProcAddress( user32, "FlashWindow" );
+     pFlashWindowEx = (void *)GetProcAddress( user32, "FlashWindowEx" );
+     pMirrorRgn = (void *)GetProcAddress( gdi32, "MirrorRgn" );
++    pGetWindowBand = (void *)GetProcAddress( user32, "GetWindowBand" );
+     pGetWindowDisplayAffinity = (void *)GetProcAddress( user32, "GetWindowDisplayAffinity" );
+     pSetWindowDisplayAffinity = (void *)GetProcAddress( user32, "SetWindowDisplayAffinity" );
+     pAdjustWindowRectExForDpi = (void *)GetProcAddress( user32, "AdjustWindowRectExForDpi" );
+@@ -14979,6 +15010,7 @@ START_TEST(win)
+     test_deferwindowpos();
+     test_LockWindowUpdate(hwndMain);
+     test_desktop();
++    test_window_band(hwndMain);
+     test_display_affinity(hwndMain);
+     test_hide_window();
+     test_minimize_window(hwndMain);
+diff --git a/dlls/user32/user32.spec b/dlls/user32/user32.spec
+index 95cef3914f3..056e5be492d 100644
+--- a/dlls/user32/user32.spec
++++ b/dlls/user32/user32.spec
+@@ -696,7 +696,7 @@
+ @ stdcall GetUserObjectSecurity(long ptr ptr long ptr)
+ # @ stub GetWinStationInfo
+ @ stdcall GetWindow(long long)
+-# @ stub GetWindowBand
++@ stdcall GetWindowBand(long ptr) NtUserGetWindowBand
+ # @ stub GetWindowCompositionAttribute
+ # @ stub GetWindowCompositionInfo
+ @ stdcall GetWindowContextHelpId(long) NtUserGetWindowContextHelpId
+diff --git a/dlls/win32u/main.c b/dlls/win32u/main.c
+index 55450fe63ec..f20842496a5 100644
+--- a/dlls/win32u/main.c
++++ b/dlls/win32u/main.c
+@@ -1854,6 +1854,11 @@ DWORD SYSCALL_API NtUserGetWindowContextHelpId( HWND hwnd )
+     SYSCALL_FUNC( NtUserGetWindowContextHelpId );
+ }
+ 
++BOOL SYSCALL_API NtUserGetWindowBand( HWND hwnd, DWORD *band )
++{
++    SYSCALL_FUNC( NtUserGetWindowBand );
++}
++
+ HDC SYSCALL_API NtUserGetWindowDC( HWND hwnd )
+ {
+     SYSCALL_FUNC( NtUserGetWindowDC );
+diff --git a/dlls/win32u/win32u.spec b/dlls/win32u/win32u.spec
+index 5cb723a52ef..3ccad81a3f7 100644
+--- a/dlls/win32u/win32u.spec
++++ b/dlls/win32u/win32u.spec
+@@ -1113,7 +1113,7 @@
+ @ stdcall -syscall NtUserGetUpdatedClipboardFormats(ptr long ptr)
+ @ stub -syscall NtUserGetWOWClass
+ @ stub -syscall NtUserGetWinStationInfo
+-@ stub -syscall NtUserGetWindowBand
++@ stdcall -syscall NtUserGetWindowBand(long ptr)
+ @ stub -syscall NtUserGetWindowCompositionAttribute
+ @ stub -syscall NtUserGetWindowCompositionInfo
+ @ stdcall -syscall NtUserGetWindowContextHelpId(long)
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 264b3ff1217..cd2fea1b5f8 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -7121,6 +7121,31 @@ BOOL WINAPI NtUserIsChildWindowDpiMessageEnabled( HWND hwnd )
+     return FALSE;
+ }
+ 
++/*****************************************************************
++ *           NtUserGetWindowBand (win32u.@)
++ *
++ * Windows keeps top-level windows in z-order bands; everything an
++ * application creates is in the desktop band, the only one Wine has.
++ */
++BOOL WINAPI NtUserGetWindowBand( HWND hwnd, DWORD *band )
++{
++    TRACE( "%p, %p\n", hwnd, band );
++
++    if (!is_window( hwnd ))
++    {
++        RtlSetLastWin32Error( ERROR_INVALID_WINDOW_HANDLE );
++        return FALSE;
++    }
++    if (!band)
++    {
++        RtlSetLastWin32Error( ERROR_NOACCESS );
++        return FALSE;
++    }
++
++    *band = 1;  /* ZBID_DESKTOP */
++    return TRUE;
++}
++
+ /*****************************************************************
+  *           NtUserGetWindowDisplayAffinity (win32u.@)
+  */
+diff --git a/dlls/wow64win/user.c b/dlls/wow64win/user.c
+index 8bb35d2d3a3..4c001d072b7 100644
+--- a/dlls/wow64win/user.c
++++ b/dlls/wow64win/user.c
+@@ -3235,6 +3235,14 @@ NTSTATUS WINAPI wow64_NtUserGetUpdatedClipboardFormats( UINT *args )
+     return NtUserGetUpdatedClipboardFormats( formats, size, out_size );
+ }
+ 
++NTSTATUS WINAPI wow64_NtUserGetWindowBand( UINT *args )
++{
++    HWND hwnd = get_handle( &args );
++    DWORD *band = get_ptr( &args );
++
++    return NtUserGetWindowBand( hwnd, band );
++}
++
+ NTSTATUS WINAPI wow64_NtUserGetWindowContextHelpId( UINT *args )
+ {
+     HWND hwnd = get_handle( &args );
+diff --git a/include/ntuser.h b/include/ntuser.h
+index b9d6a0ca43b..0a0a5dba398 100644
+--- a/include/ntuser.h
++++ b/include/ntuser.h
+@@ -920,6 +920,7 @@ W32KAPI BOOL    WINAPI NtUserGetTouchInputInfo( HTOUCHINPUT handle, UINT count,
+ W32KAPI INT     WINAPI NtUserGetUpdateRgn( HWND hwnd, HRGN hrgn, BOOL erase );
+ W32KAPI BOOL    WINAPI NtUserGetUpdatedClipboardFormats( UINT *formats, UINT size, UINT *out_size );
+ W32KAPI BOOL    WINAPI NtUserGetUpdateRect( HWND hwnd, RECT *rect, BOOL erase );
++W32KAPI BOOL    WINAPI NtUserGetWindowBand( HWND hwnd, DWORD *band );
+ W32KAPI DWORD   WINAPI NtUserGetWindowContextHelpId( HWND hwnd );
+ W32KAPI HDC     WINAPI NtUserGetWindowDC( HWND hwnd );
+ W32KAPI BOOL    WINAPI NtUserGetWindowDisplayAffinity( HWND hwnd, DWORD *affinity );

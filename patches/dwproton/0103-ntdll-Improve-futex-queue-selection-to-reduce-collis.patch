@@ -1,0 +1,29 @@
+From 198b8973c9e0576d32604a525736163d034e2e7e Mon Sep 17 00:00:00 2001
+From: Marc-Aurel Zent <mzent@codeweavers.com>
+Date: Tue, 21 Apr 2026 12:51:25 +0200
+Subject: [PATCH] ntdll: Improve futex queue selection to reduce collisions.
+
+(cherry picked from commit 3e1e33d7b15120ce2d2d9f02aa5c25e2a12bad6c)
+---
+ dlls/ntdll/sync.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/ntdll/sync.c b/dlls/ntdll/sync.c
+index 03cb52d654c..4f477e5c43e 100644
+--- a/dlls/ntdll/sync.c
++++ b/dlls/ntdll/sync.c
+@@ -842,9 +842,12 @@ static struct futex_queue futex_queues[1024];
+ 
+ static struct futex_queue *get_futex_queue( const void *addr )
+ {
+-    ULONG_PTR val = (ULONG_PTR)addr;
++    ULONG_PTR val = (ULONG_PTR)addr >> 4;
+ 
+-    return &futex_queues[(val >> 4) % ARRAY_SIZE(futex_queues)];
++    /* Mix the bits a bit to avoid collisions on low bits. */
++    val ^= val >> 11;
++    val ^= val >> 22;
++    return &futex_queues[val % ARRAY_SIZE(futex_queues)];
+ }
+ 
+ static void spin_lock( LONG *lock )

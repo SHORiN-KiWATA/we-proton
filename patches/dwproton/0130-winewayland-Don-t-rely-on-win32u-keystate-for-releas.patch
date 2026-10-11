@@ -1,0 +1,31 @@
+From 69fa36a2d0fff2add2b2e9e1f80b7f4109cdc437 Mon Sep 17 00:00:00 2001
+From: Etaash Mathamsetty
+ <45927311+Etaash-mathamsetty@users.noreply.github.com>
+Date: Mon, 8 Jun 2026 23:36:03 -0400
+Subject: [PATCH] winewayland: Don't rely on win32u keystate for
+ release_all_keys.
+
+Due to hooks. This solution is kinda a hack but whatever... shit needs to work in somehow.
+
+(cherry picked from commit f25d120265d05baa5b0918ffbef778aaea284275)
+---
+ dlls/winewayland.drv/wayland_keyboard.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/dlls/winewayland.drv/wayland_keyboard.c b/dlls/winewayland.drv/wayland_keyboard.c
+index 413977177e5..90f17836442 100644
+--- a/dlls/winewayland.drv/wayland_keyboard.c
++++ b/dlls/winewayland.drv/wayland_keyboard.c
+@@ -1063,6 +1063,12 @@ static inline void update_keystate(uint32_t key, uint32_t state)
+     keyboard->keystate[key2scan(key)] = (state == WL_KEYBOARD_KEY_STATE_PRESSED);
+ }
+ 
++static inline void update_keystate(uint32_t key, uint32_t state)
++{
++    struct wayland_keyboard *keyboard = &process_wayland.keyboard;
++    keyboard->keystate[key2scan(key)] = (state == WL_KEYBOARD_KEY_STATE_PRESSED);
++}
++
+ static void send_right_control(HWND hwnd, uint32_t state)
+ {
+     INPUT input = {0};

@@ -1,0 +1,180 @@
+From d080af1a4e8542b1f3701e7ef9c27db986c786d8 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Stefan=20D=C3=B6singer?= <stefan@codeweavers.com>
+Date: Tue, 17 Mar 2026 17:12:21 +0300
+Subject: [PATCH] ddraw/tests: Fix nested designated initializers in
+ test_caps().
+
+Visual Studio 2026 doesn't seem to like .ddpfPixelFormat.xxx
+initializers when initializing an outer structure. Some of the DDPF
+fields contained zero even though a different value was assigned during
+initialzation, in particular .ddpfPixelFormat.dwZBufferBitDepth. No
+compile error or warning is generated though.
+
+https://en.cppreference.com/w/cpp/language/aggregate_initialization.html
+suggests that the previous construct should be valid in C, but not C++.
+I guess that's where MSVC's bug comes from.
+
+(cherry picked from commit 26cac37309dbd31a39fc84c9996da205024f71ad)
+---
+ dlls/ddraw/tests/ddraw1.c | 10 ++++++++--
+ dlls/ddraw/tests/ddraw2.c | 10 ++++++++--
+ dlls/ddraw/tests/ddraw4.c | 32 ++++++++++++++++++++++----------
+ dlls/ddraw/tests/ddraw7.c | 32 ++++++++++++++++++++++----------
+ 4 files changed, 60 insertions(+), 24 deletions(-)
+
+diff --git a/dlls/ddraw/tests/ddraw1.c b/dlls/ddraw/tests/ddraw1.c
+index f9f9de96fdf..675c6ec158e 100644
+--- a/dlls/ddraw/tests/ddraw1.c
++++ b/dlls/ddraw/tests/ddraw1.c
+@@ -14897,7 +14897,10 @@ static void test_caps(void)
+         {
+             .dwSize = sizeof(DDSURFACEDESC),
+             .dwFlags = DDSD_CAPS | DDSD_ZBUFFERBITDEPTH | DDSD_WIDTH | DDSD_HEIGHT,
+-            .ddsCaps.dwCaps = DDSCAPS_ZBUFFER,
++            .ddsCaps =
++            {
++                .dwCaps = DDSCAPS_ZBUFFER,
++            },
+             .dwZBufferBitDepth = depth_caps[i].depth,
+             .dwWidth = 64,
+             .dwHeight = 64,
+@@ -14984,7 +14987,10 @@ static void test_caps(void)
+             {
+                 .dwSize = sizeof(DDSURFACEDESC),
+                 .dwFlags = DDSD_CAPS | DDSD_ZBUFFERBITDEPTH | DDSD_WIDTH | DDSD_HEIGHT,
+-                .ddsCaps.dwCaps = DDSCAPS_ZBUFFER,
++                .ddsCaps =
++                {
++                    .dwCaps = DDSCAPS_ZBUFFER,
++                },
+                 .dwZBufferBitDepth = depth_caps[i].depth,
+                 .dwWidth = 64,
+                 .dwHeight = 64,
+diff --git a/dlls/ddraw/tests/ddraw2.c b/dlls/ddraw/tests/ddraw2.c
+index ca7f39a9dc1..5258ff08d83 100644
+--- a/dlls/ddraw/tests/ddraw2.c
++++ b/dlls/ddraw/tests/ddraw2.c
+@@ -15457,7 +15457,10 @@ static void test_caps(void)
+         {
+             .dwSize = sizeof(DDSURFACEDESC),
+             .dwFlags = DDSD_CAPS | DDSD_ZBUFFERBITDEPTH | DDSD_WIDTH | DDSD_HEIGHT,
+-            .ddsCaps.dwCaps = DDSCAPS_ZBUFFER,
++            .ddsCaps =
++            {
++                .dwCaps = DDSCAPS_ZBUFFER,
++            },
+             .dwZBufferBitDepth = depth_caps[i].depth,
+             .dwWidth = 64,
+             .dwHeight = 64,
+@@ -15550,7 +15553,10 @@ static void test_caps(void)
+             {
+                 .dwSize = sizeof(DDSURFACEDESC),
+                 .dwFlags = DDSD_CAPS | DDSD_ZBUFFERBITDEPTH | DDSD_WIDTH | DDSD_HEIGHT,
+-                .ddsCaps.dwCaps = DDSCAPS_ZBUFFER,
++                .ddsCaps =
++                {
++                    .dwCaps = DDSCAPS_ZBUFFER,
++                },
+                 .dwZBufferBitDepth = depth_caps[i].depth,
+                 .dwWidth = 64,
+                 .dwHeight = 64,
+diff --git a/dlls/ddraw/tests/ddraw4.c b/dlls/ddraw/tests/ddraw4.c
+index 709b93e320b..48f0fba6560 100644
+--- a/dlls/ddraw/tests/ddraw4.c
++++ b/dlls/ddraw/tests/ddraw4.c
+@@ -18184,11 +18184,17 @@ static void test_caps(void)
+         {
+             .dwSize = sizeof(DDSURFACEDESC2),
+             .dwFlags = DDSD_CAPS | DDSD_PIXELFORMAT | DDSD_WIDTH | DDSD_HEIGHT,
+-            .ddsCaps.dwCaps = DDSCAPS_ZBUFFER,
+-            .ddpfPixelFormat.dwSize = sizeof(DDPIXELFORMAT),
+-            .ddpfPixelFormat.dwFlags = DDPF_ZBUFFER,
+-            .ddpfPixelFormat.dwZBufferBitDepth = depth_caps[i].depth,
+-            .ddpfPixelFormat.dwZBitMask = depth_caps[i].mask,
++            .ddsCaps =
++            {
++                .dwCaps = DDSCAPS_ZBUFFER,
++            },
++            .ddpfPixelFormat =
++            {
++                .dwSize = sizeof(DDPIXELFORMAT),
++                .dwFlags = DDPF_ZBUFFER,
++                .dwZBufferBitDepth = depth_caps[i].depth,
++                .dwZBitMask = depth_caps[i].mask,
++            },
+             .dwWidth = 64,
+             .dwHeight = 64,
+         };
+@@ -18280,11 +18286,17 @@ static void test_caps(void)
+             {
+                 .dwSize = sizeof(DDSURFACEDESC2),
+                 .dwFlags = DDSD_CAPS | DDSD_PIXELFORMAT | DDSD_WIDTH | DDSD_HEIGHT,
+-                .ddsCaps.dwCaps = DDSCAPS_ZBUFFER,
+-                .ddpfPixelFormat.dwSize = sizeof(DDPIXELFORMAT),
+-                .ddpfPixelFormat.dwFlags = DDPF_ZBUFFER,
+-                .ddpfPixelFormat.dwZBufferBitDepth = depth_caps[i].depth,
+-                .ddpfPixelFormat.dwZBitMask = depth_caps[i].mask,
++                .ddsCaps =
++                {
++                    .dwCaps = DDSCAPS_ZBUFFER,
++                },
++                .ddpfPixelFormat =
++                {
++                    .dwSize = sizeof(DDPIXELFORMAT),
++                    .dwFlags = DDPF_ZBUFFER,
++                    .dwZBufferBitDepth = depth_caps[i].depth,
++                    .dwZBitMask = depth_caps[i].mask,
++                },
+                 .dwWidth = 64,
+                 .dwHeight = 64,
+             };
+diff --git a/dlls/ddraw/tests/ddraw7.c b/dlls/ddraw/tests/ddraw7.c
+index 2fbe1060540..63ed3fa63fc 100644
+--- a/dlls/ddraw/tests/ddraw7.c
++++ b/dlls/ddraw/tests/ddraw7.c
+@@ -18481,11 +18481,17 @@ static void test_caps(void)
+         {
+             .dwSize = sizeof(DDSURFACEDESC2),
+             .dwFlags = DDSD_CAPS | DDSD_PIXELFORMAT | DDSD_WIDTH | DDSD_HEIGHT,
+-            .ddsCaps.dwCaps = DDSCAPS_ZBUFFER,
+-            .ddpfPixelFormat.dwSize = sizeof(DDPIXELFORMAT),
+-            .ddpfPixelFormat.dwFlags = DDPF_ZBUFFER,
+-            .ddpfPixelFormat.dwZBufferBitDepth = depth_caps[i].depth,
+-            .ddpfPixelFormat.dwZBitMask = depth_caps[i].mask,
++            .ddsCaps =
++            {
++                .dwCaps = DDSCAPS_ZBUFFER,
++            },
++            .ddpfPixelFormat =
++            {
++                .dwSize = sizeof(DDPIXELFORMAT),
++                .dwFlags = DDPF_ZBUFFER,
++                .dwZBufferBitDepth = depth_caps[i].depth,
++                .dwZBitMask = depth_caps[i].mask,
++            },
+             .dwWidth = 64,
+             .dwHeight = 64,
+         };
+@@ -18568,11 +18574,17 @@ static void test_caps(void)
+         {
+             .dwSize = sizeof(DDSURFACEDESC2),
+             .dwFlags = DDSD_CAPS | DDSD_PIXELFORMAT | DDSD_WIDTH | DDSD_HEIGHT,
+-            .ddsCaps.dwCaps = DDSCAPS_ZBUFFER,
+-            .ddpfPixelFormat.dwSize = sizeof(DDPIXELFORMAT),
+-            .ddpfPixelFormat.dwFlags = DDPF_ZBUFFER,
+-            .ddpfPixelFormat.dwZBufferBitDepth = depth_caps[i].depth,
+-            .ddpfPixelFormat.dwZBitMask = depth_caps[i].mask,
++            .ddsCaps =
++            {
++                .dwCaps = DDSCAPS_ZBUFFER,
++            },
++            .ddpfPixelFormat =
++            {
++                .dwSize = sizeof(DDPIXELFORMAT),
++                .dwFlags = DDPF_ZBUFFER,
++                .dwZBufferBitDepth = depth_caps[i].depth,
++                .dwZBitMask = depth_caps[i].mask,
++            },
+             .dwWidth = 64,
+             .dwHeight = 64,
+         };
