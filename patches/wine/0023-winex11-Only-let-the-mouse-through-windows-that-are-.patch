@@ -1,0 +1,68 @@
+From 25d25363b3dbcabed58af305c327da707595530f Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Sun, 11 Oct 2026 20:27:36 +0900
+Subject: [PATCH 23/42] winex11: Only let the mouse through windows that are
+ layered and transparent.
+
+The server's hit testing skips a window only when it has both
+WS_EX_LAYERED and WS_EX_TRANSPARENT, as Windows does; a window with
+WS_EX_TRANSPARENT alone still gets the mouse. The X11 driver emptied the
+X input shape for WS_EX_TRANSPARENT alone, so such a window took no
+clicks at all: the compositor sent them to whatever was below it, and on
+a nested X server the pointer never reached the window again to let the
+program notice.
+
+Use the server's condition, and resync the input shape when either style
+changes.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/winex11.drv/window.c | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 03cf0bf5ad2..5b205af1bfc 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -590,9 +590,11 @@ static int get_window_attributes( struct x11drv_win_data *data, XSetWindowAttrib
+ /***********************************************************************
+  *              sync_window_input_shape
+  *
+- * Update the X11 window input shape for WS_EX_TRANSPARENT windows.
++ * Update the X11 window input shape for click-through windows.
+  * This uses the ShapeInput extension to control which areas of the window
+- * can receive input events.
++ * can receive input events. Like hit testing in the server, only windows
++ * that are both WS_EX_LAYERED and WS_EX_TRANSPARENT let the mouse through;
++ * WS_EX_TRANSPARENT alone doesn't.
+  */
+ static void sync_window_input_shape( struct x11drv_win_data *data )
+ {
+@@ -614,13 +616,13 @@ static void sync_window_input_shape( struct x11drv_win_data *data )
+      */
+     if ((sgi = getenv( "SteamGameId" )) && !strcmp( sgi, "3678970" )) return;
+ 
+-    if (ex_style & WS_EX_TRANSPARENT)
++    if ((ex_style & (WS_EX_LAYERED | WS_EX_TRANSPARENT)) == (WS_EX_LAYERED | WS_EX_TRANSPARENT))
+     {
+         /* For transparent windows, set an empty input shape to allow mouse pass-through */
+         static XRectangle empty_rect;
+         XShapeCombineRectangles( data->display, data->whole_window, ShapeInput, 0, 0,
+                                  &empty_rect, 1, ShapeSet, YXBanded );
+-        TRACE( "window %p/%lx set empty input shape for WS_EX_TRANSPARENT\n",
++        TRACE( "window %p/%lx set empty input shape for a layered transparent window\n",
+                data->hwnd, data->whole_window );
+     }
+     else
+@@ -3012,7 +3014,7 @@ void X11DRV_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style )
+             set_window_visual( data, &default_visual, FALSE );
+             sync_window_opacity( data->display, data->whole_window, 0, 0 );
+         }
+-        if (changed & WS_EX_TRANSPARENT) sync_window_style( data );
++        if (changed & (WS_EX_LAYERED | WS_EX_TRANSPARENT)) sync_window_style( data );
+         flush = TRUE;
+     }
+ 
+-- 
+2.56.0
+

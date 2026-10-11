@@ -1,0 +1,98 @@
+From ed28c46738aa35cce046dc2c46e96ec1654c6398 Mon Sep 17 00:00:00 2001
+From: GloriousEggroll <gloriouseggroll@gmail.com>
+Date: Sun, 11 Oct 2026 20:30:13 +0900
+Subject: [PATCH 41/42] win32u: Keep Black Desert fullscreen across application
+ deactivation.
+
+Imported from GE-Proton11-7 patches/game-patches/black-desert-keep-fullscreen-on-focus-loss.patch;
+the helper is placed in front of set_active_window(), since the function
+it followed in GE's tree doesn't exist here.
+---
+ dlls/win32u/input.c | 49 +++++++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 45 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+index 74703beb77e..20de3f590ba 100644
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -2117,12 +2117,47 @@ static int use_activateapp_lparam_hack(void)
+     return cached;
+ }
+ 
++static BOOL black_desert_keep_fullscreen_on_focus_loss( HWND hwnd )
++{
++    static const WCHAR black_desertW[] =
++        {'b','l','a','c','k','d','e','s','e','r','t','6','4','.','e','x','e',0};
++    static LONG enabled = -1;
++    LONG value = InterlockedCompareExchange( &enabled, -1, -1 );
++    HWND foreground;
++    DWORD style, pid;
++    RECT rect;
++
++    if (value == -1)
++    {
++        const WCHAR *p, *name = NtCurrentTeb()->Peb->ProcessParameters->ImagePathName.Buffer;
++        const char *env = getenv( "WINE_BLACK_DESERT_KEEP_FULLSCREEN" );
++
++        if ((p = wcsrchr( name, '/' ))) name = p + 1;
++        if ((p = wcsrchr( name, '\\' ))) name = p + 1;
++        value = !wcsicmp( name, black_desertW ) && (!env || strcmp( env, "0" ));
++        InterlockedCompareExchange( &enabled, value, -1 );
++    }
++    if (!value || !hwnd) return FALSE;
++
++    style = get_window_long( hwnd, GWL_STYLE );
++    if ((style & (WS_VISIBLE | WS_MINIMIZE | WS_CHILD | WS_DISABLED | WS_CAPTION | WS_THICKFRAME))
++        != WS_VISIBLE) return FALSE;
++
++    foreground = NtUserGetForegroundWindow();
++    if (foreground == hwnd) return FALSE;
++    if (foreground && get_window_thread( foreground, &pid ) && pid == GetCurrentProcessId()) return FALSE;
++
++    /* Only cover DXGI exclusive fullscreen, not borderless windows or dialogs. */
++    return get_present_rect( hwnd, &rect, get_thread_dpi() );
++}
++
++
+ /*******************************************************************
+  *		set_active_window
+  */
+ BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus, DWORD new_active_thread_id )
+ {
+-    HWND previous = get_active_window();
++    HWND previous = get_active_window(), fullscreen_window;
+     BOOL ret;
+     DWORD old_thread, new_thread;
+     CBTACTIVATESTRUCT cbt;
+@@ -2141,11 +2176,17 @@ BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus, DWORD new
+     cbt.hWndActive = previous;
+     if (call_hooks( WH_CBT, HCBT_ACTIVATE, (WPARAM)hwnd, (LPARAM)&cbt, sizeof(cbt) )) return FALSE;
+ 
++    fullscreen_window = !hwnd && black_desert_keep_fullscreen_on_focus_loss( previous ) ? previous : 0;
++    if (fullscreen_window) TRACE( "Keeping Black Desert fullscreen on deactivation of %p\n", previous );
++
+     if (is_window( previous ))
+     {
+         send_message( previous, WM_NCACTIVATE, FALSE, (LPARAM)hwnd );
+-        send_message( previous, WM_ACTIVATE,
+-                      MAKEWPARAM( WA_INACTIVE, is_iconic(previous) ? 0x20 : 0 ), (LPARAM)hwnd );
++        /* Avoid the game's windowed-mode reaction, but still update the real
++         * active/focus state below and deliver WM_KILLFOCUS for input cleanup. */
++        if (previous != fullscreen_window)
++            send_message( previous, WM_ACTIVATE,
++                          MAKEWPARAM( WA_INACTIVE, is_iconic(previous) ? 0x20 : 0 ), (LPARAM)hwnd );
+     }
+ 
+     SERVER_START_REQ( set_active_window )
+@@ -2184,7 +2225,7 @@ BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus, DWORD new
+                 if (!new_active_thread_id) new_active_thread_id = new_thread;
+                 for (phwnd = list; *phwnd; phwnd++)
+                 {
+-                    if (get_window_thread( *phwnd, NULL ) == old_thread)
++                    if (get_window_thread( *phwnd, NULL ) == old_thread && *phwnd != fullscreen_window)
+                         send_message( *phwnd, WM_ACTIVATEAPP, 0, new_active_thread_id );
+                 }
+             }
+-- 
+2.56.0
+

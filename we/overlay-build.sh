@@ -1,8 +1,8 @@
 #!/bin/bash
 # Build WE-Proton quickly: take the official dwproton release this branch is
 # based on, rebuild only the wine binaries touched by patches/wine/*.patch (and
-# vkd3d-proton's d3d12*.dll if patches/vkd3d-proton has patches), and drop
-# them in. The full container build (make redist) gives the same result from
+# vkd3d-proton's d3d12*.dll if patches/vkd3d-proton has patches, DXVK's DLLs if
+# patches/dxvk has more than the base release applies), and drop them in. The full container build (make redist) gives the same result from
 # scratch but takes hours.
 #
 # Wine is built in the same Steam Runtime SDK image and with the same flags as
@@ -63,7 +63,11 @@ declare -A TARGETS=(
     [dlls/nsiproxy.sys]="dlls/nsiproxy.sys/x86_64-windows/nsiproxy.sys:x86_64-windows/nsiproxy.sys dlls/nsiproxy.sys/nsiproxy.so:x86_64-unix/nsiproxy.so"
     [dlls/vcruntime140_1]="dlls/vcruntime140_1/x86_64-windows/vcruntime140_1.dll:x86_64-windows/vcruntime140_1.dll"
     [programs/wineboot]="programs/wineboot/x86_64-windows/wineboot.exe:x86_64-windows/wineboot.exe"
+    [dlls/winex11.drv]="dlls/winex11.drv/winex11.so:x86_64-unix/winex11.so dlls/winex11.drv/x86_64-windows/winex11.drv:x86_64-windows/winex11.drv dlls/winex11.drv/i386-windows/winex11.drv:i386-windows/winex11.drv"
 )
+for m in dwrite dxgi msxml3 urlmon; do
+    TARGETS[dlls/$m]="dlls/$m/x86_64-windows/$m.dll:x86_64-windows/$m.dll dlls/$m/i386-windows/$m.dll:i386-windows/$m.dll"
+done
 for m in msvcp140 msvcp140_2; do
     TARGETS[dlls/$m]="dlls/$m/x86_64-windows/$m.dll:x86_64-windows/$m.dll dlls/$m/i386-windows/$m.dll:i386-windows/$m.dll"
 done
@@ -255,6 +259,77 @@ EOF
     done
 fi
 
+# --- DXVK, only if patches/dxvk has more than the base release ----------------
+# The official build applies every patches/dxvk/*.patch (.dxvk-post-source in
+# Makefile.in), so once we add our own all of them are applied again, with the
+# flags of rules-meson. The patched code (src/util, src/dxvk) is linked into
+# every DXVK DLL, so all of them are replaced.
+DXVK_PATCHES=$(find "$ROOT/patches/dxvk" -name '*.patch' 2>/dev/null | sort)
+DXVK_DLLS=(d3d8 d3d9 d3d10core d3d11 dxgi)
+declare -A DXVK_ARCH_CFLAGS=([x86_64]="-O3 -mno-avx -msse -msse2" [i386]="-O3 -mno-avx -mpreferred-stack-boundary=2 -msse -msse2")
+BUILD_DXVK=
+# new patches may not be committed yet: git diff alone does not see them
+git -C "$ROOT" diff --quiet "$BASE" -- patches/dxvk \
+    && [ -z "$(git -C "$ROOT" ls-files --others --exclude-standard -- patches/dxvk)" ] || BUILD_DXVK=1
+if [ -n "$BUILD_DXVK" ]; then
+    X=$ROOT/dxvk
+    XSRC=$OBJ/src-dxvk
+    [ -f "$X/meson.build" ] \
+        || { echo "dxvk/ is not checked out: git submodule update --init --recursive dxvk" >&2; exit 1; }
+    XSTAMP=$(cat $DXVK_PATCHES | sha256sum | cut -c1-16)-$(git -C "$X" rev-parse HEAD)-$(git -C "$X" submodule status --recursive | sha256sum | cut -c1-16)
+    if [ "$(cat "$OBJ/.dxvk-src-stamp" 2>/dev/null)" != "$XSTAMP" ]; then
+        log "preparing dxvk source"
+        [ -z "$(git -C "$X" status --porcelain --untracked-files=no)" ] \
+            || { echo "dxvk/ has local changes; the build applies patches/dxvk itself" >&2; exit 1; }
+        rm -rf "$XSRC" "$OBJ"/dxvk-*
+        rsync -a --filter=:C --exclude '*~' --exclude .git "$X/" "$XSRC/"
+        for p in $DXVK_PATCHES; do patch -d "$XSRC" -Np1 -s -i "$p"; done
+        # tag it like a dirty tree, so it is told apart from the official build
+        sed -re "s#@VCS_TAG@#$(git -C "$X" describe --always --abbrev=15)+#" \
+            "$X/version.h.in" > "$XSRC/version.h.in"
+        echo "$XSTAMP" > "$OBJ/.dxvk-src-stamp"
+    fi
+    for arch in "${VKD3D_ARCHS[@]}"; do
+        XB=$OBJ/dxvk-$arch
+        m=${MINGW[$arch]}
+        cflags=$(quote_list "${ARCH_CFLAGS[$arch]} $COMMON_CFLAGS $CRT_FLAGS ${DXVK_ARCH_CFLAGS[$arch]}")
+        ldflags=$(quote_list "-static -static-libgcc -static-libstdc++ $CRT_FLAGS ${DXVK_ARCH_CFLAGS[$arch]}")
+        cross=$(cat <<EOF
+[binaries]
+ar = '$m-ar'
+c = '$m-gcc'
+cpp = '$m-g++'
+windres = '$m-windres'
+strip = '$m-strip'
+
+[properties]
+needs_exe_wrapper = true
+c_args = [$cflags]
+cpp_args = [$cflags]
+c_link_args = [$ldflags]
+cpp_link_args = [$ldflags]
+
+[host_machine]
+system = 'windows'
+cpu_family = '${MESON_CPU[$arch]}'
+cpu = '${MESON_CPU[$arch]}'
+endian = 'little'
+EOF
+)
+        if [ ! -f "$XB/build.ninja" ] || [ "$(cat "$XB/cross.txt")" != "$cross" ]; then
+            log "configuring dxvk ($arch)"
+            rm -rf "$XB"
+            mkdir -p "$XB"
+            echo "$cross" > "$XB/cross.txt"
+            meson setup "$XB" "$XSRC" --cross-file "$XB/cross.txt" --buildtype=plain \
+                -Db_ndebug=true --force-fallback-for=libdisplay-info > "$XB/configure.log" 2>&1 \
+                || { tail -20 "$XB/configure.log" >&2; exit 1; }
+        fi
+        log "building dxvk ($arch)"
+        ninja -C "$XB" > "$XB/build.log" 2>&1 || { grep -m20 -E 'error' "$XB/build.log" >&2; exit 1; }
+    done
+fi
+
 # --- assemble the runner ------------------------------------------------------
 log "assembling $NAME"
 rm -rf "$DIST" "$OBJ/unpack"
@@ -281,6 +356,17 @@ if [ -n "$VKD3D_PATCHES" ]; then
         done
     done
 fi
+if [ -n "$BUILD_DXVK" ]; then
+    for arch in "${VKD3D_ARCHS[@]}"; do
+        for dll in "${DXVK_DLLS[@]}"; do
+            from=$(find "$OBJ/dxvk-$arch/src" -name "$dll.dll" | head -1)
+            to=$DIST/files/lib/wine/dxvk/$arch-windows/$dll.dll
+            [ -f "$from" ] && [ -f "$to" ] || { echo "dxvk: no $dll.dll for $arch" >&2; exit 1; }
+            "${MINGW[$arch]}-strip" -o "$to" "$from"
+            echo "  ${from#$OBJ/} -> ${to#$DIST/}"
+        done
+    done
+fi
 sed -i "s/\"$BASE-x86_64\"/\"$NAME\"/; s/\"display_name\" \"[^\"]*\"/\"display_name\" \"WE-Proton ${BASE#dwproton-}-$RELEASE\"/" \
     "$DIST/compatibilitytool.vdf"
 sed -i "s/ $BASE\$/ $NAME/" "$DIST/version"
@@ -288,9 +374,12 @@ sed -i "s/ $BASE\$/ $NAME/" "$DIST/version"
     echo "base: $BASE"
     echo "wine: $(git -C "$ROOT/wine" rev-parse HEAD)"
     [ -z "$VKD3D_PATCHES" ] || echo "vkd3d-proton: $(git -C "$ROOT/vkd3d-proton" rev-parse HEAD)"
-    echo "we-proton: $(git -C "$ROOT" rev-parse HEAD)$(git -C "$ROOT" diff --quiet HEAD -- patches || echo '-dirty')"
+    [ -z "$BUILD_DXVK" ] || echo "dxvk: $(git -C "$ROOT/dxvk" rev-parse HEAD)"
+    echo "we-proton: $(git -C "$ROOT" rev-parse HEAD)$( { git -C "$ROOT" diff --quiet HEAD -- patches \
+        && [ -z "$(git -C "$ROOT" ls-files --others --exclude-standard -- patches)" ]; } || echo '-dirty')"
     for p in "$ROOT"/patches/wine/*.patch; do echo "patch: wine/$(basename "$p")"; done
     for p in $VKD3D_PATCHES; do echo "patch: vkd3d-proton/$(basename "$p")"; done
+    [ -z "$BUILD_DXVK" ] || for p in $DXVK_PATCHES; do echo "patch: dxvk/$(basename "$p")"; done
 } > "$DIST/we-proton-build-info"
 # Wine and vkd3d-proton are LGPL: ship the changes with the binaries, plus how to use them
 mkdir -p "$DIST/we-proton-patches/wine"
@@ -298,6 +387,10 @@ cp "$ROOT"/patches/wine/*.patch "$DIST/we-proton-patches/wine/"
 if [ -n "$VKD3D_PATCHES" ]; then
     mkdir -p "$DIST/we-proton-patches/vkd3d-proton"
     cp $VKD3D_PATCHES "$DIST/we-proton-patches/vkd3d-proton/"
+fi
+if [ -n "$BUILD_DXVK" ]; then
+    mkdir -p "$DIST/we-proton-patches/dxvk"
+    cp $DXVK_PATCHES "$DIST/we-proton-patches/dxvk/"
 fi
 sed -e "s/@NAME@/$NAME/g" -e "s/@BASE@/$BASE/g" -e "s/@WINE@/$(git -C "$ROOT/wine" rev-parse HEAD)/g" \
     -e "s/@VKD3D@/$(git -C "$ROOT/vkd3d-proton" rev-parse HEAD 2>/dev/null)/g" \
@@ -310,6 +403,7 @@ tar -C "$ROOT/build" -cJf "$ROOT/build/$NAME.tar.xz" "$NAME"
 log "packing $NAME-source.tar.xz"
 src_args=(--transform "s,^src-wine,$NAME-source/wine," src-wine)
 [ -z "$VKD3D_PATCHES" ] || src_args+=(--transform "s,^src-vkd3d-proton,$NAME-source/vkd3d-proton," src-vkd3d-proton)
+[ -z "$BUILD_DXVK" ] || src_args+=(--transform "s,^src-dxvk,$NAME-source/dxvk," src-dxvk)
 tar -C "$OBJ" -cJf "$ROOT/build/$NAME-source.tar.xz" "${src_args[@]}" \
     -C "$DIST" --transform "s,^we-proton-build-info,$NAME-source/we-proton-build-info," we-proton-build-info
 log "done: build/$NAME, build/$NAME.tar.xz, build/$NAME.sha512sum, build/$NAME-source.tar.xz"

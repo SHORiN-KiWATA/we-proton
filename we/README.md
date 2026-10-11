@@ -34,7 +34,29 @@
 | `wine/0020-win32u-Implement-NtUserGetWindowBand` | 实现 `NtUserGetWindowBand`（以及 user32 的 `GetWindowBand`）：程序查询窗口所在的 z 序层级时不再被当成未实现函数中止；Wine 只有桌面层级，有效窗口都返回它 |
 | `wine/0021-msvcp140-msvcp140_2-vcruntime140_1-Report-a-version-` | 内置 VC++ 运行库（`msvcp140`、`msvcp140_2`、`vcruntime140_1`）的版本号报 14.99.65535，比任何已发布的运行库都高：按最低版本检查运行库的程序不再判它缺失 |
 | `wine/0022-wineboot-Keep-the-Visual-C-runtime-version-in-the-re` | wineboot 每次启动时，把 `VC\Runtimes\<arch>` 注册表键里比 `msvcp140.dll` 旧的版本提到它的版本：旧前缀（`wine.inf` 不覆盖已有值）和被写低的键也能跟上 |
+| `wine/0023-winex11-Only-let-the-mouse-through-windows-that-are-` | 只有同时带 `WS_EX_LAYERED` 和 `WS_EX_TRANSPARENT` 的窗口才把 X 输入区域清空（鼠标穿透），和 wineserver 的命中测试一致；只带 `WS_EX_TRANSPARENT` 的窗口不再点不动 |
+| `wine/0024-ntdll-Reuse-the-effective-range-after-clearing-nativ` | （GE）清掉 native view 后重试分配用有效的地址范围，不再必然失败 |
+| `wine/0025-msxml3-Add-GB2312-support-for-builtin-character-conv` | （staging）内置 msxml3 认 GB2312 编码 |
+| `wine/0026-ntdll-Reserve-some-space-for-top-down-allocation-in-` | （GE，上游 f4c5b041）大地址感知的 32 位程序在 WoW64 下保留顶部地址空间 |
+| `wine/0027-winex11-Poll-resize-completion-with-a-busy-message-q` | （GE）拖动/缩放窗口时消息队列一直忙也能结束 |
+| `wine/0028-urlmon-Pump-thread-user-messages-during-synchronous-` | （GE）同步 bind 时泵线程的所有消息 |
+| `wine/0029-ntdll-Finish-process-exit-instead-of-waiting-on-orph` | （GE）进程退出时不在已退出线程持有的 SRW 锁上永久等待 |
+| `wine/0030-win32u-Accept-SPI_SETSTICKYKEYS-SPI_SETFILTERKEYS-as` | （GE）`SPI_SETSTICKYKEYS`/`SPI_SETFILTERKEYS` 返回成功 |
+| `wine/0031-kernelbase-Don-t-dereference-NULL-in-CharPrevA-CharP` | （GE）`CharPrevA`/`CharPrevExA` 遇到 NULL 不崩 |
+| `wine/0032-server-Fix-numpad-vkey-handling` | （GE）小键盘的 vkey 处理 |
+| `wine/0033-ntdll-Read-QueryPerformanceCounter-from-the-TSC-in-u` | （GE）QueryPerformanceCounter 在用户态读 TSC（`WINE_DISABLE_QPC_TSC=1` 关闭） |
+| `wine/0034-ntdll-Allow-AI-LIMIT-to-reuse-DXBC-compute-shaders-i` | （GE，按游戏）AI LIMIT 的 DX12 计算着色器回退 |
+| `wine/0035-Revert-dwrite-Release-file-streams-when-building-col` | （GE）撤回 dwrite 的“建集合时释放文件流”（Assetto Corsa 的 HUD） |
+| `wine/0036-ntdll-Fix-Max-Payne-s-truncated-CPUID-leaf-count` | （GE，按游戏）Max Payne 的 CPUID 叶数 |
+| `wine/0037-Import-silence-starcitizen-unsupported-os-from-GE-Pr` | （GE，按游戏）Star Citizen 的“不支持的 Windows”弹窗 |
+| `wine/0038-winex11-Keep-Forza-backing-windows-unmapped-on-wlroo` | （GE，按游戏）Forza 的后台窗口在 wlroots 上保持不映射 |
+| `wine/0039-Import-unity_crash_hotfix-from-GE-Proton` | （GE）wined3d 路径下 dxgi 的一处 Unity 崩溃 |
+| `wine/0040-win32u-Restore-Return-to-Krondor-s-text-bitmap-readb` | （GE，按游戏）Return to Krondor 的文字位图读回 |
+| `wine/0041-win32u-Keep-Black-Desert-fullscreen-across-applicati` | （GE，按游戏）黑色沙漠失去焦点时保持全屏 |
+| `wine/0042-winex11-Shaped-and-real-alpha-transparency-for-layer` | （GE，默认关闭）桌面覆盖类游戏的分层窗口做形状或真透明 |
 | `vkd3d-proton/0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
+| `vkd3d-proton/0002-vkd3d-bound-present-waits-during-swapchain-drain` | （GE）销毁交换链时等待呈现有上限，不再卡死 |
+| `dxvk/0002`–`0007` | （GE）分层覆盖窗口的 DXVK 一半、获取图像受阻时保留交换链、《最终幻想14》多屏失焦不缩窗（三个）、黑色沙漠的 DXVK 一半；接在 DWProton 的 `dxvk/0001` 后面 |
 
 每个补丁的现象、根因、Windows 实测、验证和排查过程见 `we/fixes/`。
 
@@ -58,6 +80,7 @@
 - `ime_edit_probe`（0014）：用输入法往输入框里打字时，窗口收到哪些 IME 消息和字符消息、最后得到什么文字；参数 `disable` 先调 `ImmDisableIME(0)`。用 `ime_type.sh` 跑（`WINEPREFIX=<新前缀> ime_type.sh ime_edit_probe ctrl+space TYPE:nihao space -- <runner>/files/bin/wine ime_edit_probe.exe 20 disable`），它起私有的 Xvfb、会话总线和 fcitx5（XIM 前端 + rime），用 xdotool 打拼音，不碰桌面的输入法。需要 fcitx5、fcitx5-rime、xdotool
 - `inbv_probe`（0019）：从 `ntoskrnl.exe` 取 `InbvAcquireDisplayOwnership`、`InbvResetDisplay` 并调用；是 stub 时进程被 abort，实现了就打印 `called ok`
 - `window_band_probe`（0020，另有 32 位的 `window_band_probe32.exe`）：对各种窗口调用 `GetWindowBand`/`NtUserGetWindowBand`，打印返回值、层级和错误码；参数 `nullptr`、`nullhwnd` 测输出指针为空。是 stub 时进程被 abort
+- `input_shape_probe`（0023）：窗口一秒后加上 `WS_EX_TRANSPARENT`（参数 `layered` 再加 `WS_EX_LAYERED`），打印 wineserver 的 `WindowFromPoint` 是否还命中它；`input_shape_probe.sh` 在私有 Xvfb 上跑它，并读出 X 输入区域的矩形数（0 = 点击穿透）
 - `vcrt_version_probe`（0021、0022）：打印 `VC\Runtimes\<arch>` 在两个注册表视图里的值和 system32、syswow64 里运行库 DLL 的文件版本，再按“注册表和 `msvcp140_2.dll`、`vcruntime140_1.dll` 的文件版本都不低于最低版本”检查（默认 14.44.35211，参数可改）。`wine24-redist` 是装了官方 14.44.35211 运行库之后的输出
 - `dxil-spirv/run.sh`（vkd3d-proton 0001）：用 dxil-spirv 的 `structurize-test` 跑 `*.st` 控制流图，检查生成的 SPIR-V 能通过校验。源码取 `build/overlay/src-vkd3d-proton`（先跑 `overlay-build.sh`）；`--unpatched` 用未打补丁的子模块，应该失败
 

@@ -5,10 +5,11 @@ WE-Proton 是 DW-Proton 的一个个人修改版，补了几个 Wine 和 vkd3d-p
 基于 `@BASE@` 官方发布包，只替换了这些文件（都在 `files/` 下）：
 
 - `bin/wineserver`
-- `lib/wine/x86_64-unix/` 下的 `ntdll.so`、`win32u.so`、`qcap.so`、`nsiproxy.so`，以及新增的 `explorer.so`、`wintun.so`
+- `lib/wine/x86_64-unix/` 下的 `ntdll.so`、`win32u.so`、`winex11.so`、`qcap.so`、`nsiproxy.so`，以及新增的 `explorer.so`、`wintun.so`
 - `lib/wine/x86_64-windows/` 下的 `ntoskrnl.exe`、`nsiproxy.sys`、`wow64win.dll`、`vcruntime140_1.dll`、`wineboot.exe`
-- `lib/wine/{x86_64,i386}-windows/` 下的 `ntdll.dll`、`kernelbase.dll`、`kernel32.dll`、`user32.dll`、`win32u.dll`、`rpcrt4.dll`、`winhttp.dll`、`iphlpapi.dll`、`nsi.dll`、`explorer.exe`、`d3d10.dll`、`d3dcompiler_33`～`43`、`46`、`47`、`msvcp140.dll`、`msvcp140_2.dll`，以及新增的 `wintun.dll`
+- `lib/wine/{x86_64,i386}-windows/` 下的 `ntdll.dll`、`kernelbase.dll`、`kernel32.dll`、`user32.dll`、`win32u.dll`、`rpcrt4.dll`、`winhttp.dll`、`iphlpapi.dll`、`nsi.dll`、`explorer.exe`、`d3d10.dll`、`d3dcompiler_33`～`43`、`46`、`47`、`msvcp140.dll`、`msvcp140_2.dll`、`winex11.drv`、`dwrite.dll`、`dxgi.dll`、`msxml3.dll`、`urlmon.dll`，以及新增的 `wintun.dll`
 - vkd3d-proton（D3D12）：`lib/wine/vkd3d-proton/{x86_64,i386}-windows/` 下的 `d3d12.dll`、`d3d12core.dll`
+- DXVK：`lib/wine/dxvk/{x86_64,i386}-windows/` 下的 `d3d8.dll`、`d3d9.dll`、`d3d10core.dll`、`d3d11.dll`、`dxgi.dll`
 
 Unix 侧只换了 64 位的库（`x86_64-unix`）。32 位程序要在 WoW64 模式下运行（`PROTON_USE_WOW64=1`，wegame-launcher 默认开启）才用得上 `*.so` 里的修复；不开 WoW64 时，它们用的是官方发布包里没改过的 `i386-unix` 库。
 
@@ -38,9 +39,13 @@ Unix 侧只换了 64 位的库（`x86_64-unix`）。32 位程序要在 WoW64 模
 | wine 0020 | 《暗区突围：无限》进游戏后闪退（查询窗口层级的 `NtUserGetWindowBand` 没有实现，进程被中止） |
 | wine 0021 | 《诡秘之主》等较新的 UE5 游戏启动时提示缺少 Microsoft Visual C++ 2015-2022 Redistributable，点确定就退出（内置运行库的版本号低于游戏要求的最低版本） |
 | wine 0022 | 同上，注册表里记的运行库版本停在建前缀时的旧值，旧前缀换新版后仍然提示 |
+| wine 0023 | 程序窗口有时点不动，要切换焦点或最大化/最小化才恢复（只带 `WS_EX_TRANSPARENT` 的窗口被设成了鼠标穿透） |
+| wine 0024–0042 | 从 GE-Proton 导入：32 位程序内存紧张时分配失败、msxml3 不认 GB2312、拖动窗口卡住、进程退出卡住、小键盘、QPC 性能等通用修复，以及几个游戏（黑色沙漠、AI LIMIT、Max Payne 等）的兼容处理 |
 | vkd3d-proton 0001 | 部分 D3D12 着色器被翻译成非法的 SPIR-V，AMD 显卡（Mesa RADV）上直接崩溃 |
+| vkd3d-proton 0002 | （GE）D3D12 游戏退出或切换窗口时卡在销毁交换链 |
+| dxvk 0002–0007 | （GE）《最终幻想14》多屏时焦点移到另一块屏幕就从全屏缩成小窗口，黑色沙漠失去焦点退出全屏，等 |
 
-补丁源码在 `we-proton-patches/` 的 `wine/` 和 `vkd3d-proton/` 下。
+补丁源码在 `we-proton-patches/` 的 `wine/`、`vkd3d-proton/` 和 `dxvk/` 下。
 
 ## 安装
 

@@ -1,0 +1,26 @@
+From bd5f7c480af9614090aee1227c27e4cfe3622a24 Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Sun, 11 Oct 2026 20:28:17 +0900
+Subject: [PATCH 39/42] Import unity_crash_hotfix from GE-Proton
+
+Imported from GE-Proton11-7 patches/wine-hotfixes/pending/unity_crash_hotfix.patch.
+---
+ dlls/dxgi/dxgi_main.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/dlls/dxgi/dxgi_main.c b/dlls/dxgi/dxgi_main.c
+index ca1fb525535..245061a08e8 100644
+--- a/dlls/dxgi/dxgi_main.c
++++ b/dlls/dxgi/dxgi_main.c
+@@ -245,8 +245,6 @@ HRESULT WINAPI DXGID3D10RegisterLayers(const struct dxgi_device_layer *layers, U
+ 
+ HRESULT WINAPI DXGIGetDebugInterface1(UINT flags, REFIID iid, void **debug)
+ {
+-    TRACE("flags %#x, iid %s, debug %p.\n", flags, debugstr_guid(iid), debug);
+-
+     WARN("Returning DXGI_ERROR_SDK_COMPONENT_MISSING.\n");
+     return DXGI_ERROR_SDK_COMPONENT_MISSING;
+ }
+-- 
+2.56.0
+
