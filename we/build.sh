@@ -53,6 +53,9 @@ if [ "$PREP" = 1 ]; then
     # --force: the submodules were patched in place by the last run
     git -C "$ROOT" submodule update --init --force --filter=tree:0 --recursive > "$OUT/protonprep.log" 2>&1 \
         || { tail -20 "$OUT/protonprep.log" >&2; exit 1; }
+    # a run stopped halfway can leave git revert/am/cherry-pick state in wine/,
+    # which protonprep's git reset doesn't clear
+    for op in revert am cherry-pick; do git -C "$ROOT/wine" $op --quit > /dev/null 2>&1 || true; done
     # protonprep only checks out the files it patches in these top-level directories
     (cd "$ROOT" && find steam_helper umu_helper lsteamclient \( -name '*.rej' -o -name '*.orig' \) -delete)
     log "patching"

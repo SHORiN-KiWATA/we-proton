@@ -38,6 +38,10 @@ echo ":: updating submodules (log: $LOG)"
 git submodule update --init --force --filter=tree:0 --recursive > "$LOG" 2>&1 \
     || { tail -20 "$LOG" >&2; exit 1; }
 
+# a run stopped halfway can leave git revert/am/cherry-pick state in wine/,
+# which protonprep's git reset doesn't clear
+for op in revert am cherry-pick; do git -C wine $op --quit > /dev/null 2>&1 || true; done
+
 # protonprep without the block that applies patches/dwproton and patches/wine,
 # and without autoreconf: configure is generated, the patches don't carry it
 PREP=build/protonprep-ge-only.sh
