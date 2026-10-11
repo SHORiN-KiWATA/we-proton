@@ -1,0 +1,18 @@
+GetMessage  filter NULL, timer pending               ret=0 msg=WM_QUIT  hwnd=NULL after 0 ms
+GetMessage  filter hwnd, timer pending               ret=0 msg=WM_QUIT  hwnd=NULL after 0 ms
+GetMessage  filter hwnd, range WM_TIMER, timer pending ret=0 msg=WM_QUIT  hwnd=NULL after 0 ms
+GetMessage  filter NULL, range WM_TIMER, timer pending ret=0 msg=WM_QUIT  hwnd=NULL after 0 ms
+PeekMessage filter (HWND)-1, timer pending           ret=1 msg=WM_QUIT
+PeekMessage filter other thread's hwnd               ret=1 msg=WM_QUIT
+PeekMessage filter NULL                              ret=1 msg=WM_QUIT
+PeekMessage filter hwnd                              ret=1 msg=WM_QUIT
+PeekMessage filter hwnd, timer pending               ret=1 msg=WM_QUIT
+PeekMessage filter NULL, range WM_USER               ret=1 msg=WM_QUIT
+PeekMessage filter hwnd, range WM_USER               ret=1 msg=WM_QUIT
+PeekMessage filter (HWND)-1                          ret=1 msg=WM_QUIT
+PeekMessage posted WM_QUIT, filter NULL              ret=1 msg=WM_QUIT
+PeekMessage posted WM_QUIT, filter hwnd              ret=0 msg=-
+GetMessage  posted WM_QUIT, filter hwnd, timer pending ret=1 msg=WM_TIMER
+PeekMessage posted WM_QUIT, filter NULL, range WM_USER ret=0 msg=-
+PeekMessage posted WM_QUIT, filter (HWND)-1          ret=1 msg=WM_QUIT
+after a PeekMessage filtered on hwnd, unfiltered PeekMessage ret=0 msg=-

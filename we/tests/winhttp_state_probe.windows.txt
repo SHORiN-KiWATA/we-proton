@@ -1,0 +1,34 @@
+flags 0xa0000000
+  before send                        add(0xa0000000) -> 1 err 0
+  send                               send 1 (0) recv 1 (0) status 200
+  first send                         send 1 (0) recv 1 (0) status 200
+  after receive, body unread         add(0xa0000000) -> 1 err 0
+  resend                             send 1 (0) recv 1 (0) status 200
+  first send                         send 1 (0) recv 1 (0) status 200
+  after body read                    add(0xa0000000) -> 1 err 0
+  resend                             send 1 (0) recv 1 (0) status 200
+  send to closed port                send 0 (12029) recv 0 (0) status 0
+  after failed send                  add(0xa0000000) -> 1 err 0
+  NULL handle                        add(0xa0000000) -> 0 err 6
+  session handle                     add(0xa0000000) -> 0 err 12018
+  connect handle                     add(0xa0000000) -> 0 err 12018
+flags 0x20000000
+  before send                        add(0x20000000) -> 1 err 0
+  send                               send 1 (0) recv 1 (0) status 200
+  first send                         send 1 (0) recv 1 (0) status 200
+  after receive, body unread         add(0x20000000) -> 1 err 0
+  resend                             send 1 (0) recv 1 (0) status 200
+  first send                         send 1 (0) recv 1 (0) status 200
+  after body read                    add(0x20000000) -> 1 err 0
+  resend                             send 1 (0) recv 1 (0) status 200
+  send to closed port                send 0 (12029) recv 0 (0) status 0
+  after failed send                  add(0x20000000) -> 1 err 0
+  NULL handle                        add(0x20000000) -> 0 err 6
+  session handle                     add(0x20000000) -> 0 err 12018
+  connect handle                     add(0x20000000) -> 0 err 12018
+async
+  before send                        add(0xa0000000) -> 1 err 0
+  async send                         send 1 (0)
+  right after async send             add(0xa0000000) -> 1 err 0
+  send completion                    status 0x400000
+  after send completion              add(0xa0000000) -> 1 err 0

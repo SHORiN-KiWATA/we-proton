@@ -1,0 +1,47 @@
+InitializeIpForwardEntry: luid=0 idx=0 prefix=0.0.0.0/0 fam=0 nexthop=0.0.0.0 fam=0 site=255 valid=0xffffffff pref=0xffffffff metric=4294967295 proto=4294967295 loopback=255 autoconf=255 publish=255 immortal=255 age=0 origin=0
+InitializeUnicastIpAddressEntry: addr=0.0.0.0 fam=0 luid=0 idx=0 prefix_origin=16 suffix_origin=16 valid=0xffffffff pref=0xffffffff onlink=255 skip=0 dad=0 scope=0
+InitializeIpInterfaceEntry: fam=0 luid=0 idx=0 maxreasm=4294967295 ifid=0xffffffffffffffff minra=4294967295 maxra=4294967295 advertising=255 forwarding=255 weak_send=255 weak_recv=255 auto_metric=255 nud=255 managed=255 other=255 adv_default=255 router_disc=-1 dad=4294967295 base_reach=0 retrans=0 pmtu_to=0 link_local=-1 ll_timeout=4294967295 zones=4294967295,4294967295,4294967295 site_prefix=4294967295 metric=4294967295 mtu=0 connected=255 wakeup=255 nd=255 rd=255 reach=4294967295 disable_default=255
+GetIpInterfaceEntry ret=0
+current: fam=2 luid=set idx=set maxreasm=4294967295 ifid=0xffffffffffffffff minra=200 maxra=600 advertising=255 forwarding=255 weak_send=255 weak_recv=255 auto_metric=1 nud=1 managed=255 other=255 adv_default=255 router_disc=0 dad=3 base_reach=30000 retrans=1000 pmtu_to=600000 link_local=1 ll_timeout=6500 zones=0,0,0 site_prefix=64 metric=0 mtu=1500 connected=0 wakeup=0 nd=1 rd=1 reach=30000 disable_default=255
+SetIpInterfaceEntry unchanged ret=87
+SetIpInterfaceEntry SitePrefixLength=1 ret=0
+SetIpInterfaceEntry luid 0, index set ret=0
+SetIpInterfaceEntry luid 0, index 0 ret=87
+SetIpInterfaceEntry family 0 ret=87
+SetIpInterfaceEntry straight from Initialize ret=0
+SetIpInterfaceEntry metric+7 ret=0
+after: metric is old+7 auto=1
+SetIpInterfaceEntry restore ret=0
+SetIpInterfaceEntry same mtu ret=0
+CreateIpForwardEntry2 ret=0
+CreateIpForwardEntry2 again ret=5010
+CreateIpForwardEntry2 again, other metric ret=5010
+GetIpForwardEntry2 ret=0
+read back: luid=set idx=set prefix=198.51.100.0/24 fam=2 nexthop=0.0.0.0 fam=2 site=0 valid=0xffffffff pref=0xffffffff metric=5 proto=2 loopback=0 autoconf=1 publish=0 immortal=1 age=0 origin=0
+SetIpForwardEntry2 metric 11 ret=0
+metric after set=11
+CreateIpForwardEntry2 by index ret=0
+DeleteIpForwardEntry2 by index ret=0
+CreateIpForwardEntry2 no interface ret=2
+CreateIpForwardEntry2 prefix 33 ret=87
+CreateIpForwardEntry2 host bits set ret=87
+DeleteIpForwardEntry2 host bits set ret=87
+DeleteIpForwardEntry2 ret=0
+DeleteIpForwardEntry2 again ret=1168
+GetIpForwardEntry2 after delete ret=1168
+CreateUnicastIpAddressEntry ret=0
+CreateUnicastIpAddressEntry again ret=5010
+GetUnicastIpAddressEntry ret=0
+read back: addr=198.51.100.7 fam=2 luid=set idx=set prefix_origin=3 suffix_origin=3 valid=0xea60 pref=0xea60 onlink=24 skip=0 dad=4 scope=0
+on-link route for the new address: GetIpForwardEntry2 ret=0
+SetUnicastIpAddressEntry prefix 25 ret=0
+DeleteUnicastIpAddressEntry ret=0
+DeleteUnicastIpAddressEntry again ret=87
+CreateUnicastIpAddressEntry no interface ret=2
+CreateUnicastIpAddressEntry prefix 33 ret=87
+DeleteUnicastIpAddressEntry prefix 33 ret=87
+--- routes/addresses afterwards
+default via 10.9.9.1 dev d0 
+10.9.9.0/24 dev d0 proto kernel scope link src 10.9.9.2 
+lo               UNKNOWN        127.0.0.1/8 
+d0               UNKNOWN        10.9.9.2/24 

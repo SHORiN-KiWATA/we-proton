@@ -1,0 +1,56 @@
+diff --git a/dlls/wdf01000.sys/Makefile.in b/dlls/wdf01000.sys/Makefile.in
+index 561a1fa..24da880 100644
+--- a/dlls/wdf01000.sys/Makefile.in
++++ b/dlls/wdf01000.sys/Makefile.in
+@@ -3,4 +3,4 @@ IMPORTS = wdfldr.sys
+ 
+ EXTRADLLFLAGS = -Wl,--subsystem,native
+ 
+-SOURCES = main.c
++SOURCES = main.c stubs_generated.c
+diff --git a/dlls/wdf01000.sys/main.c b/dlls/wdf01000.sys/main.c
+index f943f23..2a304ce 100644
+--- a/dlls/wdf01000.sys/main.c
++++ b/dlls/wdf01000.sys/main.c
+@@ -76,6 +76,8 @@ static inline LPCSTR debugstr_us( const UNICODE_STRING *us )
+     return debugstr_wn( us->Buffer, us->Length / sizeof(WCHAR) );
+ }
+ 
++extern void *wdf_stub_table[1024];
++
+ static void *kmdf_functable[1024];
+ 
+ static WDF_COMPONENT_GLOBALS kmdf_globals = {
+@@ -95,6 +97,10 @@ static NTSTATUS WINAPI kmdf_LibraryDecommission(void) {
+ static NTSTATUS WINAPI kmdf_LibraryRegisterClient(WDF_BIND_INFO *info, PWDF_COMPONENT_GLOBALS *globals, void *context) {
+     FIXME("stub %p %p %p\n", info, globals, context);
+ 
++    FIXME("RegisterClient details: size=%lu component=%s version=%lu.%lu.%lu func_count=%lu func_table=%p module=%p context=%p\n",
++          info->Size, debugstr_w(info->Component), info->Version.Major, info->Version.Minor,
++          info->Version.Build, info->FuncCount, info->FuncTable, info->Module, context);
++
+     if (info->FuncCount > ARRAY_SIZE(kmdf_functable))
+     {
+         ERR("FuncTable size mismatch, we have %lu, client wants %lu\n",
+@@ -131,14 +137,19 @@ static void WINAPI wdf_stub_void_noop(void *arg)
+ NTSTATUS WINAPI DriverEntry(DRIVER_OBJECT *driver, UNICODE_STRING *path)
+ {
+     NTSTATUS status;
++    unsigned int i;
+ 
+     TRACE("%p %s\n", driver, debugstr_us(path));
+ 
+     kmdf_globals.DriverObject = driver;
+     kmdf_globals.RegistryPath = path;
+ 
+-    /* populate index 201 (WdfDriverMiniportUnload) */
+-    kmdf_functable[201] = wdf_stub_void_noop;
++    /* instrumentation: populate every functable entry with a logging stub,
++       decorated with the kernel-mode address prefix (bits 47-63), the same way
++       dwproton decorates the DriverEntry return address: Windows kernel drivers
++       may validate that pointers they receive are kernel addresses. */
++    for (i = 0; i < ARRAY_SIZE(kmdf_functable); i++)
++        kmdf_functable[i] = (void *)((ULONG_PTR)wdf_stub_table[i] | 0xffff800000000000ULL);
+ 
+     status = WdfRegisterLibrary(&kmdf_wdf_library_info, path, NULL);
+ 

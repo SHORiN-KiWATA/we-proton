@@ -1,0 +1,19 @@
+udp_wakeup_probe on 6.2.9200, wine no
+[fresh    ] connect(0.0.0.0:0) #1 ret -1 err 10049 SO_ERROR 0 | #2 ret -1 err 10049 SO_ERROR 0
+[bound    ] connect(0.0.0.0:0) #1 ret -1 err 10049 SO_ERROR 0 | #2 ret -1 err 10049 SO_ERROR 0
+[connected] connect(0.0.0.0:0) #1 ret 0 err 0 SO_ERROR 0 | #2 ret -1 err 10049 SO_ERROR 0
+[fresh     sets --E] wake by connect0  ret -1 err 10049 -> select ret 1 after  113.6 ms, r0 w0 e1, SO_ERROR 0
+[fresh     sets --E twice] wake by connect0  ret -1 err 10049 -> select ret 1 after    0.0 ms, r0 w0 e1, SO_ERROR 0
+[fresh     sets R-E twice] wake by connect0  ret -1 err 10049 -> select ret 1 after    0.0 ms, r0 w0 e1, SO_ERROR 0
+[fresh     sets --E twice] wake by connectlo ret 0 err 0 -> select ret 1 after    0.0 ms, r0 w0 e1, SO_ERROR 0
+[fresh     sets --E twice] wake by none      ret -2 err 0 -> select ret 1 after    0.0 ms, r0 w0 e1, SO_ERROR 0
+[bound     sets --E] wake by connect0  ret -1 err 10049 -> select ret 1 after  106.9 ms, r0 w0 e1, SO_ERROR 0
+[bound     sets --E twice] wake by connect0  ret -1 err 10049 -> select ret 1 after    0.0 ms, r0 w0 e1, SO_ERROR 0
+[bound     sets R-E twice] wake by connect0  ret -1 err 10049 -> select ret 1 after    0.0 ms, r0 w0 e1, SO_ERROR 0
+[bound     sets --E twice] wake by connectlo ret 0 err 0 -> select ret 1 after    0.0 ms, r0 w0 e1, SO_ERROR 0
+[bound     sets --E twice] wake by none      ret -2 err 0 -> select ret 1 after    0.0 ms, r0 w0 e1, SO_ERROR 0
+[connected sets --E] wake by connect0  ret 0 err 0 -> select ret 0 after 1012.5 ms, r0 w0 e0, SO_ERROR 0
+[connected sets --E twice] wake by connect0  ret -1 err 10049 -> select ret 1 after    0.0 ms, r0 w0 e1, SO_ERROR 0
+[connected sets R-E twice] wake by connect0  ret -1 err 10049 -> select ret 1 after    0.0 ms, r0 w0 e1, SO_ERROR 0
+[connected sets --E twice] wake by connectlo ret 0 err 0 -> select ret 1 after    0.0 ms, r0 w0 e1, SO_ERROR 0
+[connected sets --E twice] wake by none      ret -2 err 0 -> select ret 1 after    0.0 ms, r0 w0 e1, SO_ERROR 0

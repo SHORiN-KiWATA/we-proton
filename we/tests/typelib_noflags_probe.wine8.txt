@@ -1,0 +1,37 @@
+64-bit, build type library 0
+register 0
+unmarshal 0
+
+Long(5, &v=-1)    flags 0,0  hr 0  server saw: a=5 *p=-1              client v=-1
+Long(5, NULL)     flags 0,0  hr 0x800706f4  server saw:
+LongIn(&v=-1)     FIN        hr 0  server saw: *p=-1                  client v=-1
+LongOut(&v=-1)    FOUT       hr 0  server saw: *p=0                   client v=7
+Bstr(&"client")   flags 0    hr 0  server saw: *p="client"            client got "client"
+Bstr(&NULL)       flags 0    hr 0  server saw: *p=NULL                client got NULL
+TwoBstr(&NULL,&NULL) flags 0,0 hr 0  server saw: *p=NULL *p=NULL        client got NULL NULL
+Variant(&I4 -1)   flags 0    hr 0  server saw: vt=3 lVal=-1           client vt=3 lVal=-1
+Unk(object)       flags 0    hr 0  server saw: p=object
+IfacePtr(object)  flags 0    hr 0  server saw: p=object
+UnkPtr(&NULL)     flags 0    hr 0  server saw: *p=NULL                client got NULL
+UnkPtr(&object)   flags 0    hr 0  server saw: *p=object              client got its own object
+
+unregister 0, delete 1
+
+32-bit, build type library 0
+register 0
+unmarshal 0
+
+Long(5, &v=-1)    flags 0,0  hr 0  server saw: a=5 *p=-1              client v=-1
+Long(5, NULL)     flags 0,0  hr 0x800706f4  server saw:
+LongIn(&v=-1)     FIN        hr 0  server saw: *p=-1                  client v=-1
+LongOut(&v=-1)    FOUT       hr 0  server saw: *p=0                   client v=7
+Bstr(&"client")   flags 0    hr 0  server saw: *p="client"            client got "client"
+Bstr(&NULL)       flags 0    hr 0  server saw: *p=NULL                client got NULL
+TwoBstr(&NULL,&NULL) flags 0,0 hr 0  server saw: *p=NULL *p=NULL        client got NULL NULL
+Variant(&I4 -1)   flags 0    hr 0  server saw: vt=3 lVal=-1           client vt=3 lVal=-1
+Unk(object)       flags 0    hr 0  server saw: p=object
+IfacePtr(object)  flags 0    hr 0  server saw: p=object
+UnkPtr(&NULL)     flags 0    hr 0  server saw: *p=NULL                client got NULL
+UnkPtr(&object)   flags 0    hr 0  server saw: *p=object              client got its own object
+
+unregister 0, delete 1

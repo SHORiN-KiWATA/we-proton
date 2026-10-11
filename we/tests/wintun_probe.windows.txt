@@ -1,0 +1,55 @@
+export WintunCreateAdapter=yes
+export WintunOpenAdapter=yes
+export WintunCloseAdapter=yes
+export WintunDeleteDriver=yes
+export WintunGetAdapterLUID=yes
+export WintunGetRunningDriverVersion=yes
+export WintunSetLogger=yes
+export WintunStartSession=yes
+export WintunEndSession=yes
+export WintunGetReadWaitEvent=yes
+export WintunReceivePacket=yes
+export WintunReleaseReceivePacket=yes
+export WintunAllocateSendPacket=yes
+export WintunSendPacket=yes
+== driver ==
+driver-version=0x00000000
+delete-driver(no driver yet)=1 err=0
+== create ==
+logger: level=0 timestamp=134359421339959559 message=Installing driver 0.14
+logger: level=0 timestamp=134359421339975928 message=Extracting driver
+logger: level=0 timestamp=134359421339985969 message=Installing driver
+logger: level=0 timestamp=134359421344372398 message=Creating adapter
+create-adapter=ok
+luid=00000000-00350080
+luid-to-index err=0 index=3
+index-to-luid err=0 luid=35008000000000 equal=1
+luid-to-alias err=0 alias=WintunProbe
+adapter: name=WintunProbe description=Probe Tunnel iftype=53 operstatus=2
+logger: level=0 timestamp=134359421347126446 message=Using existing driver 0.14
+logger: level=0 timestamp=134359421347166586 message=Creating adapter
+create-same-name=ok err=0
+logger: level=0 timestamp=134359421348152054 message=Spawning native process to remove instance
+driver-version-after-create=0x0000000e
+logger: level=2 timestamp=134359421348881735 message=Failed to find matching adapter name: open-adapter=NULL err=1168
+== session ==
+logger: level=2 timestamp=134359421348881735 message=Failed to register rings: start-session(0)=NULL err=87
+logger: level=2 timestamp=134359421348881735 message=Failed to register rings: start-session(0x1000)=NULL err=87
+logger: level=2 timestamp=134359421348881735 message=Failed to register rings: start-session(0x30000)=NULL err=87
+logger: level=2 timestamp=134359421348881735 message=Failed to register rings: start-session(0x8000000)=NULL err=87
+start-session(0x20000)=ok err=0
+logger: level=2 timestamp=134359421348886732 message=Failed to register rings: start-session-second=NULL err=1247
+read-wait-event=000003DC err=1247
+event-type=1 state=0
+event-wait(0)=258
+receive-drain: none
+allocate(0x20001)=NULL err=111
+allocate(1500)=packet err=111
+send=done err=111
+end-session=done
+== close ==
+logger: level=0 timestamp=134359421348891728 message=Spawning native process to remove instance
+logger: level=2 timestamp=134359421349556894 message=Failed to find matching adapter name: open-after-close=NULL err=1168
+logger: level=0 timestamp=134359421350147069 message=Removing driver oem8.inf
+delete-driver=1 err=0
+done

@@ -1,0 +1,4 @@
+wine: Call from 00006FFFFFBFDA17 to unimplemented function ntoskrnl.exe.InbvAcquireDisplayOwnership, aborting
+wine: Unimplemented function ntoskrnl.exe.InbvAcquireDisplayOwnership called at address 00006FFFFFBFDA17 (thread 0024), starting debugger...
+Unhandled exception: unimplemented function ntoskrnl.exe.InbvAcquireDisplayOwnership called in 64-bit code (0x006fffffbfda17).
+wine: Call from 00006FFFFFBFDA17 to unimplemented function ntoskrnl.exe.InbvAcquireDisplayOwnership, aborting

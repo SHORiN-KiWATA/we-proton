@@ -1,0 +1,18 @@
+udp_connect_err_probe, wine no
+  afd poll(all) fresh                        st 0 count 1 flags 0x4 status 0
+T1 connect0 -> 10049
+  afd poll(all) after failed connect         st 0 count 1 flags 0x104 status 0xc0000207
+T1 sel0 x3: 1 1 1
+  afd poll(all) after 3 selects              st 0 count 1 flags 0x104 status 0xc0000207
+T2 connect0 -> 10049, then connect0 -> 10049
+T2 sel0 x2: 1 1
+T3 connect(loopback) -> 0
+T3 sel0 x2 after good connect: 0 0
+  afd poll(all) after good connect           st 0 count 1 flags 0x44 status 0
+T4 connect0 (connected) -> 0, sel0 0
+T4 connect0 (now unconnected) -> 10049, sel0 0
+T5 loop 0: connect0 10049, sel0 1, connect0 10049, select(300ms) hit 1 after 0.0 ms
+T5 loop 1: connect0 10049, sel0 1, connect0 10049, select(300ms) hit 1 after 0.0 ms
+T5 loop 2: connect0 10049, sel0 1, connect0 10049, select(300ms) hit 1 after 0.0 ms
+T5 loop 3: connect0 10049, sel0 1, connect0 10049, select(300ms) hit 1 after 0.0 ms
+T6 after failed connect, SO_ERROR 0, sel0 1

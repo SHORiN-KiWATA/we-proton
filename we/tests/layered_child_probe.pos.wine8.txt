@@ -1,0 +1,26 @@
+host 0000000000010056 child 0000000000010060, pptDst {0,0}
+child rect 200,150-520,350, own X window: 0
+shown: host at 200,150
+  left, opaque green         r=  0 g=255 b=  0
+  right top, 50% red         r=128 g=  0 b=  0
+  right bottom, transparent  r=  0 g=  0 b=  0
+  at the screen origin:     r=  0 g=  0 b=  0  r=  0 g=  0 b=  0  r=  0 g=255 b=  0
+  X window 0x1200001 320x200+200+150
+moved: host at 400,300
+  left, opaque green         r=  0 g=255 b=  0
+  right top, 50% red         r=128 g=  0 b=  0
+  right bottom, transparent  r=  0 g=  0 b=  0
+  at the screen origin:     r=  0 g=  0 b=  0  r=  0 g=  0 b=  0  r=  0 g=  0 b=  0
+  X window 0x1200001 320x200+400+300
+updated: host at 400,300
+  left, opaque green         r=  0 g=255 b=  0
+  right top, 50% red         r=128 g=  0 b=  0
+  right bottom, transparent  r=  0 g=  0 b=  0
+  at the screen origin:     r=  0 g=  0 b=  0  r=  0 g=  0 b=  0  r=  0 g=  0 b=  0
+  X window 0x1200001 320x200+400+300
+child-moved: host at 400,300
+  left, opaque green         r=  0 g=  0 b=255
+  right top, 50% red         r=  0 g=255 b=  0
+  right bottom, transparent  r=  0 g=255 b=  0
+  at the screen origin:     r=  0 g=  0 b=  0  r=  0 g=  0 b=  0  r=  0 g=  0 b=  0
+  X window 0x1200001 320x200+400+300

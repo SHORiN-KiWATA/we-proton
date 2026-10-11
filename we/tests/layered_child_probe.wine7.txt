@@ -1,0 +1,30 @@
+host 0000000000010056 child 0000000000010060, pptDst NULL
+child rect 200,150-520,350, own X window: 0x1400005
+shown: host at 200,150
+  left, opaque green         r=255 g=255 b=255
+  right top, 50% red         r=255 g=255 b=255
+  right bottom, transparent  r=255 g=255 b=255
+  at the screen origin:     r=  0 g=255 b=  0  r=128 g=  0 b=  0  r=255 g=255 b=255
+  X window 0x1400001 320x200+200+150
+  X window 0x1400005 320x200+0+0 override-redirect
+moved: host at 400,300
+  left, opaque green         r=255 g=255 b=255
+  right top, 50% red         r=255 g=255 b=255
+  right bottom, transparent  r=255 g=255 b=255
+  at the screen origin:     r=  0 g=255 b=  0  r=128 g=  0 b=  0  r=  0 g=  0 b=  0
+  X window 0x1400001 320x200+400+300
+  X window 0x1400005 320x200+0+0 override-redirect
+updated: host at 400,300
+  left, opaque green         r=255 g=255 b=255
+  right top, 50% red         r=255 g=255 b=255
+  right bottom, transparent  r=255 g=255 b=255
+  at the screen origin:     r=  0 g=255 b=  0  r=128 g=  0 b=  0  r=  0 g=  0 b=  0
+  X window 0x1400001 320x200+400+300
+  X window 0x1400005 320x200+0+0 override-redirect
+child-moved: host at 400,300
+  left, opaque green         r=255 g=255 b=255
+  right top, 50% red         r=255 g=255 b=255
+  right bottom, transparent  r=255 g=255 b=255
+  at the screen origin:     r=  0 g=  0 b=  0  r=  0 g=255 b=  0  r=  0 g=255 b=  0
+  X window 0x1400001 320x200+400+300
+  X window 0x1400005 320x200+160+0 override-redirect

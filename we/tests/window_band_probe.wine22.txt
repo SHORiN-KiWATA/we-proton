@@ -1,0 +1,2 @@
+GetWindowBand=0000000000000000 NtUserGetWindowBand=00006FFFFF444480
+wine: Call from 00006FFFFF444494 to unimplemented function win32u.NtUserGetWindowBand, aborting

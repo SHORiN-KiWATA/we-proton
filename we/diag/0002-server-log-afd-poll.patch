@@ -1,0 +1,67 @@
+--- a/server/sock.c
++++ b/server/sock.c
+@@ -2891,6 +2891,21 @@
+             }
+         }
+ 
++        if (sock->type == WS_SOCK_DGRAM)
++        {
++            /* diagnostic build: where do datagram sockets get connected to? */
++            char buf[64] = "?";
++            if (addr->sa_family == WS_AF_INET)
++            {
++                const unsigned char *b = (const unsigned char *)&((const struct WS_sockaddr_in *)addr)->sin_addr;
++                snprintf( buf, sizeof(buf), "%u.%u.%u.%u:%u", b[0], b[1], b[2], b[3],
++                          ntohs( ((const struct WS_sockaddr_in *)addr)->sin_port ) );
++            }
++            else snprintf( buf, sizeof(buf), "family %u", addr->sa_family );
++            fprintf( stderr, "DBGCONN pid %04x tid %04x dgram connect to %s addrlen %u -> ret %d errno %d\n",
++                     current->process->id, current->id, buf, params->addr_len, ret, ret < 0 ? errno : 0 );
++        }
++
+         if (ret < 0 && errno != EINPROGRESS)
+         {
+             set_error( sock_get_ntstatus( errno ) );
+@@ -2929,6 +2944,24 @@
+                 /* Connecting a datagram socket completes polls waiting for
+                  * AFD_POLL_CONNECT; some applications use this to wake up a
+                  * thread blocked in WSAPoll(). */
++                {
++                    /* diagnostic build */
++                    struct poll_req *dreq;
++                    unsigned int di, n = 0;
++                    LIST_FOR_EACH_ENTRY( dreq, &poll_list, struct poll_req, entry )
++                    {
++                        if (dreq->iosb->status != STATUS_PENDING) continue;
++                        for (di = 0; di < dreq->count; ++di)
++                            if (dreq->sockets[di].sock == sock)
++                            {
++                                fprintf( stderr, "DBGCONN pid %04x tid %04x dgram sock %04x: pending poll wants %#x\n",
++                                         current->process->id, current->id, dreq->sockets[di].handle, dreq->sockets[di].mask );
++                                n++;
++                            }
++                    }
++                    if (!n) fprintf( stderr, "DBGCONN pid %04x tid %04x dgram connect, no pending poll on this socket\n",
++                                     current->process->id, current->id );
++                }
+                 complete_async_polls_with_flags( sock, AFD_POLL_CONNECT, 0 );
+             }
+ 
+@@ -3872,6 +3905,17 @@
+             signaled = TRUE;
+     }
+ 
++    if (timeout)
++    {
++        /* diagnostic build: log every poll that may block */
++        for (i = 0; i < count; ++i)
++            fprintf( stderr, "DBGPOLL pid %04x tid %04x timeout %lld [%u/%u] sock %04x type %d state %d mask %#x flags %#x %s\n",
++                     current->process->id, current->id,
++                     (long long)timeout, i, count, req->sockets[i].handle, req->sockets[i].sock->type,
++                     req->sockets[i].sock->state, req->sockets[i].mask, req->sockets[i].flags,
++                     signaled ? "immediate" : "pending" );
++    }
++
+     if (!timeout || signaled)
+         complete_async_poll( req, STATUS_SUCCESS );
+     else

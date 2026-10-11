@@ -1,0 +1,50 @@
+### window_band_probe.exe
+GetWindowBand=00006FFFFF52BF20 NtUserGetWindowBand=00006FFFFF444490
+top-level hidden             hwnd=0000000000010056  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+top-level visible            hwnd=0000000000010060  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+topmost popup                hwnd=0000000000010070  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+layered transparent overlay  hwnd=0000000000010072  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+child                        hwnd=0000000000010078  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+owned popup                  hwnd=000000000001007C  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+message-only                 hwnd=000000000001007A  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+desktop                      hwnd=0000000000010020  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+message parent               hwnd=0000000000010028  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+Shell_TrayWnd                hwnd=0000000000030030  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+Progman                      hwnd=0000000000000000  user32: ret=0 band=0xdeadbeef err=1400  win32u: ret=0 band=0xdeadbeef err=1400
+console                      hwnd=0000000000000000  user32: ret=0 band=0xdeadbeef err=1400  win32u: ret=0 band=0xdeadbeef err=1400
+NULL                         hwnd=0000000000000000  user32: ret=0 band=0xdeadbeef err=1400  win32u: ret=0 band=0xdeadbeef err=1400
+invalid 0x12345              hwnd=0000000000012345  user32: ret=0 band=0xdeadbeef err=1400  win32u: ret=0 band=0xdeadbeef err=1400
+destroyed                    hwnd=0000000000010056  user32: ret=0 band=0xdeadbeef err=1400  win32u: ret=0 band=0xdeadbeef err=1400
+### window_band_probe.exe nullptr
+GetWindowBand=00006FFFFF52BF20 NtUserGetWindowBand=00006FFFFF444490
+user32 nullptr: ret=0 err=998
+win32u nullptr: ret=0 err=998
+### window_band_probe.exe nullhwnd
+GetWindowBand=00006FFFFF52BF20 NtUserGetWindowBand=00006FFFFF444490
+user32 nullhwnd: ret=0 err=1400
+win32u nullhwnd: ret=0 err=1400
+### window_band_probe32.exe
+GetWindowBand=7B8BA950 NtUserGetWindowBand=7B68162C
+top-level hidden             hwnd=00010056  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+top-level visible            hwnd=00010060  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+topmost popup                hwnd=00020068  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+layered transparent overlay  hwnd=0002006A  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+child                        hwnd=00010074  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+owned popup                  hwnd=00010078  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+message-only                 hwnd=00010076  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+desktop                      hwnd=00010020  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+message parent               hwnd=00010028  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+Shell_TrayWnd                hwnd=00030030  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+Progman                      hwnd=00000000  user32: ret=0 band=0xdeadbeef err=1400  win32u: ret=0 band=0xdeadbeef err=1400
+console                      hwnd=00000000  user32: ret=0 band=0xdeadbeef err=1400  win32u: ret=0 band=0xdeadbeef err=1400
+NULL                         hwnd=00000000  user32: ret=0 band=0xdeadbeef err=1400  win32u: ret=0 band=0xdeadbeef err=1400
+invalid 0x12345              hwnd=00012345  user32: ret=0 band=0xdeadbeef err=1400  win32u: ret=0 band=0xdeadbeef err=1400
+destroyed                    hwnd=00010056  user32: ret=0 band=0xdeadbeef err=1400  win32u: ret=0 band=0xdeadbeef err=1400
+### window_band_probe32.exe nullptr
+GetWindowBand=7B8BA950 NtUserGetWindowBand=7B68162C
+user32 nullptr: ret=0 err=998
+win32u nullptr: ret=0 err=998
+### window_band_probe32.exe nullhwnd
+GetWindowBand=7B8BA950 NtUserGetWindowBand=7B68162C
+user32 nullhwnd: ret=0 err=1400
+win32u nullhwnd: ret=0 err=1400
