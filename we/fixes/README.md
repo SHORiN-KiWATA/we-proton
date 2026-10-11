@@ -34,6 +34,7 @@
 
 ## 已知、没修的问题
 
+- **没写过的写时复制页，`VirtualProtect` 报告的旧属性和 Windows 不同**（从 `we-proton-ge11-7-*` 起）：GE-Proton 带的 staging `ntdll-WRITECOPY/0010` 把 `PAGE_WRITECOPY` 一律改报成 `PAGE_READWRITE`，Windows 对没写过的页报 `PAGE_WRITECOPY`。0005 修的写过的页不受影响。见 `../tests/writecopy_probe.ge25.txt`
 - **wineserver fsync 断言**（`fsync.c:271`，`fsync_free_shm_idx`）：进程在短时间内反复异常退出时触发，wineserver 退出，前缀里的进程卡住。只在一次崩溃循环里见过
 - **N 卡渲染、核显显示时交帧卡住**（niri 不用 N 卡，屏幕接在核显上）：D3D11 程序在 N 卡上约 2 fps，渲染线程在等交帧。见 `0006-noactivate-activation/`
 - **xwayland-satellite 不执行最小化**：会在失去前台时最小化自己的程序会进入「最小化 → 被恢复」循环

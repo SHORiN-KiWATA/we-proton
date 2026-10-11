@@ -109,6 +109,7 @@ Valve 在 09-23 用的 dxvk、vkd3d-proton、vkd3d、FEX、dxvk-nvapi 比两边�
 - DW-Proton 的 dxvk HDR 检测：宿主机开了 HDR 时，dxvk 自动报告 HDR10，不用再设 `DXVK_HDR=1`（`DXVK_NO_HDR=1` 可以关掉）
 - 托盘图标由 GE-Proton 的 StatusNotifierItem 实现显示（代替 WE 0011）
 - 视频走 GE-Proton 的 winedmo + FFmpeg
+- staging 的 `ntdll-WRITECOPY/0010`（GE-Proton 带着）在 kernelbase 的 `VirtualProtect` 里把返回的旧属性 `PAGE_WRITECOPY` 一律改报成 `PAGE_READWRITE`。WE 0005 管的「写过的写时复制页报告成可读写」照样成立；没写过的页，Windows 报 `PAGE_WRITECOPY`（0x08），这一版报 `PAGE_READWRITE`（0x04），见 `tests/writecopy_probe.ge25.txt`。没有去掉这个 staging 补丁
 - DW-Proton 的「不按分层父窗口裁剪其他进程的子窗口」（server）和 GE-Proton 在 winex11 里裁剪客户区（`mark_direct_draw_child()`）同时作用；《Return to Krondor》的文字位图两边各有一个修复。都没有冲突，但没有实测
 
 ## 验证
@@ -116,3 +117,13 @@ Valve 在 09-23 用的 dxvk、vkd3d-proton、vkd3d、FEX、dxvk-nvapi 比两边�
 - 在干净的检出上跑 protonprep：所有补丁都打上，没有 `.rej`；结果和 Wine 开发分支逐文件相同，只差 `SERVER_PROTOCOL_VERSION`（`make_requests` 跑的次数不同）和 `dlls/wineopenxr`（建开发分支的起点时只跑了 protonprep 的 Wine 部分，wineopenxr 没打 GE-Proton 的补丁；DW-Proton 和 WE-Proton 的补丁都不碰它）
 - 单独编 Wine（SDK 镜像，`--enable-werror`，**不带 Wayland、FFmpeg、OpenXR**）：第一次编出的错误来自 9 个提交，即编译时剔除的 6 个和改过的 3 个（2 个 DW-Proton 提交和 WE 0016）。改完后编译错误全部消失，只剩缺 FFmpeg 和 OpenXR 加载器库的链接错误。因为没编 Wayland 驱动，winewayland 里的重复定义没抓到
 - review：逐个比对完整标题，又找出 6 个和 GE-Proton 同名、已经打上的提交，以及上面那个强制 X11 的提交，都去掉了
+- 完整构建：`we/build.sh --name we-proton-ge11-7-25`，从干净的 `build/obj` 开始，在同一个检出上第二次打补丁（验证子模块重置），67 分钟编完。打出来的 Wine 源码和开发分支一致（差别同第一条）
+- 回归探测（Steam Linux Runtime 4.0 + WoW64，和 wegame-launcher 相同的启动方式），和 we-proton-11.0-14-24 比：
+  - inbv、noactivate、private_ns（64/32 位）、typelib_noflags（64/32 位）、vcrt_version、winhttp_crlf 输出相同
+  - layered_child、window_band（64/32 位）只差窗口句柄和函数地址
+  - minprec_sig（0009）和修复后、Windows 上的输出相同
+  - writecopy 差一行，原因见上一节
+- input_shape_probe（0023，无头 gamescope）：两种模式的输出和 we-proton-11.0-14-25 相同
+- D3D11：DXVK v3.1.1-27 建设备成功（这次是核显 780M，独显没绑驱动）
+- 托盘：`tray_sni_probe` 在 GE-Proton 的 StatusNotifierItem 实现上能注册、显示图标和提示、发通知，单击、右键、双击、删除都正常（`tests/tray_sni_probe.ge25.txt`）。和 0011 的不同：图标只给 32×32 一种尺寸、通知的应用名是 "Wine"、多发 `NIN_SELECT`、`WM_CONTEXTMENU` 回调；waybar 双击时连发三次 Activate，程序收到一次双击外加一次单击
+- 没测：WeGame 和游戏的实机运行、WeGame 自绘托盘菜单的位置、Wayland 驱动下的程序
