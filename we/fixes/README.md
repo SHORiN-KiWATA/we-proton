@@ -30,6 +30,7 @@
 | wine 0022 | 同上，注册表那一项：`wine.inf` 不覆盖已有值，旧前缀的运行库版本停在建前缀时的值；wineboot 每次启动把它提到 `msvcp140.dll` 的版本 | `0021-vcruntime-version/` |
 | wine 0023 | 《诡秘之主》的启动器（Electron）切几次焦点就点不动：鼠标落在透明背景上时程序把窗口设成鼠标穿透，靠低级鼠标钩子看鼠标何时回来，而 XWayland 下 X 收不到穿透窗口上的指针；普通窗口穿透时仍然接收鼠标 | `0023-winex11-input-shape/` |
 | wine 0024–0042、vkd3d-proton 0002、dxvk 0002–0007（这一版没有：GE-Proton 直接带着原版） | 从 GE-Proton 导入的通用修复和按游戏的兼容处理（没有逐个审代码） | `0024-ge-proton-imports/` |
+| wine 0048 | 内置 wintun 报的网卡描述是 Linux 接口名，不是 Windows 的 `<tunnel type> Tunnel`：按描述找自己建的虚拟网卡的程序找不到网卡，网易 UU 的路由模式报 50004 | `0048-wintun-adapter-description/` |
 | vkd3d-proton 0001 | dxil-spirv 生成非法的结构化控制流，RADV 拒绝后崩溃 | `vkd3d-0001-dxil-spirv-loop-breaks/` |
 
 ## 已知、没修的问题

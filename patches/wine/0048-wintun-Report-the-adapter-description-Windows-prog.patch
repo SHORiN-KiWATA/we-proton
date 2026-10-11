@@ -1,0 +1,342 @@
+From 272955c6a5f7677df65e5424f33269e6fee3259a Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Mon, 12 Oct 2026 01:47:16 +0900
+Subject: [PATCH] wintun: Report the adapter description Windows programs look
+ for.
+
+The wintun driver reports the adapter name as the friendly name, which is
+what programs pass to WintunOpenAdapter(), and a description built from the
+tunnel type, "<tunnel type> Tunnel", which is what Windows programs match
+adapters by. Only the name was kept: nsiproxy reported the unix interface
+name (derived from the adapter name) as the description, so a program looking
+for the description of an adapter it created could not find it.
+
+Set the Windows description as the kernel interface alias when the adapter is
+created, and let nsiproxy report the alias as the description, falling back to
+the unix name for interfaces that do not have one. Both sides go through
+netlink (IFLA_IFALIAS): the alias cannot be written through sysfs inside the
+Steam runtime (it mounts /sys read-only, and its view does not follow the
+process network namespace). The interface name (and therefore the friendly
+name and the name the adapter is opened with) is unchanged.
+
+Signed-off-by: SHORiN-KIWATA <shorin@users.noreply.github.com>
+---
+ dlls/nsiproxy.sys/ndis.c | 98 +++++++++++++++++++++++++++++++++++++++-
+ dlls/wintun/unixlib.c    | 95 ++++++++++++++++++++++++++++++++++++++
+ dlls/wintun/unixlib.h    | 11 +++--
+ dlls/wintun/wintun.c     |  2 +
+ 4 files changed, 200 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/nsiproxy.sys/ndis.c b/dlls/nsiproxy.sys/ndis.c
+index 158a39e558d..e871637e6e7 100644
+--- a/dlls/nsiproxy.sys/ndis.c
++++ b/dlls/nsiproxy.sys/ndis.c
+@@ -66,6 +66,10 @@
+ #include <linux/wireless.h>
+ #endif
+ 
++#ifdef HAVE_LINUX_RTNETLINK_H
++#include <linux/rtnetlink.h>
++#endif
++
+ #include <pthread.h>
+ 
+ #include "ntstatus.h"
+@@ -96,6 +100,7 @@ struct if_entry
+     GUID if_guid;
+     NET_LUID if_luid;
+     WCHAR *if_name;
++    WCHAR *if_alias;
+     char if_unix_name[IFNAMSIZ];
+     IF_PHYSICAL_ADDRESS if_phys_addr;
+     UINT if_index;
+@@ -303,6 +308,7 @@ static struct if_entry *add_entry( UINT index, const char *name )
+ 
+     entry->if_index = index;
+     memcpy( entry->if_unix_name, name, name_len + 1 );
++    entry->if_alias = NULL;
+     entry->if_name = strdupAtoW( name );
+     if (!entry->if_name)
+     {
+@@ -328,6 +334,94 @@ static struct if_entry *add_entry( UINT index, const char *name )
+     return entry;
+ }
+ 
++/* The wintun driver emulation sets the Windows adapter description
++ * ("<tunnel type> Tunnel") as the kernel interface alias: programs tell
++ * adapters apart by the description, while the interface name is the friendly
++ * name they open them with. Read the aliases over netlink; the sysfs view
++ * inside the Steam runtime does not follow the process network namespace. */
++static void update_if_aliases( void )
++{
++#ifdef HAVE_LINUX_RTNETLINK_H
++    struct
++    {
++        struct nlmsghdr nh;
++        struct ifinfomsg ifinfo;
++    } req;
++    struct sockaddr_nl nladdr;
++    struct msghdr msg;
++    struct iovec iov;
++    char buffer[8192];
++    struct nlmsghdr *nlh;
++    int fd, len;
++
++    if ((fd = socket( PF_NETLINK, SOCK_RAW, NETLINK_ROUTE )) < 0) return;
++
++    memset( &req, 0, sizeof(req) );
++    req.nh.nlmsg_len = NLMSG_LENGTH( sizeof(req.ifinfo) );
++    req.nh.nlmsg_type = RTM_GETLINK;
++    req.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
++    req.nh.nlmsg_seq = 1;
++    req.ifinfo.ifi_family = AF_UNSPEC;
++
++    memset( &nladdr, 0, sizeof(nladdr) );
++    nladdr.nl_family = AF_NETLINK;
++    iov.iov_base = &req;
++    iov.iov_len = req.nh.nlmsg_len;
++    memset( &msg, 0, sizeof(msg) );
++    msg.msg_name = &nladdr;
++    msg.msg_namelen = sizeof(nladdr);
++    msg.msg_iov = &iov;
++    msg.msg_iovlen = 1;
++
++    if (sendmsg( fd, &msg, 0 ) < 0)
++    {
++        close( fd );
++        return;
++    }
++
++    while ((len = recv( fd, buffer, sizeof(buffer), 0 )) > 0)
++    {
++        for (nlh = (struct nlmsghdr *)buffer; NLMSG_OK( nlh, len ); nlh = NLMSG_NEXT( nlh, len ))
++        {
++            struct ifinfomsg *ifinfo;
++            struct rtattr *attr;
++            int attrlen;
++
++            if (nlh->nlmsg_type == NLMSG_DONE)
++            {
++                close( fd );
++                return;
++            }
++            if (nlh->nlmsg_type != RTM_NEWLINK) continue;
++
++            ifinfo = NLMSG_DATA( nlh );
++            attr = IFLA_RTA( ifinfo );
++            attrlen = IFLA_PAYLOAD( nlh );
++            for (; RTA_OK( attr, attrlen ); attr = RTA_NEXT( attr, attrlen ))
++            {
++                struct if_entry *entry;
++                char alias[256];
++                int alias_len;
++
++                if (attr->rta_type != IFLA_IFALIAS) continue;
++                if (!(entry = find_entry_from_index( ifinfo->ifi_index ))) continue;
++
++                alias_len = RTA_PAYLOAD( attr );
++                free( entry->if_alias );
++                entry->if_alias = NULL;
++                if (alias_len <= 0) continue;
++                if (alias_len >= sizeof(alias)) alias_len = sizeof(alias) - 1;
++                memcpy( alias, RTA_DATA( attr ), alias_len );
++                alias[alias_len] = 0;
++                entry->if_alias = strdupAtoW( alias );
++            }
++        }
++    }
++
++    close( fd );
++#endif
++}
++
+ static unsigned int update_if_table( void )
+ {
+     struct if_nameindex *indices = if_nameindex(), *entry;
+@@ -349,6 +443,8 @@ static unsigned int update_if_table( void )
+         ++append_count;
+     }
+ 
++    update_if_aliases();
++
+     return append_count;
+ }
+ 
+@@ -501,7 +597,7 @@ static void ifinfo_fill_entry( struct if_entry *entry, NET_LUID *key, struct nsi
+     if (stat)
+     {
+         stat->if_index = entry->if_index;
+-        if_counted_string_init( &stat->descr, entry->if_name ); /* get a more descriptive name */
++        if_counted_string_init( &stat->descr, entry->if_alias ? entry->if_alias : entry->if_name );
+         stat->type = entry->if_type;
+         stat->access_type = (entry->if_type == MIB_IF_TYPE_LOOPBACK) ? NET_IF_ACCESS_LOOPBACK : NET_IF_ACCESS_BROADCAST;
+         stat->unk = 0;
+diff --git a/dlls/wintun/unixlib.c b/dlls/wintun/unixlib.c
+index 8c3e038b4b0..9752e4b84a7 100644
+--- a/dlls/wintun/unixlib.c
++++ b/dlls/wintun/unixlib.c
+@@ -37,6 +37,9 @@
+ #include <sys/ioctl.h>
+ #include <sys/socket.h>
+ #include <linux/if_tun.h>
++#ifdef HAVE_LINUX_RTNETLINK_H
++#include <linux/rtnetlink.h>
++#endif
+ #endif
+ 
+ #include "ntstatus.h"
+@@ -222,6 +225,95 @@ static void close_pipe( struct unix_adapter *adapter )
+     adapter->wake[0] = adapter->wake[1] = -1;
+ }
+ 
++/* Windows programs tell adapters apart by the description the wintun driver
++ * reports, "<tunnel type> Tunnel": the adapter name is the friendly name they
++ * open the adapter with. Keep that description in the kernel interface alias
++ * (nsiproxy reads it back from sysfs when it fills MIB_IF_ROW2.Description);
++ * the unix interface name stays derived from the adapter name, so an adapter
++ * left behind by a crashed process can still be opened again.
++ *
++ * The alias is written over netlink: the Steam runtime mounts /sys read-only,
++ * so the sysfs attribute cannot be written to directly. */
++static void set_ifalias( int ifindex, const WCHAR *tunnel_type )
++{
++    struct
++    {
++        struct nlmsghdr nh;
++        struct ifinfomsg ifinfo;
++        char attr[512];
++    } req;
++    struct rtattr *rta = (struct rtattr *)req.attr;
++    struct sockaddr_nl nladdr;
++    struct msghdr msg;
++    struct iovec iov;
++    char alias[256];
++    unsigned int i, len = 0;
++    int fd;
++
++    if (!tunnel_type || !tunnel_type[0]) return;
++
++    for (i = 0; tunnel_type[i] && len + 4 < sizeof(alias) - 8; i++)
++    {
++        UINT32 cp = tunnel_type[i];
++
++        if (cp >= 0xd800 && cp <= 0xdbff && tunnel_type[i + 1] >= 0xdc00 && tunnel_type[i + 1] <= 0xdfff)
++        {
++            cp = 0x10000 + ((cp & 0x3ff) << 10) + (tunnel_type[i + 1] & 0x3ff);
++            i++;
++        }
++        if (cp < 0x20) continue;
++        if (cp < 0x80) alias[len++] = cp;
++        else if (cp < 0x800)
++        {
++            alias[len++] = 0xc0 | (cp >> 6);
++            alias[len++] = 0x80 | (cp & 0x3f);
++        }
++        else if (cp < 0x10000)
++        {
++            alias[len++] = 0xe0 | (cp >> 12);
++            alias[len++] = 0x80 | ((cp >> 6) & 0x3f);
++            alias[len++] = 0x80 | (cp & 0x3f);
++        }
++        else
++        {
++            alias[len++] = 0xf0 | (cp >> 18);
++            alias[len++] = 0x80 | ((cp >> 12) & 0x3f);
++            alias[len++] = 0x80 | ((cp >> 6) & 0x3f);
++            alias[len++] = 0x80 | (cp & 0x3f);
++        }
++    }
++    if (!len) return;
++    memcpy( alias + len, " Tunnel", 8 );
++    len += 7;
++
++    if ((fd = socket( PF_NETLINK, SOCK_RAW, NETLINK_ROUTE )) < 0) return;
++
++    memset( &req, 0, sizeof(req) );
++    req.nh.nlmsg_len = NLMSG_LENGTH( sizeof(req.ifinfo) );
++    req.nh.nlmsg_type = RTM_NEWLINK;
++    req.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
++    req.ifinfo.ifi_family = AF_UNSPEC;
++    req.ifinfo.ifi_index = ifindex;
++
++    rta->rta_type = IFLA_IFALIAS;
++    rta->rta_len = RTA_LENGTH( len );
++    memcpy( RTA_DATA(rta), alias, len );
++    req.nh.nlmsg_len = NLMSG_ALIGN( req.nh.nlmsg_len ) + RTA_ALIGN( rta->rta_len );
++
++    memset( &nladdr, 0, sizeof(nladdr) );
++    nladdr.nl_family = AF_NETLINK;
++    iov.iov_base = &req;
++    iov.iov_len = req.nh.nlmsg_len;
++    memset( &msg, 0, sizeof(msg) );
++    msg.msg_name = &nladdr;
++    msg.msg_namelen = sizeof(nladdr);
++    msg.msg_iov = &iov;
++    msg.msg_iovlen = 1;
++
++    sendmsg( fd, &msg, 0 );
++    close( fd );
++}
++
+ #else /* __linux__ */
+ 
+ static int make_pipe( int fds[2] ) { (void)fds; return -1; }
+@@ -234,6 +326,7 @@ static int open_tun( const char *ifname, unsigned int *index )
+ }
+ static void destroy_tun( struct unix_adapter *adapter ) { (void)adapter; }
+ static void close_pipe( struct unix_adapter *adapter ) { (void)adapter; }
++static void set_ifalias( int ifindex, const WCHAR *tunnel_type ) { (void)ifindex; (void)tunnel_type; }
+ 
+ #endif /* __linux__ */
+ 
+@@ -253,6 +346,7 @@ static NTSTATUS wintun_create_adapter( void *args )
+     if ((adapter = find_adapter( ifname )))
+     {
+         adapter->refcount++;
++        set_ifalias( adapter->index, params->tunnel_type );
+         params->ctx = (UINT64)(uintptr_t)adapter;
+         params->ifindex = adapter->index;
+         memcpy( params->ifname, adapter->name, strlen( adapter->name ) + 1 );
+@@ -283,6 +377,7 @@ static NTSTATUS wintun_create_adapter( void *args )
+     }
+ 
+     memcpy( adapter->name, ifname, strlen( ifname ) + 1 );
++    set_ifalias( adapter->index, params->tunnel_type );
+     add_adapter( adapter );
+ 
+     params->ctx = (UINT64)(uintptr_t)adapter;
+diff --git a/dlls/wintun/unixlib.h b/dlls/wintun/unixlib.h
+index 1bedc2a77a6..33c8dac2dbb 100644
+--- a/dlls/wintun/unixlib.h
++++ b/dlls/wintun/unixlib.h
+@@ -48,11 +48,12 @@ enum wintun_unix_funcs
+ 
+ struct wintun_create_params
+ {
+-    UINT64 ctx;                       /* out: unix adapter context */
+-    UINT status;                      /* out: Win32 error code */
+-    UINT ifindex;                     /* out */
+-    WCHAR name[WINTUN_NAME_MAX];      /* in */
+-    char ifname[WINTUN_IFNAME_MAX];   /* out */
++    UINT64 ctx;                         /* out: unix adapter context */
++    UINT status;                        /* out: Win32 error code */
++    UINT ifindex;                       /* out */
++    WCHAR name[WINTUN_NAME_MAX];        /* in */
++    WCHAR tunnel_type[WINTUN_NAME_MAX]; /* in */
++    char ifname[WINTUN_IFNAME_MAX];     /* out */
+ };
+ 
+ struct wintun_open_params
+diff --git a/dlls/wintun/wintun.c b/dlls/wintun/wintun.c
+index e71bb082fcc..19972f336e6 100644
+--- a/dlls/wintun/wintun.c
++++ b/dlls/wintun/wintun.c
+@@ -117,6 +117,8 @@ WINTUN_ADAPTER_HANDLE WINAPI WintunCreateAdapter( LPCWSTR name, LPCWSTR tunnel_t
+ 
+     memset( &params, 0, sizeof(params) );
+     for (i = 0; i + 1 < ARRAY_SIZE(params.name) && name[i]; i++) params.name[i] = name[i];
++    for (i = 0; i + 1 < ARRAY_SIZE(params.tunnel_type) && tunnel_type && tunnel_type[i]; i++)
++        params.tunnel_type[i] = tunnel_type[i];
+ 
+     if (WINE_UNIX_CALL( unix_wintun_create_adapter, &params ) || params.status)
+     {

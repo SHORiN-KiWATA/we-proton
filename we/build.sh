@@ -17,7 +17,7 @@
 # re-patched: uncommitted changes in them are lost.
 #
 # Output: build/NAME/ (the runner), build/NAME.tar.xz, build/NAME.sha512sum and
-# build/NAME-source.tar.xz (the patched Wine, vkd3d-proton and dxvk sources).
+# build/NAME-source.tar.xz (the patched Wine, vkd3d-proton and dxvk sources, and 7-Zip's).
 set -euo pipefail
 
 NAME=""
@@ -47,7 +47,7 @@ mkdir -p "$OUT"
 PATCHED="wine dxvk vkd3d-proton protonfixes dxvk-nvapi wineopenxr vklayers/low_latency_layer
     steam_helper umu_helper lsteamclient"
 # patch(1), git apply (staging's patchinstall) and git revert report failures this way
-FAILURES='FAILED|can.t find file to patch|^error: |Failed to apply|^patch: \*\*\*\*|Only garbage|malformed patch'
+FAILURES='FAILED|can.t find file to patch|^error: |^fatal: |Failed to apply|^patch: \*\*\*\*|Only garbage|malformed patch|No such file or directory'
 if [ "$PREP" = 1 ]; then
     log "updating submodules (log: build/protonprep.log)"
     # --force: the submodules were patched in place by the last run
@@ -57,9 +57,9 @@ if [ "$PREP" = 1 ]; then
     (cd "$ROOT" && find steam_helper umu_helper lsteamclient \( -name '*.rej' -o -name '*.orig' \) -delete)
     log "patching"
     # protonprep goes on when a patch doesn't apply and stops only when wine-mono
-    # can't be prepared, so look for failures in its output. English messages for
-    # the patterns, and no terminal for patch(1) to ask questions on.
-    (cd "$ROOT" && LC_ALL=C setsid -w ./patches/protonprep-valve-staging.sh < /dev/null) >> "$OUT/protonprep.log" 2>&1 \
+    # can't be prepared, so look for failures in its output (in English). With its
+    # output going to the log, patch(1) doesn't stop to ask questions.
+    (cd "$ROOT" && LC_ALL=C ./patches/protonprep-valve-staging.sh < /dev/null) >> "$OUT/protonprep.log" 2>&1 \
         || { tail -20 "$OUT/protonprep.log" >&2; exit 1; }
     rejects=$(cd "$ROOT" && find $PATCHED -name '*.rej' 2>/dev/null || true)
     if [ -n "$rejects" ] || grep -qE "$FAILURES" "$OUT/protonprep.log"; then
@@ -101,13 +101,16 @@ dirty() { [ -z "$(git -C "$ROOT" status --porcelain -- patches)" ] || echo "-dir
     for p in "$ROOT"/patches/vkd3d-proton/we-*.patch; do echo "patch: vkd3d-proton/$(basename "$p")"; done
 } > "$DIST/we-proton-build-info"
 sed -e "s/@NAME@/$NAME/g" -e "s/@GE@/$(cat "$ROOT/VERSION")/g" "$ROOT/we/dist-README.md" > "$DIST/README-WE-Proton.md"
+# files/utils/7zz (for DW-Proton's protonfixes) is 7-Zip: LGPL plus the unRAR restriction
+cp "$ROOT/7zip/DOC/License.txt" "$DIST/LICENSE.7zip"
+cp "$ROOT/7zip/DOC/copying.txt" "$DIST/COPYING.7zip"
 export XZ_OPT=-T0
 tar -C "$OUT" -cJf "$OUT/$NAME.tar.xz" "$NAME"
 (cd "$OUT" && sha512sum "$NAME.tar.xz" > "$NAME.sha512sum")
-# Wine and vkd3d-proton are LGPL: ship the sources the binaries were built from
+# Wine, vkd3d-proton and 7-Zip are LGPL: ship the sources the binaries were built from
 log "packing $NAME-source.tar.xz"
 tar -C "$ROOT" -cJf "$OUT/$NAME-source.tar.xz" --exclude=.git --exclude='*.orig' \
-    --transform "s,^,$NAME-source/," wine vkd3d-proton dxvk \
+    --transform "s,^,$NAME-source/," wine vkd3d-proton dxvk 7zip \
     -C "$DIST" we-proton-build-info
 log "done: build/$NAME, build/$NAME.tar.xz, build/$NAME.sha512sum, build/$NAME-source.tar.xz"
 

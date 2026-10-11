@@ -62,7 +62,7 @@ GE-Proton 去掉了 GStreamer 后端，视频全走 winedmo（FFmpeg 8.1），WM
 
 | 游戏 | 提交 | 做法 |
 |---|---|---|
-| 异环 | wdfldr.sys 组件加载器、`WdfRegisterLibrary`、wdf01000.sys 存根、函数表第 201 项（4 个） | 两边从同一个存根各自往下做，都修了第 201 项，DW-Proton 那份是完整的加载器：`wdfldr.sys` 整块换成 DW-Proton 的，加上 `wdf01000.sys`；GE-Proton 的私有头文件没人用了，删掉（`patches/dwproton/0165`） |
+| 异环 | wdfldr.sys 组件加载器、`WdfRegisterLibrary`、wdf01000.sys 存根、函数表第 201 项（4 个） | 两边从同一个存根各自往下做，都修了第 201 项，DW-Proton 那份是完整的加载器：`wdfldr.sys` 整块换成 DW-Proton 的，加上 `wdf01000.sys`；GE-Proton 的私有头文件没人用了，删掉（`patches/dwproton/0158`） |
 | hololive Dreams | 把进程挪到另一个会话、记录已加载的内核模块（2 个） | `server/device.c` 两边新增的声明都留；协议头用 `make_requests` 重新生成 |
 | NIKKE | `PsGetContextThread` 改成跳板（1 个） | 用 DW-Proton 的版本：三个参数，和 Windows 一致；GE-Proton 的是两个参数。spec 和 `ntddk.h` 跟着改 |
 | 鸣潮 | winex11 跨进程往 ARGB 窗口上画（1 个） | 两处冲突都留两边：GE-Proton 的 `mark_direct_draw_child()` 和 DW-Proton 的 visual。`set_dc_drawable()` 多了一个参数，GE-Proton 的其他调用补上 |
@@ -78,6 +78,7 @@ GE-Proton 去掉了 GStreamer 后端，视频全走 winedmo（FFmpeg 8.1），WM
 - DW-Proton 的 protonfixes 游戏修复：`patches/protonfixes/0003`–`0005`（NIKKE、hololive Dreams、按可执行文件自动套用）
 - DW-Proton 的 dxvk HDR 检测：`patches/dxvk/dw-hdr-detection-via-displayconfig.patch`，排在 GE-Proton 的 dxvk 补丁前面；Wine 那一侧（`NtUserDisplayConfigGetDeviceInfo`）已经有了
 - 7zip：hololive Dreams 的 protonfix 要用 `files/utils/7zz` 从 Windows 镜像里解出 `version.dll`，GE-Proton 不编它。照 DW-Proton 的 `steamrtdeps/build-sevenzip.mk` 加了 `7zip` 子模块（DW-Proton 用的同一个提交）和 `Makefile.in` 里的构建规则
+- 没带过来：DW-Proton 给 protonfixes 的 umu 数据库加 NIKKE 条目的补丁（它的 protonfixes 版本里已经有了，只影响日志里显示的标题）。另外 dwfixes（`patches/protonfixes/0005`）会给终末地等程序设 `UMU_ID`，从 Steam 启动时会走 GE-Proton 的 `umu_without_steam` 分支，这是 DW-Proton 原来的设计
 - 不要：DW-Proton 的额外组件（dxvk-sarek、低延迟版 dxvk/vkd3d、自编 GStreamer 等）、proton 脚本里 DW-Proton 独有的选项（`PROTON_DXVK_SAREK` 等，大多数选项 GE-Proton 有同名的）、8 个 Valve 回移
 
 ### 子模块
@@ -100,6 +101,7 @@ Valve 在 09-23 用的 dxvk、vkd3d-proton、vkd3d、FEX、dxvk-nvapi 比两边�
 - 去掉：0001 和撤回它的 0018；0011（托盘改用 GE-Proton 自带的 StatusNotifierItem 实现）；0012（GE-Proton 的 `qcap-dshow-fixes` 修了同一个 bug）；0024–0042、dxvk 0002–0007、vkd3d-proton 0002（都是从 GE-Proton 搬的，GE-Proton 直接带着原版）
 - 改过：0003（GE-Proton 换了一套系统调用拦截，新的 SIGSYS 处理函数里有同样的问题，改在那里）、0016（格式串在 `-Werror` 下报错）、0023（和 GE-Proton 覆盖层窗口的条件合并）
 - 编号沿用原来的，`patches/wine/` 里的空号就是去掉的
+- 合并之后 WE-Proton 又加了 0048（wintun 报 Windows 风格的网卡描述，网易 UU 的路由模式要用），直接接在 WE 层后面
 
 ## 换底座带来的行为变化
 
@@ -110,6 +112,7 @@ Valve 在 09-23 用的 dxvk、vkd3d-proton、vkd3d、FEX、dxvk-nvapi 比两边�
 - 托盘图标由 GE-Proton 的 StatusNotifierItem 实现显示（代替 WE 0011）
 - 视频走 GE-Proton 的 winedmo + FFmpeg
 - staging 的 `ntdll-WRITECOPY/0010`（GE-Proton 带着）在 kernelbase 的 `VirtualProtect` 里把返回的旧属性 `PAGE_WRITECOPY` 一律改报成 `PAGE_READWRITE`。WE 0005 管的「写过的写时复制页报告成可读写」照样成立；没写过的页，Windows 报 `PAGE_WRITECOPY`（0x08），这一版报 `PAGE_READWRITE`（0x04），见 `tests/writecopy_probe.ge25.txt`。没有去掉这个 staging 补丁
+- 鸣潮那个跨进程画 ARGB 窗口的提交顺带改了 xrender：从没有 alpha 的源画到 32 位目标时，不再把 alpha 清零（所有程序都受影响）。DW-Proton 本来就这样，相对旧版 WE-Proton 不算变化，但和 GE-Proton 原来的行为不同
 - DW-Proton 的「不按分层父窗口裁剪其他进程的子窗口」（server）和 GE-Proton 在 winex11 里裁剪客户区（`mark_direct_draw_child()`）同时作用；《Return to Krondor》的文字位图两边各有一个修复。都没有冲突，但没有实测
 
 ## 验证

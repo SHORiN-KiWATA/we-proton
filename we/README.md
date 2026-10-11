@@ -55,6 +55,7 @@
 | `wine/0040-win32u-Restore-Return-to-Krondor-s-text-bitmap-readb` | （这一版没有：GE-Proton 直接带着原版）（GE，按游戏）Return to Krondor 的文字位图读回 |
 | `wine/0041-win32u-Keep-Black-Desert-fullscreen-across-applicati` | （这一版没有：GE-Proton 直接带着原版）（GE，按游戏）黑色沙漠失去焦点时保持全屏 |
 | `wine/0042-winex11-Shaped-and-real-alpha-transparency-for-layer` | （这一版没有：GE-Proton 直接带着原版）（GE，默认关闭）桌面覆盖类游戏的分层窗口做形状或真透明 |
+| `wine/0048-wintun-Report-the-adapter-description-Windows-prog` | 内置 wintun 把 Windows 风格的网卡描述（`<tunnel type> Tunnel`）写进接口 alias，nsiproxy 报给 `GetAdaptersInfo`/`GetAdaptersAddresses`；按描述找自己建的虚拟网卡的程序（网易 UU 的路由模式，报 50004）不再找不到网卡 |
 | `vkd3d-proton/we-0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
 | `vkd3d-proton/0002-vkd3d-bound-present-waits-during-swapchain-drain` | （这一版没有：GE-Proton 直接带着原版）（GE）销毁交换链时等待呈现有上限，不再卡死 |
 | `dxvk/0002`–`0007` | （这一版没有：GE-Proton 直接带着原版）（GE）分层覆盖窗口的 DXVK 一半、获取图像受阻时保留交换链、《最终幻想14》多屏失焦不缩窗（三个）、黑色沙漠的 DXVK 一半 |
@@ -113,11 +114,11 @@ we/build.sh --name we-proton-<版本> [--install] [--jobs N] [--skip-prep]
 
 需要 docker。第一次要几个小时，之后靠 ccache（`~/.ccache`）快一些。脚本做的事：
 
-1. `git submodule update --init --filter=tree:0 --recursive`
-2. 跑 `patches/protonprep-valve-staging.sh`（日志 `build/protonprep.log`）：重置并打补丁 dxvk、vkd3d-proton、protonfixes 等子模块，准备 wine-mono 源码，往 Valve 的 Wine 上打 GE-Proton 的补丁、staging、`patches/dwproton/`、`patches/wine/`，最后 `autoreconf` 和 `make_requests`。脚本本身不会因为补丁打不上而停下，`build.sh` 查到 `.rej` 文件或 `FAILED` 就报错退出
+1. `git submodule update --init --force --filter=tree:0 --recursive`：子模块回到这棵树钉住的提交。子模块里没提交的改动会丢，要改 Wine 在开发分支上改（见「跟进上游新版本」）
+2. 跑 `patches/protonprep-valve-staging.sh`（日志 `build/protonprep.log`，`LC_ALL=C`）：重置并打补丁 dxvk、vkd3d-proton（包括它嵌套的 dxil-spirv）、protonfixes 等子模块，准备 wine-mono 源码，往 Valve 的 Wine 上打 GE-Proton 的补丁、staging、`patches/dwproton/`、`patches/wine/`，最后 `autoreconf` 和 `make_requests`。脚本本身不会因为补丁打不上而停下，`build.sh` 在日志里找 patch、`git apply`、`git revert` 的报错（`FAILED`、`error:`、`fatal:`、`Failed to apply`、文件不存在等），以及打补丁的目录里有没有 `.rej`，有就报错退出
 3. 在 `build/obj` 里 `configure.sh --build-name=<名字>`，`make redist`（日志 `build/make.log`），全部在 `Makefile.in` 指定的 Steam Linux Runtime 4.0 SDK 镜像里编
 4. 把结果移到 `build/<名字>`，`version` 文件改成 `<时间> <名字>`（`Makefile.in` 写的是 `git describe`，启动器从这里读 runner 名字），加上 `we-proton-build-info` 和 `README-WE-Proton.md`
-5. 生成三个发布文件：`<名字>.tar.xz`（runner）、`<名字>.sha512sum`、`<名字>-source.tar.xz`（打好补丁的 Wine、vkd3d-proton、dxvk 源码，满足 LGPL 提供源码的要求）
+5. 生成三个发布文件：`<名字>.tar.xz`（runner）、`<名字>.sha512sum`、`<名字>-source.tar.xz`（打好补丁的 Wine、vkd3d-proton、dxvk 源码和 7-Zip 源码，满足 LGPL 提供源码的要求）。`files/utils/7zz` 的许可证复制成 `LICENSE.7zip`、`COPYING.7zip`
 6. `--install` 时复制到 `~/.local/share/proton/runners/WE-Proton Latest`
 
 `--skip-prep` 跳过第 1、2 步，用在补丁已经打好、只想重新编译的时候。

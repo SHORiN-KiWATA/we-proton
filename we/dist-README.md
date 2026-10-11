@@ -27,9 +27,10 @@ WE-Proton 是基于 GE-Proton 和 DW-Proton 的个人 Proton：以 GE-Proton（`
 | wine 0021 | 《诡秘之主》等较新的 UE5 游戏启动时提示缺少 Microsoft Visual C++ 2015-2022 Redistributable，点确定就退出（内置运行库的版本号低于游戏要求的最低版本） |
 | wine 0022 | 同上，注册表里记的运行库版本停在建前缀时的旧值，旧前缀换新版后仍然提示 |
 | wine 0023 | Wayland 桌面下，有的程序（如部分 Electron 启动器）窗口切几次焦点就点不动（程序把窗口设成鼠标穿透后，等不到鼠标回来的消息） |
+| wine 0048 | 网易 UU 加速器的路由模式报 50004：内置 wintun 报的网卡描述是 Linux 接口名，程序按 Windows 的描述找不到自己建的虚拟网卡 |
 | vkd3d-proton 0001 | 部分 D3D12 着色器被翻译成非法的 SPIR-V，AMD 显卡（Mesa RADV）上直接崩溃 |
 
-编号沿用原来的。空号（0001、0011、0012、0018）是这一版不再需要的：托盘图标（原 0011）改用 GE-Proton 自带的 StatusNotifierItem 实现，0012 修的 bug GE-Proton 也修了。原来从 GE-Proton 搬来的 0024–0042 等，现在由 GE-Proton 本身带着。
+编号沿用原来的。0001、0011、0012、0018 和 0024–0042 是这一版不再需要的（0043–0047 没有用到）：托盘图标（原 0011）改用 GE-Proton 自带的 StatusNotifierItem 实现，0012 修的 bug GE-Proton 也修了。原来从 GE-Proton 搬来的 0024–0042 等，现在由 GE-Proton 本身带着。
 
 托盘图标：在 waybar 等只支持 StatusNotifierItem 的面板上，程序的托盘图标由 GE-Proton 的实现显示。
 
