@@ -1,0 +1,48 @@
+From 1c424441b5b48cf9d2cba72b5c38285539963b96 Mon Sep 17 00:00:00 2001
+From: Ziia Shi <mkrsym1@gmail.com>
+Date: Mon, 24 Aug 2026 02:21:52 +0200
+Subject: [PATCH] pdh: Avoid access violation in PdhCloseQuery on bad handle.
+
+(cherry picked from commit ddb7e3abd5fd6108bf1c1b0a27dff1b938dbf273)
+---
+ dlls/pdh/pdh_main.c  | 2 +-
+ dlls/pdh/tests/pdh.c | 6 ++++++
+ 2 files changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/pdh/pdh_main.c b/dlls/pdh/pdh_main.c
+index 8354bddcdb0..172eedfaee7 100644
+--- a/dlls/pdh/pdh_main.c
++++ b/dlls/pdh/pdh_main.c
+@@ -363,7 +363,7 @@ PDH_STATUS WINAPI PdhCloseQuery( PDH_HQUERY handle )
+     TRACE("%p\n", handle);
+ 
+     EnterCriticalSection( &pdh_handle_cs );
+-    if (!query || query->magic != PDH_MAGIC_QUERY)
++    if (IsBadReadPtr( query, sizeof(*query) ) || query->magic != PDH_MAGIC_QUERY)
+     {
+         LeaveCriticalSection( &pdh_handle_cs );
+         return PDH_INVALID_HANDLE;
+diff --git a/dlls/pdh/tests/pdh.c b/dlls/pdh/tests/pdh.c
+index 5408e4cc3f3..0392f1f3b2f 100644
+--- a/dlls/pdh/tests/pdh.c
++++ b/dlls/pdh/tests/pdh.c
+@@ -94,6 +94,9 @@ static void test_PdhOpenQueryA( void )
+     ret = PdhCloseQuery( NULL );
+     ok(ret == PDH_INVALID_HANDLE, "PdhCloseQuery failed 0x%08lx\n", ret);
+ 
++    ret = PdhCloseQuery( (PDH_HQUERY)0xdeadbeef );
++    ok(ret == PDH_INVALID_HANDLE, "PdhCloseQuery failed 0x%08lx\n", ret);
++
+     ret = PdhCloseQuery( &query );
+     ok(ret == PDH_INVALID_HANDLE, "PdhCloseQuery failed 0x%08lx\n", ret);
+ 
+@@ -118,6 +121,9 @@ static void test_PdhOpenQueryW( void )
+     ret = PdhCloseQuery( NULL );
+     ok(ret == PDH_INVALID_HANDLE, "PdhCloseQuery failed 0x%08lx\n", ret);
+ 
++    ret = PdhCloseQuery( (PDH_HQUERY)0xdeadbeef );
++    ok(ret == PDH_INVALID_HANDLE, "PdhCloseQuery failed 0x%08lx\n", ret);
++
+     ret = PdhCloseQuery( &query );
+     ok(ret == PDH_INVALID_HANDLE, "PdhCloseQuery failed 0x%08lx\n", ret);
+ 

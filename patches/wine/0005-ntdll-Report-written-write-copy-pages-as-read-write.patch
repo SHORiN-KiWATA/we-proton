@@ -1,4 +1,4 @@
-From 166b30f8ee2f5b0e0359bbd94eda7337f2fed42a Mon Sep 17 00:00:00 2001
+From 5b183926e0450413b55aa97a38ca7a7fc6bceee0 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Wed, 7 Oct 2026 17:19:50 +0900
 Subject: [PATCH] ntdll: Report written write-copy pages as read-write.

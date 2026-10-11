@@ -1,4 +1,4 @@
-From 8cda8454ec76297e58b696c8ddf532b88f6f95b0 Mon Sep 17 00:00:00 2001
+From 2012ab1fd7b252ac77e61c5c80601644b9aad01e Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Thu, 8 Oct 2026 14:57:23 +0900
 Subject: [PATCH] win32u: Draw layered child windows into their parent's

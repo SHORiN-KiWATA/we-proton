@@ -1,0 +1,22 @@
+From 755bcabd6f2ce52b374ec238f7e98b44683ba4a1 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Mon, 5 Jan 2026 16:18:02 +0100
+Subject: [PATCH] loader: Show dotfiles by default.
+
+(cherry picked from commit 15fe155c06a52858bc40e3ccbbd8f0fdd6f96d81)
+---
+ loader/wine.inf.in | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/loader/wine.inf.in b/loader/wine.inf.in
+index aa7a6c252f8..4e5c80ccd39 100644
+--- a/loader/wine.inf.in
++++ b/loader/wine.inf.in
+@@ -606,6 +606,7 @@ HKLM,%MciExtStr%,"wmx",,"MPEGVideo"
+ HKLM,%MciExtStr%,"wvx",,"MPEGVideo"
+ 
+ [Misc]
++HKCU,Software\Wine,"ShowDotFiles",2,"Y"
+ HKLM,Software\Borland\Database Engine\Settings\SYSTEM\INIT,SHAREDMEMLOCATION,,9000
+ HKLM,Software\Clients,,16
+ HKLM,Software\Clients\Mail,,2,"Native Mail Client"

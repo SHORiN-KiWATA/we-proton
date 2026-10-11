@@ -1,0 +1,39 @@
+From 611590fa40dc59a8f30cdd62671e66cb977e03fe Mon Sep 17 00:00:00 2001
+From: Nello De Gregoris <bluechxindv@gmail.com>
+Date: Wed, 2 Sep 2026 01:15:15 +0200
+Subject: [PATCH] ntoskrnl.exe/tests: Add tests for PsGetProcessSessionId.
+
+(cherry picked from commit cd4a0fbcdefe0f3d52007b9fa333741a626f137b)
+---
+ dlls/ntoskrnl.exe/tests/driver.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/dlls/ntoskrnl.exe/tests/driver.c b/dlls/ntoskrnl.exe/tests/driver.c
+index 68f90c17ad3..f9955d3f2a7 100644
+--- a/dlls/ntoskrnl.exe/tests/driver.c
++++ b/dlls/ntoskrnl.exe/tests/driver.c
+@@ -447,6 +447,7 @@ static void test_current_thread(BOOL is_system)
+     PROCESS_BASIC_INFORMATION info;
+     DISPATCHER_HEADER *header;
+     HANDLE process_handle, id;
++    ULONG session_id;
+     PEPROCESS current;
+     PETHREAD thread;
+     NTSTATUS ret;
+@@ -489,6 +490,16 @@ static void test_current_thread(BOOL is_system)
+     id = PsGetProcessInheritedFromUniqueProcessId(current);
+     ok(id == (HANDLE)info.InheritedFromUniqueProcessId, "unexpected process id %p\n", id);
+ 
++    session_id = 0xdeadbeef;
++    ret = ZwQueryInformationProcess(process_handle, ProcessSessionInformation, &session_id, sizeof(session_id), NULL);
++    ok(!ret, "ZwQueryInformationProcess failed: %#lx\n", ret);
++    ok(PsGetProcessSessionId(current) == session_id, "got session id %lu, expected %lu\n",
++       PsGetProcessSessionId(current), session_id);
++
++    /* the system process reports session 0 on windows */
++    todo_wine ok(!PsGetProcessSessionId(*pPsInitialSystemProcess), "got session id %lu for the system process\n",
++                 PsGetProcessSessionId(*pPsInitialSystemProcess));
++
+     ret = ZwClose(process_handle);
+     ok(!ret, "ZwClose failed: %#lx\n", ret);
+ }

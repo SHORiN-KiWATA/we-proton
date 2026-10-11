@@ -1,0 +1,78 @@
+From 8b3058f30f54fb89eae82e12c3fe74fbee55b391 Mon Sep 17 00:00:00 2001
+From: Nello De Gregoris <bluechxindv@gmail.com>
+Date: Thu, 10 Sep 2026 02:11:57 +0200
+Subject: [PATCH] ntoskrnl.exe/tests: Add tests for token kernel objects.
+
+(cherry picked from commit 8b85bf34ed56455aefcc252d33eccb3260af37de)
+---
+ dlls/ntoskrnl.exe/tests/driver.c | 36 +++++++++++++++++++++++++++++++-
+ 1 file changed, 35 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/ntoskrnl.exe/tests/driver.c b/dlls/ntoskrnl.exe/tests/driver.c
+index 5bdb103ba42..d92ab257103 100644
+--- a/dlls/ntoskrnl.exe/tests/driver.c
++++ b/dlls/ntoskrnl.exe/tests/driver.c
+@@ -62,7 +62,7 @@ static LDR_DATA_TABLE_ENTRY *ldr_module;
+ static IRP *queued_async_irps[2];
+ static unsigned int queued_async_count;
+ 
+-static POBJECT_TYPE *pExEventObjectType, *pIoFileObjectType, *pPsThreadType, *pIoDriverObjectType;
++static POBJECT_TYPE *pExEventObjectType, *pIoFileObjectType, *pPsThreadType, *pIoDriverObjectType, *pSeTokenObjectType;
+ static PEPROCESS *pPsInitialSystemProcess;
+ static void *create_caller_thread;
+ 
+@@ -2083,6 +2083,36 @@ static void test_dir_kernel_object(void)
+     ZwClose(dir_handle);
+ }
+ 
++static void test_token_kernel_object(void)
++{
++    NTSTATUS (WINAPI *pZwOpenProcessToken)(HANDLE,DWORD,HANDLE*);
++    HANDLE token_handle, handle;
++    void *token_obj;
++    NTSTATUS status;
++
++    pZwOpenProcessToken = get_proc_address("ZwOpenProcessToken");
++    if (!pZwOpenProcessToken) return;
++
++    status = pZwOpenProcessToken(NtCurrentProcess(), TOKEN_QUERY, &token_handle);
++    ok(!status, "ZwOpenProcessToken failed: %#lx\n", status);
++    if (status) return;
++
++    status = ObReferenceObjectByHandle(token_handle, TOKEN_QUERY, *pSeTokenObjectType, KernelMode,
++                                       &token_obj, NULL);
++    ok(!status, "ObReferenceObjectByHandle failed: %#lx\n", status);
++    if (!status)
++    {
++        status = ObOpenObjectByPointer(token_obj, OBJ_KERNEL_HANDLE, NULL, TOKEN_QUERY,
++                                       *pSeTokenObjectType, KernelMode, &handle);
++        ok(!status, "ObOpenObjectByPointer failed: %#lx\n", status);
++        if (!status)
++            ZwClose(handle);
++        ObDereferenceObject(token_obj);
++    }
++
++    ZwClose(token_handle);
++}
++
+ static void test_fsrtl_get_file_size(void)
+ {
+     static const char data[] = "hello, world!";
+@@ -2674,6 +2704,9 @@ static NTSTATUS main_test(DEVICE_OBJECT *device, IRP *irp, IO_STACK_LOCATION *st
+     pPsThreadType = get_proc_address("PsThreadType");
+     ok(!!pPsThreadType, "IofileObjectType not found\n");
+ 
++    pSeTokenObjectType = get_proc_address("SeTokenObjectType");
++    ok(!!pSeTokenObjectType, "SeTokenObjectType not found\n");
++
+     pPsInitialSystemProcess = get_proc_address("PsInitialSystemProcess");
+     ok(!!pPsInitialSystemProcess, "PsInitialSystemProcess not found\n");
+ 
+@@ -2696,6 +2729,7 @@ static NTSTATUS main_test(DEVICE_OBJECT *device, IRP *irp, IO_STACK_LOCATION *st
+     test_IoAttachDeviceToDeviceStack();
+     test_object_name();
+     test_dir_kernel_object();
++    test_token_kernel_object();
+     test_fsrtl_get_file_size();
+ #if defined(__i386__) || defined(__x86_64__)
+     test_executable_pool();

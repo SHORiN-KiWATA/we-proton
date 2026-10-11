@@ -1,0 +1,35 @@
+From 667ce1034b4d090d511c2eeca6f1cbb58a1f8dd0 Mon Sep 17 00:00:00 2001
+From: Etaash Mathamsetty
+ <45927311+Etaash-mathamsetty@users.noreply.github.com>
+Date: Wed, 13 Aug 2025 03:56:55 -0400
+Subject: [PATCH] ntdll: Add SystemPowerInformation semi-stub.
+
+(cherry picked from commit 1be3fa03f120eeef31fe4070a019e78e56cf46ad)
+---
+ dlls/ntdll/unix/system.c | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/dlls/ntdll/unix/system.c b/dlls/ntdll/unix/system.c
+index c2a53b4f4c3..71ce9687ed0 100644
+--- a/dlls/ntdll/unix/system.c
++++ b/dlls/ntdll/unix/system.c
+@@ -4869,6 +4869,19 @@ NTSTATUS WINAPI NtPowerInformation( POWER_INFORMATION_LEVEL level, void *input,
+         return STATUS_SUCCESS;
+     }
+ 
++    case SystemPowerInformation:
++    {
++        static int once;
++        SYSTEM_POWER_INFORMATION *info = output;
++
++        if (!once++) FIXME("semi-stub: SystemPowerInformation\n");
++        if (out_size < sizeof(SYSTEM_POWER_INFORMATION)) return STATUS_BUFFER_TOO_SMALL;
++        memset(info, 0, sizeof(SYSTEM_POWER_INFORMATION));
++        info->MaxIdlenessAllowed = 100;
++        info->TimeRemaining = 600;
++        return STATUS_SUCCESS;
++    }
++
+     case SystemBatteryState:
+     {
+         if (out_size < sizeof(SYSTEM_BATTERY_STATE)) return STATUS_BUFFER_TOO_SMALL;

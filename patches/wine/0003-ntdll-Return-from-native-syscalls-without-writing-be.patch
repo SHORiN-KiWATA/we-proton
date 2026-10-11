@@ -1,4 +1,4 @@
-From 8cc35dfb3364e7f913c098a217eaa9518e3845e3 Mon Sep 17 00:00:00 2001
+From cb71454e6edd443c5dfc21a171c16884f065fe22 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Wed, 7 Oct 2026 07:51:23 +0900
 Subject: [PATCH] ntdll: Return from native syscalls without writing below the

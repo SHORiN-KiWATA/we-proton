@@ -1,4 +1,4 @@
-From 858768040a2ebe4da91fa01038a0561bbb8d27fa Mon Sep 17 00:00:00 2001
+From 6e95a1719c105b8176dfc8d7e1b6cad911ce2a0b Mon Sep 17 00:00:00 2001
 From: SHORiN-KIWATA <shorin@users.noreply.github.com>
 Date: Sun, 11 Oct 2026 15:19:13 +0900
 Subject: [PATCH] win32u: Implement NtUserGetWindowBand.

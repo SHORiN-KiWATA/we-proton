@@ -1,0 +1,204 @@
+From 0e107b613da285fc0236f62c66ad5e26e875639b Mon Sep 17 00:00:00 2001
+From: shxrrydw <sherrydrv@gmail.com>
+Date: Thu, 6 Aug 2026 16:27:12 +0200
+Subject: [PATCH] server: Keep track of loaded kernel modules.
+
+App: Hololive Dreams (4282500).
+---
+ server/device.c     | 94 +++++++++++++++++++++++++++++++++++++++++++++
+ server/protocol.def | 27 +++++++++++++
+ server/trace.c      | 27 +++++++++++++
+ 3 files changed, 148 insertions(+)
+
+diff --git a/server/device.c b/server/device.c
+index cfd76e46330..79938845aad 100644
+--- a/server/device.c
++++ b/server/device.c
+@@ -42,6 +42,20 @@
+ static unsigned int sony_active_controller[4];
+ static int sony_active_controller_valid;
+ 
++/* loaded kernel module */
++
++struct kernel_module
++{
++    struct list      entry;      /* entry in kernel_modules list */
++    struct process  *owner;      /* process that registered it, not a reference */
++    client_ptr_t     base;       /* module base address in the owner process */
++    mem_size_t       size;       /* module size */
++    WCHAR           *name;       /* module name */
++    data_size_t      name_len;   /* length of name in bytes */
++};
++
++static struct list kernel_modules = LIST_INIT(kernel_modules);
++
+ /* IRP object */
+ 
+ struct irp_call
+@@ -1207,3 +1221,83 @@ DECL_HANDLER(get_kernel_object_handle)
+ 
+     release_object( manager );
+ }
++
++
++/* register a newly loaded kernel module */
++DECL_HANDLER(register_kernel_module)
++{
++    struct kernel_module *module;
++
++    if (!(module = mem_alloc( sizeof(*module) ))) return;
++
++    module->name_len = get_req_data_size();
++    module->name = NULL;
++
++    if (module->name_len && !(module->name = memdup( get_req_data(), module->name_len )))
++    {
++        free( module );
++        return;
++    }
++
++    module->owner = current->process;
++    module->base = req->base;
++    module->size = req->size;
++    list_add_tail( &kernel_modules, &module->entry );
++}
++
++
++/* unregister a kernel module that is being unloaded */
++DECL_HANDLER(unregister_kernel_module)
++{
++    struct kernel_module *module;
++
++    /* a module is identified by its base address within its owner process */
++    LIST_FOR_EACH_ENTRY( module, &kernel_modules, struct kernel_module, entry )
++    {
++        if (module->base == req->base && module->owner == current->process)
++        {
++            list_remove( &module->entry );
++            free( module->name );
++            free( module );
++            return;
++        }
++    }
++}
++
++
++/* return the list of currently loaded kernel modules */
++DECL_HANDLER(list_kernel_modules)
++{
++    struct kernel_module *module;
++    char *data;
++
++    LIST_FOR_EACH_ENTRY( module, &kernel_modules, struct kernel_module, entry )
++    {
++        reply->module_count++;
++        reply->info_size += (sizeof(struct kernel_module_info) + module->name_len
++                             + sizeof(client_ptr_t)-1) / sizeof(client_ptr_t) * sizeof(client_ptr_t);
++    }
++
++    if (reply->info_size > get_reply_max_size())
++    {
++        set_error( STATUS_INFO_LENGTH_MISMATCH );
++        return;
++    }
++
++    if (!(data = set_reply_data_size( reply->info_size ))) return;
++
++    memset( data, 0, reply->info_size );
++
++    LIST_FOR_EACH_ENTRY( module, &kernel_modules, struct kernel_module, entry )
++    {
++        struct kernel_module_info *info = (struct kernel_module_info *)data;
++
++        info->base     = module->base;
++        info->size     = module->size;
++        info->name_len = module->name_len;
++        memcpy( info + 1, module->name, module->name_len );
++        data += (sizeof(*info) + module->name_len
++                 + sizeof(client_ptr_t)-1) / sizeof(client_ptr_t) * sizeof(client_ptr_t);
++    }
++}
++
+diff --git a/server/protocol.def b/server/protocol.def
+index 9b3b396d26d..523c93dfba3 100644
+--- a/server/protocol.def
++++ b/server/protocol.def
+@@ -486,6 +486,14 @@ struct luid_attr
+     unsigned int attrs;
+ };
+ 
++struct kernel_module_info
++{
++    client_ptr_t base;
++    mem_size_t   size;
++    data_size_t  name_len;
++    /* VARARG(name,unicode_str,name_len); */
++};
++
+ struct acl
+ {
+     unsigned char  revision;
+@@ -3992,6 +4000,25 @@ struct handle_info
+     client_ptr_t user_ptr;        /* kernel object pointer */
+ @END
+ 
++/* Register a loaded kernel module */
++@REQ(register_kernel_module)
++    client_ptr_t base;            /* module base address */
++    mem_size_t   size;            /* module size */
++    VARARG(name,unicode_str);     /* module name */
++@END
++
++/* Unregister a kernel module */
++@REQ(unregister_kernel_module)
++    client_ptr_t base;            /* module base address */
++@END
++
++/* Return the list of loaded kernel modules */
++@REQ(list_kernel_modules)
++@REPLY
++    unsigned int module_count;    /* number of modules */
++    data_size_t  info_size;       /* total size of module info */
++    VARARG(info,kernel_module_info); /* module info */
++@END
+ 
+ /* Grab server object reference from kernel object pointer */
+ @REQ(grab_kernel_object)
+diff --git a/server/trace.c b/server/trace.c
+index 2354fb68163..5dfce7515ab 100644
+--- a/server/trace.c
++++ b/server/trace.c
+@@ -1718,6 +1718,33 @@ static void dump_varargs_monitor_infos( const char *prefix, data_size_t size )
+     remove_data( size );
+ }
+ 
++static void dump_varargs_kernel_module_info( const char *prefix, data_size_t size )
++{
++    fprintf( stderr,"%s{", prefix );
++    while (size)
++    {
++        const struct kernel_module_info *info = cur_data;
++        data_size_t len;
++
++        if (size < sizeof(*info)) break;
++        len = (sizeof(*info) + info->name_len + sizeof(client_ptr_t)-1)
++               / sizeof(client_ptr_t) * sizeof(client_ptr_t);
++        if (size < len) break;
++
++        dump_uint64( "{base=", &info->base );
++        dump_uint64( ",size=", &info->size );
++        fprintf( stderr, ",name=L\"" );
++
++        dump_strW( (const WCHAR *)(info + 1), info->name_len, stderr, "\"\"" );
++        fprintf( stderr, "\"}" );
++
++        size -= len;
++        remove_data( len );
++        if (size)fputc( ',', stderr );
++    }
++    fputc( '}', stderr );
++}
++
+ void trace_request(void)
+ {
+     enum request req = current->req.request_header.req;

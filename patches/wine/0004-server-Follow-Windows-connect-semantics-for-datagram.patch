@@ -1,4 +1,4 @@
-From 98c93dff0927409ffdce29afe3d0c76058e958ba Mon Sep 17 00:00:00 2001
+From 047884cf8a0c764457ebf2e5caafc0d46829026c Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Wed, 7 Oct 2026 14:26:58 +0900
 Subject: [PATCH] server: Follow Windows connect() semantics for datagram

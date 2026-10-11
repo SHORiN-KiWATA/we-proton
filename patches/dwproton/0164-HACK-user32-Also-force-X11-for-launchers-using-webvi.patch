@@ -1,0 +1,31 @@
+From 273da399881dd347023bbbe7f1fe3e95a2aa6994 Mon Sep 17 00:00:00 2001
+From: shxrrydw <sherrydrv@gmail.com>
+Date: Tue, 29 Sep 2026 16:20:25 +0200
+Subject: [PATCH] HACK: user32: Also force X11 for launchers using webview2.
+
+Based on GE's patches to force X11 for launchers.
+
+App: Wuthering Waves (3513350).
+---
+ dlls/user32/user_main.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/dlls/user32/user_main.c b/dlls/user32/user_main.c
+index 7c50c8ece72..e542977c5ac 100644
+--- a/dlls/user32/user_main.c
++++ b/dlls/user32/user_main.c
+@@ -171,6 +171,14 @@ static BOOL use_x11_launcher_driver( const WCHAR *image, const WCHAR *name )
+         path_contains( image, L"\\Program Files\\Origin\\" ))
+         return TRUE;
+ 
++    if (!wcsicmp( name, L"launcher.exe" ) ||
++        !wcsicmp( name, L"launcher_main.exe" ) ||
++        !wcsicmp( name, L"nikke_launcher.exe" ) ||
++        !wcsicmp( name, L"tbs_browser.exe" ) ||
++        !wcsicmp( name, L"INTLWebViewHelper.exe" ) ||
++        !wcsicmp( name, L"msedgewebview2.exe" ))
++        return TRUE;
++
+     return FALSE;
+ }
+ 

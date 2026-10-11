@@ -1,4 +1,4 @@
-From 0fb7731899050a9e0b40698378c8ab8a1803970d Mon Sep 17 00:00:00 2001
+From 195420722094d9eb5cb18ffa10230536ddd954d9 Mon Sep 17 00:00:00 2001
 From: SHORiN-KIWATA <shorin@users.noreply.github.com>
 Date: Thu, 8 Oct 2026 23:10:06 +0900
 Subject: [PATCH] wintun: Implement the Wintun userspace tunnel driver
@@ -676,7 +676,7 @@ index 00000000000..1bedc2a77a6
 +#endif /* __WINTUN_UNIXLIB_H */
 diff --git a/dlls/wintun/wintun.c b/dlls/wintun/wintun.c
 new file mode 100644
-index 00000000000..e0993f57f32
+index 00000000000..e71bb082fcc
 --- /dev/null
 +++ b/dlls/wintun/wintun.c
 @@ -0,0 +1,495 @@
@@ -1167,7 +1167,7 @@ index 00000000000..e0993f57f32
 +    if (WINE_UNIX_CALL( unix_wintun_write_packet, &params ))
 +        WARN( "write call failed\n" );
 +    else if (params.status)
-+        WARN( "write failed, status %lu\n", params.status );
++        WARN( "write failed, status %#x\n", params.status );
 +
 +    if (prev) prev->next = packet->next;
 +    else session->tx_head = packet->next;

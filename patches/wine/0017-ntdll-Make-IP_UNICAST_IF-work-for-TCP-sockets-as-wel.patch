@@ -1,4 +1,4 @@
-From 610e68f80682b8a75e620b17691c94087216bdda Mon Sep 17 00:00:00 2001
+From a0fce68d48f77b86024bcabdfb4206c32cbc2f81 Mon Sep 17 00:00:00 2001
 From: SHORiN-KIWATA <shorin@users.noreply.github.com>
 Date: Thu, 8 Oct 2026 23:56:55 +0900
 Subject: [PATCH] ntdll: Make IP_UNICAST_IF work for TCP sockets as well.

@@ -1,0 +1,47 @@
+From e16579047acce0bf6d1a99af13419267a15ec90c Mon Sep 17 00:00:00 2001
+From: Ziia Shi <mkrsym1@gmail.com>
+Date: Sun, 9 Aug 2026 15:28:44 +0200
+Subject: [PATCH] wpprecorder.sys: Add stub library.
+
+App: Neverness to Everness (4508340).
+---
+ configure.ac                              | 1 +
+ dlls/wpprecorder.sys/Makefile.in          | 1 +
+ dlls/wpprecorder.sys/wpprecorder.sys.spec | 7 +++++++
+ 3 files changed, 9 insertions(+)
+ create mode 100644 dlls/wpprecorder.sys/Makefile.in
+ create mode 100644 dlls/wpprecorder.sys/wpprecorder.sys.spec
+
+diff --git a/configure.ac b/configure.ac
+index 83870c43d6a..d5e2d064ca3 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -3504,6 +3504,7 @@ WINE_CONFIG_MAKEFILE(dlls/wpc)
+ WINE_CONFIG_MAKEFILE(dlls/wpc/tests)
+ WINE_CONFIG_MAKEFILE(dlls/wpcap)
+ WINE_CONFIG_MAKEFILE(dlls/wpcap/tests)
++WINE_CONFIG_MAKEFILE(dlls/wpprecorder.sys)
+ WINE_CONFIG_MAKEFILE(dlls/ws2_32)
+ WINE_CONFIG_MAKEFILE(dlls/ws2_32/tests)
+ WINE_CONFIG_MAKEFILE(dlls/wsdapi)
+diff --git a/dlls/wpprecorder.sys/Makefile.in b/dlls/wpprecorder.sys/Makefile.in
+new file mode 100644
+index 00000000000..6a475ff93d9
+--- /dev/null
++++ b/dlls/wpprecorder.sys/Makefile.in
+@@ -0,0 +1 @@
++MODULE = wpprecorder.sys
+\ No newline at end of file
+diff --git a/dlls/wpprecorder.sys/wpprecorder.sys.spec b/dlls/wpprecorder.sys/wpprecorder.sys.spec
+new file mode 100644
+index 00000000000..57ebc34881f
+--- /dev/null
++++ b/dlls/wpprecorder.sys/wpprecorder.sys.spec
+@@ -0,0 +1,7 @@
++@ stub WppAutoLogStart
++@ stub WppAutoLogStop
++@ stub WppAutoLogTrace
++@ stub imp_WppRecorderConfigure
++@ stub imp_WppRecorderLogCreate
++@ stub imp_WppRecorderLogGetDefault
++@ stub imp_WppRecorderReplay

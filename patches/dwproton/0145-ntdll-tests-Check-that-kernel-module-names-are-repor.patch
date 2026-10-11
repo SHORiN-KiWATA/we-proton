@@ -1,0 +1,24 @@
+From e5c7798c9496214509538422a63e6da5e6ed0522 Mon Sep 17 00:00:00 2001
+From: shxrrydw <sherrydrv@gmail.com>
+Date: Thu, 6 Aug 2026 17:55:25 +0200
+Subject: [PATCH] ntdll/tests: Check that kernel module names are reported.
+
+App: Hololive Dreams (4282500).
+---
+ dlls/ntdll/tests/info.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/dlls/ntdll/tests/info.c b/dlls/ntdll/tests/info.c
+index 2d078309ab0..7f915302bd2 100644
+--- a/dlls/ntdll/tests/info.c
++++ b/dlls/ntdll/tests/info.c
+@@ -845,6 +845,9 @@ static void test_query_module(void)
+         /* module->ImageBaseAddress is not set on wow64 or arm64 */
+         ok(module->ImageSize, "%lu: got 0 size\n", i);
+         ok(module->LoadCount, "%lu: got 0 load count\n", i);
++        ok(module->Name[0], "%lu: got empty name\n", i);
++        ok(module->NameOffset < strlen((const char *)module->Name),
++           "%lu: got NameOffset %u for %s\n", i, module->NameOffset, module->Name);
+     }
+ 
+     free(info);

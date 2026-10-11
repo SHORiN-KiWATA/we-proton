@@ -1,4 +1,4 @@
-From 64d257d4b114a5cbac4f9da0a0f4080c2fc5d4ac Mon Sep 17 00:00:00 2001
+From 2fec78627034e9788e54f1571a2dc4f135f9137a Mon Sep 17 00:00:00 2001
 From: SHORiN-KIWATA <shorin@users.noreply.github.com>
 Date: Sun, 11 Oct 2026 19:19:52 +0900
 Subject: [PATCH] wineboot: Keep the Visual C++ runtime version in the registry
@@ -21,7 +21,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  1 file changed, 80 insertions(+)
 
 diff --git a/programs/wineboot/wineboot.c b/programs/wineboot/wineboot.c
-index 0f57577dc39..e63dc051b1d 100644
+index 9afa1875fe8..ad65f71777b 100644
 --- a/programs/wineboot/wineboot.c
 +++ b/programs/wineboot/wineboot.c
 @@ -1083,6 +1083,85 @@ static void create_known_dlls(void)

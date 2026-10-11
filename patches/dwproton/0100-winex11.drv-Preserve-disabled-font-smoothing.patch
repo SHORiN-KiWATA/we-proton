@@ -1,0 +1,45 @@
+From 3c75e8f776d7fa300f95b21825117f7dcf47330f Mon Sep 17 00:00:00 2001
+From: Ziqing Hui <zhui@codeweavers.com>
+Date: Tue, 5 May 2026 14:47:00 +0800
+Subject: [PATCH] winex11.drv: Preserve disabled font smoothing.
+
+(cherry picked from commit 56bdc88b55bca170d2ffa9196e1d243d0ca279b3)
+---
+ dlls/gdi32/tests/dib.c     | 1 -
+ dlls/winex11.drv/xrender.c | 4 +++-
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/gdi32/tests/dib.c b/dlls/gdi32/tests/dib.c
+index 62f62afa9d8..60ed7ffabc4 100644
+--- a/dlls/gdi32/tests/dib.c
++++ b/dlls/gdi32/tests/dib.c
+@@ -3100,7 +3100,6 @@ static void test_runtime_font_smoothing(void)
+     ok( mixed, "expected some antialiased pixels\n" );
+ 
+     mixed = draw_runtime_smoothing_text( hdc, &bmi, bits, font, FALSE );
+-    todo_wine
+     ok( !mixed, "expected no antialiased pixels, got %u\n", mixed );
+ 
+     mixed = draw_runtime_smoothing_text( hdc, &bmi, bits, cleartype_font, FALSE );
+diff --git a/dlls/winex11.drv/xrender.c b/dlls/winex11.drv/xrender.c
+index 5adbdc958cc..179f93adfbb 100644
+--- a/dlls/winex11.drv/xrender.c
++++ b/dlls/winex11.drv/xrender.c
+@@ -820,14 +820,16 @@ static HFONT xrenderdrv_SelectFont( PHYSDEV dev, HFONT hfont, UINT *aa_flags )
+     LFANDSIZE lfsz;
+     struct xrender_physdev *physdev = get_xrender_dev( dev );
+     PHYSDEV next = GET_NEXT_PHYSDEV( dev, pSelectFont );
++    UINT xft_aa_flags;
+     DWORD mode;
+     HFONT ret;
+ 
+     NtGdiExtGetObjectW( hfont, sizeof(lfsz.lf), &lfsz.lf );
+-    if (!*aa_flags) *aa_flags = get_xft_aa_flags( &lfsz.lf );
+ 
+     ret = next->funcs->pSelectFont( next, hfont, aa_flags );
+     if (!ret) return 0;
++    xft_aa_flags = get_xft_aa_flags( &lfsz.lf );
++    if (xft_aa_flags && *aa_flags != GGO_BITMAP) *aa_flags = xft_aa_flags;
+ 
+     switch (*aa_flags)
+     {

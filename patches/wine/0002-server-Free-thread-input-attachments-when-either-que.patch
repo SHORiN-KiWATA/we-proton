@@ -1,4 +1,4 @@
-From 26ba01817b89e4da8b74aef6c5d7625f4af8a83f Mon Sep 17 00:00:00 2001
+From 76d1eb6b09219139209327f5e1e9aa1475cbb33f Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Wed, 7 Oct 2026 07:51:23 +0900
 Subject: [PATCH] server: Free thread input attachments when either queue is

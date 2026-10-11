@@ -1,0 +1,96 @@
+From 0321536307d716402b86e0100dae43c4f5984cd7 Mon Sep 17 00:00:00 2001
+From: Zhiyi Zhang <zzhang@codeweavers.com>
+Date: Sun, 1 Feb 2026 10:55:49 +0800
+Subject: [PATCH] wined3d: Reset internal_format_set when using the backup DC.
+
+internal_format_set is only relevant to the real DC, but it's checked before
+setting the format on the backup DC as well. If the real DC stops being valid,
+we need to reset the field to make sure we actually set the format on the backup
+DC.
+
+(cherry picked from commit 98a441ddf9d857ae21e4383eaee628deb6947a27)
+---
+ dlls/d3d8/tests/device.c  | 11 ++---------
+ dlls/d3d9/tests/device.c  | 13 ++++---------
+ dlls/wined3d/context_gl.c |  1 +
+ 3 files changed, 7 insertions(+), 18 deletions(-)
+
+diff --git a/dlls/d3d8/tests/device.c b/dlls/d3d8/tests/device.c
+index fc4ad11ac35..507b4d0b041 100644
+--- a/dlls/d3d8/tests/device.c
++++ b/dlls/d3d8/tests/device.c
+@@ -2094,11 +2094,7 @@ static void test_reset(void)
+ 
+     hr = IDirect3D8_CreateDevice(d3d8, D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL,
+             window, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &d3dpp, &device2);
+-    if (FAILED(hr))
+-    {
+-        skip("Failed to create device, hr %#lx.\n", hr);
+-        goto cleanup;
+-    }
++    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+ 
+     hr = IDirect3DDevice8_TestCooperativeLevel(device2);
+     ok(SUCCEEDED(hr), "TestCooperativeLevel failed, hr %#lx.\n", hr);
+@@ -2113,14 +2109,11 @@ static void test_reset(void)
+ 
+     hr = IDirect3DDevice8_Reset(device2, &d3dpp);
+     ok(SUCCEEDED(hr), "Reset failed, hr %#lx.\n", hr);
+-    if (FAILED(hr))
+-        goto cleanup;
+ 
+     hr = IDirect3DDevice8_GetDepthStencilSurface(device2, &surface);
+     ok(SUCCEEDED(hr), "GetDepthStencilSurface failed, hr %#lx.\n", hr);
+     ok(!!surface, "Depth / stencil buffer should not be NULL.\n");
+-    if (surface)
+-        IDirect3DSurface8_Release(surface);
++    IDirect3DSurface8_Release(surface);
+ 
+ cleanup:
+     free(modes);
+diff --git a/dlls/d3d9/tests/device.c b/dlls/d3d9/tests/device.c
+index 8b0447b2be8..3443dd0b9f9 100644
+--- a/dlls/d3d9/tests/device.c
++++ b/dlls/d3d9/tests/device.c
+@@ -2549,12 +2549,9 @@ static void test_reset(void)
+     d3dpp.EnableAutoDepthStencil = FALSE;
+     d3dpp.AutoDepthStencilFormat = D3DFMT_D24S8;
+ 
+-    if (FAILED(hr = IDirect3D9_CreateDevice(d3d, D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL,
+-            hwnd, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &d3dpp, &device2)))
+-    {
+-        skip("Failed to create device, hr %#lx.\n", hr);
+-        goto cleanup;
+-    }
++    hr = IDirect3D9_CreateDevice(d3d, D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL,
++            hwnd, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &d3dpp, &device2);
++    ok(hr == S_OK, "Got hr %#lx.\n", hr);
+ 
+     hr = IDirect3DDevice9_TestCooperativeLevel(device2);
+     ok(hr == S_OK, "Got hr %#lx.\n", hr);
+@@ -2569,12 +2566,10 @@ static void test_reset(void)
+     hr = IDirect3DDevice9_Reset(device2, &d3dpp);
+     ok(hr == S_OK, "Got hr %#lx.\n", hr);
+ 
+-    if (FAILED(hr)) goto cleanup;
+-
+     hr = IDirect3DDevice9_GetDepthStencilSurface(device2, &surface);
+     ok(hr == S_OK, "Got hr %#lx.\n", hr);
+     ok(surface != NULL, "Depth stencil should not be NULL\n");
+-    if (surface) IDirect3DSurface9_Release(surface);
++    IDirect3DSurface9_Release(surface);
+ 
+ cleanup:
+     free(modes);
+diff --git a/dlls/wined3d/context_gl.c b/dlls/wined3d/context_gl.c
+index 07587d88c3d..8b006ccc5f4 100644
+--- a/dlls/wined3d/context_gl.c
++++ b/dlls/wined3d/context_gl.c
+@@ -1259,6 +1259,7 @@ static BOOL wined3d_context_gl_set_gl_context(struct wined3d_context_gl *context
+         TRACE("Using backup DC %p.\n", context_gl->dc);
+         context_gl->dc_is_private = TRUE;
+         context_gl->dc_has_format = FALSE;
++        context_gl->internal_format_set = FALSE;
+ 
+         if (!wined3d_context_gl_set_pixel_format(context_gl))
+         {

@@ -1,0 +1,24 @@
+From 9e74e405228317dddeecb86b82a515e32ec575c8 Mon Sep 17 00:00:00 2001
+From: shxrrydw <sherrydrv@gmail.com>
+Date: Thu, 6 Aug 2026 12:45:18 +0200
+Subject: [PATCH] include: Make the service control manager started event
+ global.
+
+App: Hololive Dreams (4282500).
+---
+ include/wine/svcctl.idl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/wine/svcctl.idl b/include/wine/svcctl.idl
+index 74b939ddd17..a6616484464 100644
+--- a/include/wine/svcctl.idl
++++ b/include/wine/svcctl.idl
+@@ -35,7 +35,7 @@ cpp_quote("#define SVCCTL_ENDPOINT {'\\\\','p','i','p','e','\\\\','s','v','c','c
+ cpp_quote("#define SVCCTL_ENDPOINTA \"\\\\pipe\\\\svcctl\"")
+ 
+ /* Not the Windows event name - if needed the true one can be found in Inside Windows */
+-cpp_quote("#define SVCCTL_STARTED_EVENT {'_','_','w','i','n','e','_','S','v','c','c','t','l','S','t','a','r','t','e','d',0}")
++cpp_quote("#define SVCCTL_STARTED_EVENT {'G','l','o','b','a','l','\\\\','_','_','w','i','n','e','_','S','v','c','c','t','l','S','t','a','r','t','e','d',0}")
+ 
+ /* Service startup protocol over control pipe - not compatible with Windows */
+ cpp_quote("#define SERVICE_PROTOCOL_MAGIC 0x57494e45")
