@@ -39,7 +39,7 @@ https://github.com/user-attachments/assets/42438b93-5a36-4557-8a0f-4b65b53d5e07
 
 说明：
 
-- 前缀版本和所基于的 GE-Proton 版本相同（`GE-Proton11-7`）。从基于 DW-Proton 的旧版 WE-Proton（`we-proton-11.0-14-*`）换过来时，前缀会升级一次
+- 前缀版本和所基于的 GE-Proton 版本相同（`GE-Proton11-7`）。从基于 DW-Proton 的旧版 WE-Proton（`we-proton-11.0-14-*`）换过来时，前缀会升级一次。日志里会出现 `Prefix has an invalid version?!`：GE-Proton 的脚本认不出 `dwproton-` 开头的版本号，跳过 Proton 自己的升级步骤、交给 Wine 更新前缀，属于正常
 - 0005 依赖 Linux 6.7 及以上内核的 userfaultfd 异步写保护；内核更旧时这一项不生效，其他照常
 
 ## 从源码构建

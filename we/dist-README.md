@@ -48,7 +48,7 @@ WE-Proton 是基于 GE-Proton 和 DW-Proton 的个人 Proton：以 GE-Proton（`
 ## 说明
 
 - 0005 依赖 Linux 6.7 及以上内核的 userfaultfd 异步写保护；内核更旧时这一项不生效，其他照常
-- 前缀版本是 `@GE@`，从基于 DW-Proton 的旧版 WE-Proton 换过来时前缀会升级一次
+- 前缀版本是 `@GE@`，从基于 DW-Proton 的旧版 WE-Proton 换过来时前缀会升级一次；日志里的 `Prefix has an invalid version?!` 是因为 GE-Proton 的脚本认不出旧的版本号格式，属于正常
 - 在 Wine 下运行带反作弊的在线游戏，账号可能被处理，风险自负
 
 ## 源码
