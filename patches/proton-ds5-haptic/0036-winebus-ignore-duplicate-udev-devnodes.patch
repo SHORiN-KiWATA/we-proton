@@ -1,0 +1,82 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GE-Proton <git@localhost>
+Date: Tue, 7 Jul 2026 15:45:00 -0600
+Subject: [PATCH] winebus: Ignore duplicate udev devnode hotplug events.
+
+DualSense USB reconnects can produce an initial unreadable hidraw node,
+then multiple add/change notifications after udev updates permissions.
+If the same /dev/hidraw node is registered twice, Wine creates duplicate
+PDOs with the same device instance. The game may bind the first PDO and
+then lose input when that stale duplicate is removed, even though the game
+itself keeps running.
+
+Override process_attrib_change() from f51244b with the original DS5 refresh
+behavior. Do not remove and recreate devices for attribute-only inotify
+changes when the devnode is already tracked, and ignore duplicate monitor
+add/change events for devnodes that are already present.
+---
+ dlls/winebus.sys/bus_udev.c | 23 +++++++++++++----------
+ 1 file changed, 13 insertions(+), 10 deletions(-)
+
+diff --git a/dlls/winebus.sys/bus_udev.c b/dlls/winebus.sys/bus_udev.c
+index d3e3a441f0f..11b9e099cfa 100644
+--- a/dlls/winebus.sys/bus_udev.c
++++ b/dlls/winebus.sys/bus_udev.c
+@@ -1723,6 +1723,13 @@ static void udev_add_device(struct udev_device *dev, int fd)
+         return;
+     }
+ 
++    if (find_device_from_devnode(devnode))
++    {
++        TRACE("udev %s is already tracked, ignoring duplicate add/change event.\n", debugstr_a(devnode));
++        close(fd);
++        return;
++    }
++
+     TRACE("udev %s syspath %s\n", debugstr_a(devnode), udev_device_get_syspath(dev));
+ 
+     get_device_subsystem_info(dev, "hid", NULL, &desc, &bus);
+@@ -1962,19 +1969,15 @@
+-static void process_attrib_change(const char *base, const char *dir, const char *subsystem)
++static void maybe_refresh_devnode(const char *base, const char *dir, const char *subsystem)
+ {
+     char devnode[MAX_PATH];
+-    int fd;
+ 
+     snprintf(devnode, sizeof(devnode), "%s/%s", dir, base);
+-    if (!find_device_from_devnode(devnode))
++    if (find_device_from_devnode(devnode))
+     {
+-        maybe_add_devnode(base, dir, subsystem);
++        TRACE("Ignoring attribute change for existing device %s.\n", debugstr_a(devnode));
+         return;
+     }
+ 
+-    if ((fd = open(devnode, O_RDWR)) < 0)
+-        maybe_remove_devnode(base, dir);
+-    else
+-        close(fd);
++    maybe_add_devnode(base, dir, subsystem);
+ }
+ 
+ static void process_inotify_event(int fd)
+@@ -1995,7 +1998,7 @@ static void process_inotify_event(int fd)
+                 else if (buf.event.mask & (IN_CREATE | IN_MOVED_TO))
+                     maybe_add_devnode(buf.event.name, "/dev", "hidraw");
+                 else if (buf.event.mask & IN_ATTRIB)
+-                    process_attrib_change(buf.event.name, "/dev", "hidraw");
++                    maybe_refresh_devnode(buf.event.name, "/dev", "hidraw");
+             }
+ #ifdef HAS_PROPER_INPUT_HEADER
+             else if (buf.event.wd == devinput_watch)
+@@ -2007,7 +2010,7 @@ static void process_inotify_event(int fd)
+                 else if (buf.event.mask & (IN_CREATE | IN_MOVED_TO))
+                     maybe_add_devnode(buf.event.name, "/dev/input", "input");
+                 else if (buf.event.mask & IN_ATTRIB)
+-                    process_attrib_change(buf.event.name, "/dev/input", "input");
++                    maybe_refresh_devnode(buf.event.name, "/dev/input", "input");
+             }
+ #endif
+         }
+-- 
+2.50.0

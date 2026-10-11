@@ -1,0 +1,77 @@
+From fd2939310e5301c9f1612f891af3061bbc87cd3b Mon Sep 17 00:00:00 2001
+From: GloriousEggroll <gloriouseggroll@gmail.com>
+Date: Wed, 17 Jun 2026 16:18:22 -0600
+Subject: [PATCH] add video playback fix for trails in the sky 1/2/3
+
+---
+ dlls/amstream/ddrawstream.c     |  5 +++++
+ dlls/winedmo/quartz_transform.c | 26 +++++++++++++++++++++++---
+ 2 files changed, 28 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/amstream/ddrawstream.c b/dlls/amstream/ddrawstream.c
+index e1aa900d85c1250e6be91a4b816e0998d3d32081..743afa0331d220d17946079a4988dc7423ecf30e 100644
+--- a/dlls/amstream/ddrawstream.c
++++ b/dlls/amstream/ddrawstream.c
+@@ -1625,6 +1625,11 @@ static HRESULT WINAPI ddraw_mem_allocator_GetBuffer(IMemAllocator *iface,
+         LeaveCriticalSection(&stream->cs);
+         return VFW_E_NOT_COMMITTED;
+     }
++    if (stream->flushing)
++    {
++        LeaveCriticalSection(&stream->cs);
++        return VFW_E_WRONG_STATE;
++    }
+ 
+     sample->surface_desc.dwSize = sizeof(DDSURFACEDESC);
+     /* Don't pass the sample rect here; the upstream filter is expected to
+diff --git a/dlls/winedmo/quartz_transform.c b/dlls/winedmo/quartz_transform.c
+index 67dcfdc4a7cab3f1fa748482c80f697e69d7eefd..76c2482471cfa6912c0b273e96c723e1102656f5 100644
+--- a/dlls/winedmo/quartz_transform.c
++++ b/dlls/winedmo/quartz_transform.c
+@@ -650,16 +650,35 @@ static HRESULT transform_sink_begin_flush(struct strmbase_sink *pin)
+ {
+     struct transform *filter = impl_from_strmbase_filter(pin->pin.filter);
+     NTSTATUS status = STATUS_SUCCESS;
++    HRESULT hr = S_OK;
++
++    /* BeginFlush is used to abort in-flight delivery. Forward it downstream
++     * before waiting for stream_cs; Receive() may be blocked there while
++     * holding stream_cs, and the downstream flush is what wakes it up. */
++    if (filter->source.pin.peer && FAILED(hr = IPin_BeginFlush(filter->source.pin.peer)))
++        return hr;
+ 
+-    EnterCriticalSection(&filter->receive_cs);
+     EnterCriticalSection(&filter->filter.stream_cs);
+     filter->have_next_output_time = false;
+     if (filter->winedmo_transform.handle)
+         status = winedmo_transform_flush(filter->winedmo_transform);
+     LeaveCriticalSection(&filter->filter.stream_cs);
+-    LeaveCriticalSection(&filter->receive_cs);
++    if (status)
++        return E_FAIL;
++
++    return hr;
++}
+ 
+-    return status ? E_FAIL : S_OK;
++static HRESULT transform_sink_end_flush(struct strmbase_sink *pin)
++{
++    struct transform *filter = impl_from_strmbase_filter(pin->pin.filter);
++
++    TRACE("filter %p.\n", filter);
++
++    if (filter->source.pin.peer)
++        return IPin_EndFlush(filter->source.pin.peer);
++
++    return S_OK;
+ }
+ 
+ static HRESULT transform_sink_eos(struct strmbase_sink *pin)
+@@ -699,6 +718,7 @@ static const struct strmbase_sink_ops sink_ops =
+     .pfnReceive = transform_sink_receive,
+     .sink_eos = transform_sink_eos,
+     .sink_begin_flush = transform_sink_begin_flush,
++    .sink_end_flush = transform_sink_end_flush,
+ };
+ 
+ static HRESULT transform_source_query_accept(struct strmbase_pin *pin, const AM_MEDIA_TYPE *mt)

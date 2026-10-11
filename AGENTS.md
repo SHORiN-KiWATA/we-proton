@@ -5,19 +5,23 @@ analysing a problem, or changing the code.
 
 ## What this project is
 
-WE-Proton is an unofficial personal fork of [DWProton](https://dawn.wine/dawn-winery/dwproton)
-(itself a fork of Valve's Proton). It adds Wine and vkd3d-proton fixes so that the
-WeGame client, and games without kernel-level anti-cheat, run properly on Linux.
-It is not affiliated with DWProton, Dawn Winery, Valve or the Wine project.
+WE-Proton is an unofficial personal Proton build based on
+[GE-Proton](https://github.com/GloriousEggroll/proton-ge-custom) and
+[DW-Proton](https://dawn.wine/dawn-winery/dwproton) (both forks of Valve's Proton):
+GE-Proton's tree and build, plus the DW-Proton Wine patches GE-Proton doesn't carry,
+plus WE-Proton's own Wine and vkd3d-proton fixes so that the WeGame client, and games
+without kernel-level anti-cheat, run properly on Linux. It is not affiliated with
+GE-Proton, DW-Proton, Dawn Winery, Valve or the Wine project.
 
 ## Where problems go
 
 - Problems with WE-Proton are reported at
   https://github.com/SHORiN-KiWATA/we-proton/issues, in Chinese or English.
-- Do not create issues, pull requests or comments in DWProton, Proton, Wine or any
-  other upstream project on the user's behalf. If a problem also reproduces with an
-  official DWProton build, tell the user and let them decide whether to report it
-  there; DWProton has its own rules for reports, including AI-assisted ones.
+- Do not create issues, pull requests or comments in GE-Proton, DW-Proton, Proton,
+  Wine or any other upstream project on the user's behalf. If a problem also
+  reproduces with an official GE-Proton or DW-Proton build, tell the user and let them
+  decide whether to report it there; those projects have their own rules for reports,
+  including AI-assisted ones.
 
 ## Competitive games and anti-cheat
 
@@ -52,10 +56,12 @@ Delta Force or VALORANT) and does not adapt to ACE or any other anti-cheat.
 ## Changing the code
 
 - Wine fixes are patches in `patches/wine/`, vkd3d-proton fixes in
-  `patches/vkd3d-proton/`. The `wine/` and `vkd3d-proton/` submodules stay at the
-  upstream commits; the build applies the patches. Make the change on the local
-  `we-patches` branch of the submodule, export it with `git format-patch` into
-  `patches/`, then put the submodule back on the upstream commit.
+  `patches/vkd3d-proton/we-*.patch`. `patches/dwproton/` holds the DW-Proton patches;
+  everything else under `patches/` is GE-Proton's. The submodules stay at the
+  upstream commits; `patches/protonprep-valve-staging.sh` applies GE-Proton's patches,
+  then `patches/dwproton/`, then `patches/wine/`. Make Wine changes on a branch on top
+  of the patched tree (see `we/README.md`) and export them with `git format-patch`,
+  leaving out the generated files listed there.
 - Every fix gets a report in `we/fixes/<number>-<topic>/README.md`: symptoms, root
   cause, how Windows behaves and how that was established, the fix, verification,
   the investigation including dead ends, and what was not verified. Add the patch to
@@ -68,11 +74,13 @@ Delta Force or VALORANT) and does not adapt to ACE or any other anti-cheat.
   They must not name specific programs, game platforms, games or anti-cheats.
   Fix reports name the game the problem was found in, but no anti-cheat.
   `README.md`, `README.en.md` and this file may name programs too.
-- Build with `we/overlay-build.sh --release <N>`. It needs docker: Wine is built in
-  the Steam Linux Runtime SDK image named in `Makefile.in`, so the result runs inside
-  the runtime. It deletes and recreates `build/we-proton-<version>-<N>`, so do not run
-  it while anything is running from that directory. Do not patch files of an
-  installed runner by hand.
+- Build with `we/build.sh --name we-proton-<version>`. It needs docker: everything is
+  built in the Steam Linux Runtime SDK image named in `Makefile.in`, so the result
+  runs inside the runtime. It re-patches the submodules in place and deletes and
+  recreates `build/<name>`, so do not run it while anything is running from that
+  directory. Do not patch files of an installed runner by hand.
+- To follow a new GE-Proton or DW-Proton release, follow `we/upstream-sync.md` step by
+  step, including its checks and the places where it says to stop and ask the user.
 - Proton runs inside Steam Linux Runtime 4.0. Test there, not by running `proton`
   directly on the host, where its bundled media libraries are missing.
 - Check for regressions with Wine's own conformance tests (a separate

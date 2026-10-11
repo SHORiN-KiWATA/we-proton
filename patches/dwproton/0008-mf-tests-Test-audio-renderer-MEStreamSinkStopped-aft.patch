@@ -1,0 +1,54 @@
+From 153b86f02e2dc6e960f9d97109fc7d8d960d21b2 Mon Sep 17 00:00:00 2001
+From: Conor McCarthy <cmccarthy@codeweavers.com>
+Date: Mon, 7 Sep 2026 15:57:42 +1000
+Subject: [PATCH] mf/tests: Test audio renderer MEStreamSinkStopped after
+ OnClockStop().
+
+(cherry picked from commit 5886b7ece2884abb01b70a9b4197eebb841098d2)
+---
+ dlls/mf/tests/mf.c | 25 +++++++++++++++++++++++--
+ 1 file changed, 23 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/mf/tests/mf.c b/dlls/mf/tests/mf.c
+index 3b8ce0202c8..fd7c0615bd9 100644
+--- a/dlls/mf/tests/mf.c
++++ b/dlls/mf/tests/mf.c
+@@ -5037,6 +5037,29 @@ if (SUCCEEDED(hr))
+     hr = IMFMediaSink_QueryInterface(sink, &IID_IMFClockStateSink, (void **)&state_sink);
+     ok(hr == S_OK, "Failed to get interface, hr %#lx.\n", hr);
+ 
++    callback = create_test_callback(TRUE);
++
++    /* Flush events */
++    while (SUCCEEDED(IMFStreamSink_GetEvent(stream_sink, MF_EVENT_FLAG_NO_WAIT, &event)))
++        IMFMediaEvent_Release(event);
++
++    /* State sink is in its initial state. */
++    hr = IMFClockStateSink_OnClockStop(state_sink, 0);
++    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
++    PropVariantInit(&propvar);
++    hr = gen_wait_media_event_until_blocking((IMFMediaEventGenerator *)stream_sink, callback, MEStreamSinkStopped, 1000, &propvar);
++    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
++    PropVariantClear(&propvar);
++
++    hr = IMFClockStateSink_OnClockPause(state_sink, 0);
++    ok(hr == MF_E_INVALID_STATE_TRANSITION, "Unexpected hr %#lx.\n", hr);
++
++    hr = IMFClockStateSink_OnClockStop(state_sink, 0);
++    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
++    hr = gen_wait_media_event_until_blocking((IMFMediaEventGenerator *)stream_sink, callback, MEStreamSinkStopped, 1000, &propvar);
++    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
++    PropVariantClear(&propvar);
++
+     hr = IMFClockStateSink_OnClockStart(state_sink, 0, 0);
+     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+ 
+@@ -5064,8 +5087,6 @@ if (SUCCEEDED(hr))
+     hr = IMFClockStateSink_OnClockStop(state_sink, 0);
+     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+ 
+-    callback = create_test_callback(TRUE);
+-
+     /* Flush events */
+     while (SUCCEEDED(IMFStreamSink_GetEvent(stream_sink, MF_EVENT_FLAG_NO_WAIT, &event)))
+         IMFMediaEvent_Release(event);

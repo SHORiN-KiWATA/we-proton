@@ -79,7 +79,8 @@ def filter_registry(filename):
     """Remove registry values that contain a fully qualified path
     inside some well-known registry keys. These paths are devised on
     the build machine and it makes no sense to distribute them. Plus,
-    they are known to cause bugs."""
+    they are known to cause bugs. Also remove the template's SQM machine
+    identifier so wineboot generates a separate one in each new prefix."""
 
     FILTER_KEYS = [
         r'Software\\Microsoft\\Windows\\CurrentVersion\\Fonts',
@@ -88,6 +89,7 @@ def filter_registry(filename):
     ]
 
     filtering = False
+    filtering_sqm = False
     with open(filename) as fin:
         with open(filename + '.tmp', 'w') as fout:
             for line in fin:
@@ -97,10 +99,13 @@ def filter_registry(filename):
                 if match is not None:
                     fout.write(line + '\n')
                     filtering = match.group(1) in FILTER_KEYS
+                    filtering_sqm = match.group(1) == r'Software\\Microsoft\\SQMClient'
                     continue
 
                 match = VALUE_RE.match(line)
                 if match is not None:
+                    if filtering_sqm and match.group(1) == 'MachineId':
+                        continue
                     if not filtering or match.group(2)[1:2] != ':':
                         fout.write(line + '\n')
                     continue
@@ -121,15 +126,17 @@ def make_default_pfx(default_pfx_dir, dist_dir, arm64):
     local_env = dict(os.environ)
     libdir = dist_dir + '/lib/'
 
-    system_libdir = ["/usr/aarch64-linux-gnu/lib"] if arm64 else []
-    ld_path = ':'.join([libdir + "x86_64-linux-gnu", libdir + "aarch64-linux-gnu", libdir + "i386-linux-gnu"] + system_libdir)
+    if arm64:
+        system_libdir = ["/usr/aarch64-linux-gnu/lib"]
+        libdirs = [libdir + "aarch64-linux-gnu", libdir + "x86_64-linux-gnu", libdir + "i386-linux-gnu"]
+    else:
+        system_libdir = []
+        libdirs = [libdir + "x86_64-linux-gnu", libdir + "i386-linux-gnu"]
+    ld_path = ':'.join(libdirs + system_libdir)
     local_env["LD_LIBRARY_PATH"] = ld_path
     local_env["WINEPREFIX"] = default_pfx_dir
     local_env["WINEDEBUG"] = "-all"
     local_env["WINEDLLPATH"] = libdir + "vkd3d"
-    local_env["WINEDLLOVERRIDES"] = "winex11.drv,winewayland.drv=d;winemenubuilder=d;"
-    local_env["WINEESYNC"] = "0"
-    local_env["WINEFSYNC"] = "0"
     runtime_args = []
 
 

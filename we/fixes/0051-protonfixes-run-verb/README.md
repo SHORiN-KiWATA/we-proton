@@ -1,6 +1,8 @@
 # 0051：设了 PROTONFIXES_RUN_VERB=1 时，用 `run` 启动的程序也执行 protonfixes
 
-补丁：`patches/protonfixes/0051-protonfixes-Also-run-fixes-for-run-when-PROTONFIXES_.patch`（`__init__.py`）。`we/overlay-build.sh` 同时学会把比基础版本多出来的 protonfixes 补丁打进发布包。
+补丁：`patches/protonfixes/0051-protonfixes-Also-run-fixes-for-run-when-PROTONFIXES_.patch`（`__init__.py`）。GE-Proton 底座的构建由 `patches/protonprep-valve-staging.sh` 打上 `patches/protonfixes/` 里的所有补丁，排在 DW-Proton 的 0003–0005 后面。
+
+（这份报告是在 DW-Proton 底座的 WE 仓库里写的，2026-10-12 搬到 GE-Proton 底座。下面提到的 `we/overlay-build.sh` 和 release 26 都是那边的；验证用的也是那边的测试构建。）
 
 ## 现象
 

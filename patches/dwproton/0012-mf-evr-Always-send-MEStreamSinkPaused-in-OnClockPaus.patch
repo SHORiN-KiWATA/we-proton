@@ -1,0 +1,44 @@
+From 8e5623894b996748339f27b4f2b72697d82c5599 Mon Sep 17 00:00:00 2001
+From: Conor McCarthy <cmccarthy@codeweavers.com>
+Date: Mon, 7 Sep 2026 16:40:21 +1000
+Subject: [PATCH] mf/evr: Always send MEStreamSinkPaused in OnClockPaused().
+
+(cherry picked from commit d171c7f02e40cb8920aa903905a25449baae19e8)
+---
+ dlls/mf/evr.c      | 9 +++------
+ dlls/mf/tests/mf.c | 1 -
+ 2 files changed, 3 insertions(+), 7 deletions(-)
+
+diff --git a/dlls/mf/evr.c b/dlls/mf/evr.c
+index c1e83c327ba..7cda8131ab6 100644
+--- a/dlls/mf/evr.c
++++ b/dlls/mf/evr.c
+@@ -2092,13 +2092,10 @@ static HRESULT WINAPI video_renderer_clock_sink_OnClockPause(IMFClockStateSink *
+ 
+     IMFVideoPresenter_OnClockPause(renderer->presenter, systime);
+ 
+-    if (renderer->state == EVR_STATE_RUNNING)
++    for (i = 0; i < renderer->stream_count; ++i)
+     {
+-        for (i = 0; i < renderer->stream_count; ++i)
+-        {
+-            struct video_stream *stream = renderer->streams[i];
+-            IMFMediaEventQueue_QueueEventParamVar(stream->event_queue, MEStreamSinkPaused, &GUID_NULL, S_OK, NULL);
+-        }
++        struct video_stream *stream = renderer->streams[i];
++        IMFMediaEventQueue_QueueEventParamVar(stream->event_queue, MEStreamSinkPaused, &GUID_NULL, S_OK, NULL);
+     }
+ 
+     renderer->state = EVR_STATE_PAUSED;
+diff --git a/dlls/mf/tests/mf.c b/dlls/mf/tests/mf.c
+index dea60fcfd2a..e51c7565fff 100644
+--- a/dlls/mf/tests/mf.c
++++ b/dlls/mf/tests/mf.c
+@@ -5608,7 +5608,6 @@ static void test_evr(void)
+     hr = IMFClockStateSink_OnClockPause(state_sink, 0);
+     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+     hr = gen_wait_media_event_until_blocking((IMFMediaEventGenerator *)stream_sink, callback, MEStreamSinkPaused, 1000, &propvar);
+-    todo_wine
+     ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+     PropVariantClear(&propvar);
+ 

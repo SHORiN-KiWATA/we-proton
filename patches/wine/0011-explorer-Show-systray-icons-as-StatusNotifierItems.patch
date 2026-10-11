@@ -1,4 +1,4 @@
-From 9ac7a64c887caa195bda0860fb37cd3fbd11b845 Mon Sep 17 00:00:00 2001
+From d9ef4c5e9d863a2df12e5865700826ecb5a26374 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Thu, 8 Oct 2026 20:43:24 +0900
 Subject: [PATCH] explorer: Show systray icons as StatusNotifierItems.
@@ -1304,6 +1304,3 @@ index 00000000000..5ded10e7a19
 +};
 +
 +#endif /* __WINE_EXPLORER_UNIXLIB_H */
--- 
-2.56.0
-

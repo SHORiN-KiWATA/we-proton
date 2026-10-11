@@ -279,55 +279,6 @@ static BOOL try_recover_eadesktop_symlink(void)
     return FALSE;
 }
 
-static void setup_discord_bridge_service(void)
-{
-    SC_HANDLE manager, service;
-    WCHAR bridge_path[MAX_PATH] = L"c:\\windows\\system32\\discord\\bridge.exe --service";
-    DWORD id;
-    BOOL start;
-
-    manager = OpenSCManagerW( NULL, NULL, SC_MANAGER_ALL_ACCESS );
-    if ( !manager ) {
-        ERR( "(discord-bridge) OpenSCManagerW failed, error %lu\n", GetLastError() );
-        return;
-    }
-
-    service = OpenServiceW( manager, L"discord-bridge", SERVICE_START );
-    if ( !service ) {
-        if ( GetLastError() != ERROR_SERVICE_DOES_NOT_EXIST ) {
-            ERR( "(discord-bridge) OpenServiceW failed, error %lu\n", GetLastError() );
-            CloseServiceHandle( manager );
-            return;
-        }
-        WARN( "(discord-bridge) Service does not exist, registering %s\n", debugstr_w(bridge_path) );
-
-        service = CreateServiceW(
-            manager, L"discord-bridge", L"Wine Discord RPC Bridge",
-            SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS, SERVICE_DEMAND_START, SERVICE_ERROR_NORMAL,
-            bridge_path, NULL, &id, NULL, NULL, NULL);
-        if ( !service ) {
-            ERR( "(discord-bridge) CreateServiceW failed, error %lu\n", GetLastError() );
-            CloseServiceHandle( manager );
-            return;
-        }
-
-        service = OpenServiceW( manager, L"discord-bridge", SERVICE_START );
-        if ( !service ) {
-            ERR( "(discord-bridge) OpenServiceW failed after creation, error %lu\n", GetLastError() );
-            CloseServiceHandle( manager );
-            return;
-        }
-    }
-
-    if ( env_nonzero( "PROTON_DISCORD_BRIDGE" ) ) {
-        start = StartServiceW( service, 0, NULL );
-        if ( !start ) ERR( "(discord-bridge) StartServiceW failed, error %lu\n", GetLastError() );
-    }
-
-    CloseServiceHandle( service );
-    CloseServiceHandle( manager );
-}
-
 static HANDLE run_process(BOOL *should_await, BOOL game_process)
 {
     WCHAR *cmdline = GetCommandLineW();
@@ -504,6 +455,7 @@ run:
         WCHAR *param = NULL;
         WCHAR *executable_name_end = get_end_of_excutable_name(cmdline);
         static const WCHAR verb[] = { 'o', 'p', 'e', 'n', 0 };
+        unsigned int retry_count = 0;
         INT_PTR ret;
 
         if (*executable_name_end != '\0')
@@ -512,9 +464,15 @@ run:
             param = executable_name_end+1;
         }
 
-        if ((ret = (INT_PTR)ShellExecuteW(NULL, verb, cmdline, param, NULL, hide_window ? SW_HIDE : SW_SHOWNORMAL)) < 32)
+        while ((ret = (INT_PTR)ShellExecuteW(NULL, verb, cmdline, param, NULL, hide_window ? SW_HIDE : SW_SHOWNORMAL)) < 32)
         {
             WINE_ERR("Failed to execute %s, ret %Iu.\n", wine_dbgstr_w(cmdline), ret);
+            if (game_process && ret == SE_ERR_FNF && link2ea)
+            {
+                if (!try_recover_eadesktop_symlink()) break;
+                if (retry_count++) break;
+                continue;
+            }
             if (game_process && ret == SE_ERR_NOASSOC && link2ea)
             {
                 /* Try to uninstall EA desktop so it is set up from prerequisites on the next run. */
@@ -527,6 +485,7 @@ run:
                 RegDeleteTreeW( HKEY_LOCAL_MACHINE, L"Software\\Electronic Arts\\EA Desktop" );
                 RegDeleteTreeW( HKEY_LOCAL_MACHINE, L"Software\\Electronic Arts\\EA Core" );
             }
+            break;
         }
         return INVALID_HANDLE_VALUE;
     }
@@ -608,9 +567,6 @@ int main(int argc, char *argv[])
 
         if (game_process)
             setup_vr_registry();
-
-        if (game_process)
-            setup_discord_bridge_service();
 
         child = run_process(&should_await, game_process);
 

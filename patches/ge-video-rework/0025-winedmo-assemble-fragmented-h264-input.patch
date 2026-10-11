@@ -1,0 +1,36 @@
+From 8ecf72184d2a7442f0b3593935a25bfc1dba9d11 Mon Sep 17 00:00:00 2001
+From: GloriousEggroll <gloriouseggroll@gmail.com>
+Date: Fri, 14 Aug 2026 12:00:00 -0600
+Subject: [PATCH] winedmo: assemble fragmented Annex-B H.264 input
+
+Some Media Foundation clients, including CRIWARE in GIRLS' FRONTLINE 2:
+EXILIUM, split an Annex-B H.264 access unit across multiple input samples.
+Sending each sample directly to libavcodec makes it decode the first fragment
+as a truncated picture, then reject the continuation because it does not begin
+with a start code.  The resulting E_FAIL stops the entire playback graph.
+
+Use libavcodec's H.264 parser when the input media type has no codec
+extradata.  Such Media Foundation H.264 input is an elementary Annex-B stream,
+so the parser can preserve fragments until it has a complete access unit.
+Keep configured H.264 streams on the existing packet-oriented path to avoid
+changing AVCC/length-prefixed input handling.
+---
+ dlls/winedmo/unix_transform.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winedmo/unix_transform.c b/dlls/winedmo/unix_transform.c
+index 74d034ccc0e938bfac12f80bf9b3bbb1e78dab86..4ed04301d7422f11e3293d52d3eb3edd3de1cd54 100644
+--- a/dlls/winedmo/unix_transform.c
++++ b/dlls/winedmo/unix_transform.c
+@@ -915,8 +915,10 @@ NTSTATUS transform_create( void *arg )
+         return STATUS_NOT_SUPPORTED;
+     }
+ 
++    /* MF H.264 elementary streams may split one Annex-B access unit across
++     * multiple input samples.  Preserve those fragments until complete. */
+     if (!t->is_audio && (codec_id == AV_CODEC_ID_MPEG1VIDEO || codec_id == AV_CODEC_ID_MPEG2VIDEO
+-            || is_wmv_video_codec( codec_id )))
++            || is_wmv_video_codec( codec_id ) || (codec_id == AV_CODEC_ID_H264 && !extradata_size)))
+     {
+         t->parser = av_parser_init( codec_id );
+         t->parser_codec_id = codec_id;

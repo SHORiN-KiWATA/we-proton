@@ -1,0 +1,271 @@
+From 027ae2bdf81d60934fb832e9f563e70f6caef179 Mon Sep 17 00:00:00 2001
+From: GloriousEggroll <gloriouseggroll@gmail.com>
+Date: Tue, 9 Jun 2026 16:00:33 -0600
+Subject: [PATCH 5/6] audio: smooth decoded media playback
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Update Pulse, MMDevAPI, XAudio2, and Microsoft audio decoder behavior used by the replacement media pipeline.
+
+This covers the audio regressions chased during the session:
+
+- Sky: Children of the Light's in-game theater stream no longer drops into mostly-silent bursts.
+
+- Grandia HD's movie audio can play without the crackling/stutter that was traced to output/logging pressure.
+
+- Underdog Detective [神都不良探] gets decoded video audio without needing stale winetricks overrides.
+
+- The Medium keeps the corrected AAC channel-layout path for C001_51.mp4 without adding a SteamGameId hack.
+
+- Warhammer 40,000: Dakka Squadron keeps audio/video media type negotiation working without the old fake-AAC game branch.
+
+- Kirikiri-engine titles from the removed SteamGameId list use general WMA/AAC decoder behavior instead of forcing the input subtype/tag to PCM.
+
+The Pulse changes keep timer and buffer accounting stable when video playback is producing decoded audio in small bursts.
+
+This version intentionally does not reintroduce DualSense mono/haptic reconnect paths; those endpoints are now treated as removed on unplug and newly created on plug-in.
+---
+ dlls/msauddecmft/msauddecmft.c |  6 ++-
+ dlls/winepulse.drv/pulse.c     | 86 ++++++++++++++++++++++++++++++++++--------
+ 2 files changed, 74 insertions(+), 18 deletions(-)
+
+diff --git a/dlls/msauddecmft/msauddecmft.c b/dlls/msauddecmft/msauddecmft.c
+index 672389564a274b22a19709f7f16a638e07c9113b..9928ddf92dad2188ac9d65652b16fd8aa2db6fe7 100644
+--- a/dlls/msauddecmft/msauddecmft.c
++++ b/dlls/msauddecmft/msauddecmft.c
+@@ -34,13 +34,14 @@ WINE_DEFAULT_DEBUG_CHANNEL(dmo);
+ #include "initguid.h"
+ 
+ DEFINE_MEDIATYPE_GUID(MFAudioFormat_RAW_AAC,WAVE_FORMAT_RAW_AAC1);
++DEFINE_MEDIATYPE_GUID(MFAudioFormat_ADPCM,WAVE_FORMAT_ADPCM);
+ static const GUID CLSID_WineAudioDecoder = {0x480b1517,0xc8e9,0x4eaf,{0xb0,0x06,0xe6,0x30,0x07,0x18,0xd8,0x5d}};
+ 
+ static HRESULT WINAPI audio_decoder_factory_CreateInstance(IClassFactory *iface, IUnknown *outer,
+         REFIID riid, void **out)
+ {
+-    static const GUID CLSID_GStreamerAudioDecoder = {0x480b1517,0xc8e9,0x4eae,{0xb0,0x06,0xe6,0x30,0x07,0x18,0xd8,0x5d}};
+-    return CoCreateInstance(&CLSID_GStreamerAudioDecoder, outer, CLSCTX_INPROC_SERVER, riid, out);
++    static const GUID CLSID_WineDMOAudioDecoder = {0x480b1517,0xc8e9,0x4eae,{0xb0,0x06,0xe6,0x30,0x07,0x18,0xd8,0x5d}};
++    return CoCreateInstance(&CLSID_WineDMOAudioDecoder, outer, CLSCTX_INPROC_SERVER, riid, out);
+ }
+ 
+ static HRESULT WINAPI aac_decoder_factory_CreateInstance(IClassFactory *iface, IUnknown *outer,
+@@ -125,6 +126,7 @@ HRESULT WINAPI DllRegisterServer(void)
+     {
+         {MFMediaType_Audio, MFAudioFormat_Vorbis},
+         {MFMediaType_Audio, MFAudioFormat_Opus},
++        {MFMediaType_Audio, MFAudioFormat_ADPCM},
+     };
+     MFT_REGISTER_TYPE_INFO audio_decoder_mft_outputs[] =
+     {
+diff --git a/dlls/winepulse.drv/pulse.c b/dlls/winepulse.drv/pulse.c
+index 04da7f3854cf2a8a4a892639acaced661f07e9fb..abaf1d31abd0dd7b5359643ba2d8c7c022d25151 100644
+--- a/dlls/winepulse.drv/pulse.c
++++ b/dlls/winepulse.drv/pulse.c
+@@ -28,7 +28,9 @@
+ #include <stdarg.h>
+ #include <stdlib.h>
+ #include <stdint.h>
++#include <errno.h>
+ #include <pthread.h>
++#include <time.h>
+ #include <math.h>
+ #include <poll.h>
+ 
+@@ -119,6 +121,8 @@ struct pulse_stream
+     struct pulse_period *period;
+ };
+ 
++static void pulse_write(struct pulse_stream *stream);
++
+ typedef struct _ACPacket
+ {
+     struct list entry;
+@@ -175,6 +179,22 @@ static int pulse_cond_wait(void)
+     return pthread_cond_wait(&pulse_cond, &pulse_mutex);
+ }
+ 
++static int pulse_cond_timedwait_ms(unsigned int timeout_ms)
++{
++    struct timespec ts;
++
++    clock_gettime(CLOCK_REALTIME, &ts);
++    ts.tv_sec += timeout_ms / 1000;
++    ts.tv_nsec += (timeout_ms % 1000) * 1000000;
++    if (ts.tv_nsec >= 1000000000)
++    {
++        ts.tv_sec++;
++        ts.tv_nsec -= 1000000000;
++    }
++
++    return pthread_cond_timedwait(&pulse_cond, &pulse_mutex, &ts);
++}
++
+ static void pulse_broadcast(void)
+ {
+     pthread_cond_broadcast(&pulse_cond);
+@@ -403,14 +423,32 @@ static void pulse_contextcallback(pa_context *c, void *userdata)
+ 
+ static void pulse_stream_state(pa_stream *s, void *user)
+ {
++    struct pulse_stream *stream = user;
+     pa_stream_state_t state = pa_stream_get_state(s);
+     TRACE("%p: Stream state changed to %i\n", user, state);
++    if (stream && stream->dataflow == eRender && state == PA_STREAM_READY)
++    {
++        const pa_buffer_attr *attr = pa_stream_get_buffer_attr(s);
++        pa_operation *op;
++
++        if (attr)
++            stream->attr = *attr;
++        if (stream->started)
++        {
++            pulse_write(stream);
++            if (pa_stream_is_corked(s) && (op = pa_stream_cork(s, 0, NULL, NULL)))
++                pa_operation_unref(op);
++        }
++    }
+     pulse_broadcast();
+ }
+ 
+ static void pulse_attr_update(pa_stream *s, void *user) {
++    struct pulse_stream *stream = user;
+     const pa_buffer_attr *attr = pa_stream_get_buffer_attr(s);
+     TRACE("%p: New attributes or device moved:\n", user);
++    if (stream && attr)
++        stream->attr = *attr;
+     dump_attr(attr);
+ }
+ 
+@@ -1195,6 +1233,7 @@ static HRESULT pulse_stream_connect(struct pulse_stream *stream, const char *pul
+     attr.tlength = period_bytes * 3;
+     attr.maxlength = stream->bufsize_frames * pa_frame_size(&stream->ss);
+     attr.prebuf = 0;
++    stream->attr = attr;
+     dump_attr(&attr);
+ 
+     /* If specific device was requested, use it exactly */
+@@ -1304,7 +1343,7 @@ static NTSTATUS pulse_create_stream(void *args)
+     hr = pulse_stream_connect(stream, params->device, stream->period_bytes);
+     if (SUCCEEDED(hr)) {
+         UINT32 unalign;
+-        const pa_buffer_attr *attr = pa_stream_get_buffer_attr(stream->stream);
++        const pa_buffer_attr *attr = pulse_stream_ready(stream) ? pa_stream_get_buffer_attr(stream->stream) : &stream->attr;
+         SIZE_T size;
+ 
+         stream->attr = *attr;
+@@ -1505,10 +1544,14 @@ write:
+ 
+ static void pulse_write_index_catchup(struct pulse_stream *stream)
+ {
+-    const pa_timing_info *ti = pa_stream_get_timing_info(stream->stream);
++    const pa_timing_info *ti;
+     UINT32 frame_size, to_write;
+     int64_t write_index;
+ 
++    if (!pulse_stream_ready(stream))
++        return;
++
++    ti = pa_stream_get_timing_info(stream->stream);
+     if (!ti || ti->read_index <= ti->write_index) return;
+     if (ti->read_index_corrupt || ti->write_index_corrupt)
+     {
+@@ -1518,15 +1561,21 @@ static void pulse_write_index_catchup(struct pulse_stream *stream)
+ 
+     if (!silence_buf) silence_buf = calloc(1, silence_buf_size);
+     frame_size = pa_frame_size(&stream->ss);
++    if (!frame_size) return;
+ 
+     while (ti && ti->read_index > ti->write_index)
+     {
+         write_index = ti->write_index;
+-        TRACE("stream %p, runnind %d, read is ahead of write %lld bytes.\n", stream, stream->started,
++        TRACE("stream %p, running %d, read is ahead of write %lld bytes.\n", stream, stream->started,
+               (long long)(ti->read_index - write_index));
+ 
+-        to_write = min(ti->read_index - write_index, silence_buf_size) / frame_size * frame_size;
++        to_write = min(ti->read_index - write_index, min(stream->period_bytes, silence_buf_size)) / frame_size * frame_size;
++        if (!to_write) break;
++        if (!pulse_stream_ready(stream))
++            break;
+         pa_stream_write(stream->stream, silence_buf, to_write, NULL, 0, PA_SEEK_RELATIVE);
++        if (!pulse_stream_ready(stream))
++            break;
+         ti = pa_stream_get_timing_info(stream->stream);
+         if (ti && ti->write_index <= write_index)
+         {
+@@ -1767,7 +1816,7 @@ static void pulse_update_timing_cb(pa_stream *s, int success, void *user)
+ static void pa_streams_timer_cb(pa_mainloop_api *api, pa_time_event *e, const struct timeval *tv, void *userdata)
+ {
+     struct pulse_period *period = userdata;
+-    struct pulse_stream *stream;
++    struct pulse_stream *stream, *next;
+     BOOL reset_timeline = FALSE;
+     pa_usec_t next_timer;
+     int64_t adjust = 0;
+@@ -1785,7 +1834,7 @@ static void pa_streams_timer_cb(pa_mainloop_api *api, pa_time_event *e, const st
+         reset_timeline = TRUE;
+     }
+ 
+-    LIST_FOR_EACH_ENTRY(stream, &period->streams, struct pulse_stream, period_entry)
++    LIST_FOR_EACH_ENTRY_SAFE(stream, next, &period->streams, struct pulse_stream, period_entry)
+     {
+         if (stream->started)
+         {
+@@ -1794,16 +1843,18 @@ static void pa_streams_timer_cb(pa_mainloop_api *api, pa_time_event *e, const st
+                 stream->timeline_start_period_time = 0;
+                 stream->timeline_start_stream_time = 0;
+             }
+-            if (!stream->update_timing_info_pending && (o = pa_stream_update_timing_info(stream->stream, pulse_update_timing_cb, stream)))
++            if (!pulse_stream_haptic(stream) && !pulse_stream_ready(stream))
++                continue;
++            if (!pulse_stream_haptic(stream) && !stream->update_timing_info_pending && (o = pa_stream_update_timing_info(stream->stream, pulse_update_timing_cb, stream)))
+             {
+                 pa_operation_unref(o);
+                 stream->update_timing_info_pending = TRUE;
+             }
+-            else if (stream->update_timing_info_pending)
++            else if (!pulse_stream_haptic(stream) && stream->update_timing_info_pending)
+             {
+                 TRACE("pa_stream_update_timing_info is still pending.\n");
+             }
+-            else
++            else if (!pulse_stream_haptic(stream))
+             {
+                 ERR("pa_stream_update_timing_info err %d.\n", pa_context_errno(pulse_ctx));
+             }
+@@ -2516,7 +2567,7 @@ static NTSTATUS pulse_get_latency(void *args)
+         params->result = AUDCLNT_E_DEVICE_INVALIDATED;
+         return STATUS_SUCCESS;
+     }
+-    attr = pa_stream_get_buffer_attr(stream->stream);
++    attr = pulse_stream_ready(stream) ? pa_stream_get_buffer_attr(stream->stream) : &stream->attr;
+     if (stream->dataflow == eRender)
+         lat = attr->minreq / pa_frame_size(&stream->ss);
+     else
+@@ -2683,15 +2734,18 @@ static NTSTATUS pulse_set_sample_rate(void *args)
+     new_ss = stream->ss;
+     new_ss.rate = params->rate;
+ 
+-    if (!wait_pa_operation_complete(pa_stream_update_sample_rate(stream->stream, params->rate, pulse_op_cb, &success)))
+-        success = 0;
++    if (pulse_stream_ready(stream))
++    {
++        if (!wait_pa_operation_complete(pa_stream_update_sample_rate(stream->stream, params->rate, pulse_op_cb, &success)))
++            success = 0;
+ 
+-    if (!success) {
+-        hr = E_OUTOFMEMORY;
+-        goto exit;
++        if (!success) {
++            hr = E_OUTOFMEMORY;
++            goto exit;
++        }
+     }
+ 
+-    if (stream->held_bytes)
++    if (stream->held_bytes && pulse_stream_ready(stream))
+         wait_pa_operation_complete(pa_stream_flush(stream->stream, pulse_op_cb, &success));
+ 
+     stream->clock_lastpos = stream->clock_written = 0;

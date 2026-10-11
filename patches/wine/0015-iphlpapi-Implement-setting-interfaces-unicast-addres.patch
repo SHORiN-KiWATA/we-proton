@@ -1,4 +1,4 @@
-From 7a3e41cfdd911f2eeb359a9c8a52ebc17c6d5e39 Mon Sep 17 00:00:00 2001
+From 54716aa4c34e7d4dd6be5356e1e099cd5aed853a Mon Sep 17 00:00:00 2001
 From: SHORiN-KiWATA <feng13862095732@gmail.com>
 Date: Thu, 8 Oct 2026 22:26:37 +0900
 Subject: [PATCH] iphlpapi: Implement setting interfaces, unicast addresses and

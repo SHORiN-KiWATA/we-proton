@@ -1,8 +1,8 @@
-From db77063480b25f7af680edc8241edab5b6a5cac1 Mon Sep 17 00:00:00 2001
+From 2751e144be635f04defed874bbd39fac9c57e7a7 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Wed, 7 Oct 2026 07:51:23 +0900
-Subject: [PATCH 2/5] server: Free thread input attachments when either queue
- is destroyed.
+Subject: [PATCH] server: Free thread input attachments when either queue is
+ destroyed.
 
 An attachment is linked into the attachments list of the thread input
 that queue_from had when it was created. msg_queue_destroy() only went
@@ -21,7 +21,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  1 file changed, 20 insertions(+), 9 deletions(-)
 
 diff --git a/server/queue.c b/server/queue.c
-index 2a40673..90e4002 100644
+index 377500ede51..28cdd36156e 100644
 --- a/server/queue.c
 +++ b/server/queue.c
 @@ -119,6 +119,7 @@ struct pointer_state
@@ -104,6 +104,3 @@ index 2a40673..90e4002 100644
      }
      if (queue_to)
      {
--- 
-2.56.0
-

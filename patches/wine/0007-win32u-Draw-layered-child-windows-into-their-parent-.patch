@@ -1,4 +1,4 @@
-From cc461f853659a0a73398804e43cd870cd1c5790f Mon Sep 17 00:00:00 2001
+From 8cc0bdf8ab53836d125bbdb5b0c88a97ef3745ae Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Thu, 8 Oct 2026 14:57:23 +0900
 Subject: [PATCH] win32u: Draw layered child windows into their parent's
@@ -22,10 +22,10 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  1 file changed, 77 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index ca897cb..baa4996 100644
+index f28ab0fa50a..264b3ff1217 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
-@@ -2626,6 +2626,62 @@ BOOL WINAPI NtUserSetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alph
+@@ -2826,6 +2826,62 @@ BOOL WINAPI NtUserSetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alph
      return ret;
  }
  
@@ -88,7 +88,7 @@ index ca897cb..baa4996 100644
  /*****************************************************************************
   *           UpdateLayeredWindow (win32u.@)
   */
-@@ -2635,9 +2691,11 @@ BOOL WINAPI NtUserUpdateLayeredWindow( HWND hwnd, HDC hdc_dst, const POINT *pts_
+@@ -2835,9 +2891,11 @@ BOOL WINAPI NtUserUpdateLayeredWindow( HWND hwnd, HDC hdc_dst, const POINT *pts_
  {
      DWORD swp_flags = SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOREDRAW;
      BYTE source_alpha = blend ? blend->SourceConstantAlpha : 0xff;
@@ -101,7 +101,7 @@ index ca897cb..baa4996 100644
      SIZE offset;
      BOOL ret = FALSE;
  
-@@ -2650,6 +2708,7 @@ BOOL WINAPI NtUserUpdateLayeredWindow( HWND hwnd, HDC hdc_dst, const POINT *pts_
+@@ -2850,6 +2908,7 @@ BOOL WINAPI NtUserUpdateLayeredWindow( HWND hwnd, HDC hdc_dst, const POINT *pts_
      }
  
      get_window_rects( hwnd, COORDS_PARENT, &new_rects, get_thread_dpi() );
@@ -109,7 +109,7 @@ index ca897cb..baa4996 100644
  
      if (pts_dst)
      {
-@@ -2685,8 +2744,24 @@ BOOL WINAPI NtUserUpdateLayeredWindow( HWND hwnd, HDC hdc_dst, const POINT *pts_
+@@ -2885,8 +2944,24 @@ BOOL WINAPI NtUserUpdateLayeredWindow( HWND hwnd, HDC hdc_dst, const POINT *pts_
  
      TRACE( "window %p new_rects %s\n", hwnd, debugstr_window_rects( &new_rects ) );
  
@@ -135,6 +135,3 @@ index ca897cb..baa4996 100644
      if (!surface) return FALSE;
  
      if (!hdc_src || surface == &dummy_surface)
--- 
-2.56.0
-

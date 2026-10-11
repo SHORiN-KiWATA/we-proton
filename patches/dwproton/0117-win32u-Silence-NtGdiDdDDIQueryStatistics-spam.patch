@@ -1,0 +1,29 @@
+From 5bd6d073183c0c31f1ff396edddaca2033b59fee Mon Sep 17 00:00:00 2001
+From: Stelios Tsampas <loathingkernel@gmail.com>
+Date: Fri, 5 Jun 2026 13:46:23 +0300
+Subject: [PATCH] win32u: Silence NtGdiDdDDIQueryStatistics spam
+
+(cherry picked from commit 01ed60ef6432c4cc7b7ed3f54d6197500267dcfe)
+---
+ dlls/win32u/d3dkmt.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/win32u/d3dkmt.c b/dlls/win32u/d3dkmt.c
+index 484d029a3e8..9f0d3d545ba 100644
+--- a/dlls/win32u/d3dkmt.c
++++ b/dlls/win32u/d3dkmt.c
+@@ -1025,7 +1025,13 @@ NTSTATUS WINAPI NtGdiDdDDIQueryAdapterInfo( D3DKMT_QUERYADAPTERINFO *desc )
+  */
+ NTSTATUS WINAPI NtGdiDdDDIQueryStatistics( D3DKMT_QUERYSTATISTICS *stats )
+ {
+-    FIXME( "(%p): stub\n", stats );
++    static unsigned int once;
++
++    if (!once++)
++        FIXME( "(%p): stub\n", stats );
++    else
++        WARN( "(%p): stub\n", stats );
++
+     return STATUS_SUCCESS;
+ }
+ 

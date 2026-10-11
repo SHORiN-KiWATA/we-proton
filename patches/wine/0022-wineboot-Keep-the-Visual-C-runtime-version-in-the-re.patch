@@ -1,8 +1,8 @@
-From 4056e98faa9b8b5aa26996e583b5ebb3d73070b4 Mon Sep 17 00:00:00 2001
+From dbd87b598efec2ce2a5c95f102cac41ffb6acde2 Mon Sep 17 00:00:00 2001
 From: SHORiN-KIWATA <shorin@users.noreply.github.com>
 Date: Sun, 11 Oct 2026 19:19:52 +0900
-Subject: [PATCH 22/22] wineboot: Keep the Visual C++ runtime version in the
- registry up to date.
+Subject: [PATCH] wineboot: Keep the Visual C++ runtime version in the registry
+ up to date.
 
 Programs also check HKLM\Software\Microsoft\VisualStudio\14.0\VC\Runtimes\<arch>
 against a minimum version, and those values come from wine.inf, which
@@ -21,10 +21,10 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  1 file changed, 80 insertions(+)
 
 diff --git a/programs/wineboot/wineboot.c b/programs/wineboot/wineboot.c
-index c3334dd1843..a34c2538bad 100644
+index 9afa1875fe8..ad65f71777b 100644
 --- a/programs/wineboot/wineboot.c
 +++ b/programs/wineboot/wineboot.c
-@@ -1082,6 +1082,85 @@ static void create_known_dlls(void)
+@@ -1083,6 +1083,85 @@ static void create_known_dlls(void)
      RegCloseKey( key );
  }
  
@@ -110,14 +110,11 @@ index c3334dd1843..a34c2538bad 100644
  /* Some broken applications expect the ProxyEnable registry value to exist.
   * This value is automatically created by wininet when initializing.
   * This value is not initialized for new users on Windows, but it is created
-@@ -1991,6 +2070,7 @@ int __cdecl main( int argc, char *argv[] )
-     create_digitalproductid();
+@@ -2028,6 +2107,7 @@ int __cdecl main( int argc, char *argv[] )
+     create_sqm_machine_id();
      create_volatile_environment_registry_key();
      create_known_dlls();
 +    update_vcruntime_keys();
      initialize_internet();
  
      ProcessRunKeys( HKEY_LOCAL_MACHINE, L"RunOnce", TRUE, TRUE );
--- 
-2.56.0
-

@@ -1,8 +1,8 @@
-From b7a4a945faec012c8df0693588f6e4b34a8e7824 Mon Sep 17 00:00:00 2001
+From 183dcdd0238cfdc6810c9ef811e0037b881e7316 Mon Sep 17 00:00:00 2001
 From: SHORiN-KIWATA <shorin@users.noreply.github.com>
 Date: Sun, 11 Oct 2026 19:19:52 +0900
-Subject: [PATCH 21/22] msvcp140, msvcp140_2, vcruntime140_1: Report a version
- higher than any released runtime.
+Subject: [PATCH] msvcp140, msvcp140_2, vcruntime140_1: Report a version higher
+ than any released runtime.
 
 Programs that need the Visual C++ runtime compare the file version of
 these DLLs in the system directory against the minimum version they were
@@ -59,6 +59,3 @@ index dd39e049e43..4239aa37fad 100644
 +#define WINE_FILEVERSION 14,99,65535,0
  
  #include "wine/wine_common_ver.rc"
--- 
-2.56.0
-

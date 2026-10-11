@@ -1,0 +1,301 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GloriousEggroll <gloriouseggroll@gmail.com>
+Date: Mon, 7 Sep 2026 12:00:00 -0400
+Subject: [PATCH] win32u: Notify applications of native interactive resizing
+
+The Wine-managed resize loop sends WM_SIZING before updating window
+geometry. Native X11 and Wayland resizing instead updates the geometry
+without that notification. Aion traces show WM_SIZE with the correct
+client dimensions but an unchanged D3D9 backbuffer on the native paths,
+whereas the Wine-managed loop produces backbuffer resets during the drag.
+
+Add a shared helper to send WM_SIZING in the window's DPI context, preserving
+application-adjusted bounds without rounding unchanged host coordinates.
+Do not send it for unchanged sizes, child windows, non-resizable windows,
+or minimized/maximized windows.
+
+Wayland uses the compositor's resizing state. Preserve the last configure's
+size when that state is cleared and send WM_EXITSIZEMOVE after applying it.
+Keep the resize edge for Wine-initiated drags. For server decorations,
+xdg-shell does not supply the edge or global position, so infer the edge
+from the size change in Wine's virtual rectangle.
+
+X11 keeps the edge during Wine-initiated native drags. EWMH does not expose
+a server-decoration resize lifecycle; infer those drags only for an active,
+normally sized managed window while button 1 is held. Exclude state
+transitions, fullscreen/embedded windows, and pending application requests.
+Run application callbacks without holding either driver's window lock.
+
+This does not force unmanaged windows, change D3D9 scaling, or add a game
+name check. The notification gap is verified; whether this alone replaces
+Aion's successful unmanaged-window test needs runtime validation. Preserve
+0042's Wayland size limits and 0043's X11 message-queue polling fix.
+
+---
+ dlls/win32u/window.c              | 45 +++++++++++++++++++++++++++++++++++++++
+ dlls/winewayland.drv/waylanddrv.h |  1 +
+ dlls/winewayland.drv/window.c     | 21 ++++++++++++++----
+ dlls/winex11.drv/window.c         | 34 +++++++++++++++++++++++++++++
+ dlls/winex11.drv/x11drv.h         |  1 +
+ include/ntuser.h                  | 14 ++++++++++++
+ 6 files changed, 112 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 1b380067c68f2b4bf2bde9d427b8c1ac81410f2c..988d93e0745c8c67760007b269cf8ff41922647a 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -6503,6 +6503,45 @@ static BOOL set_dialog_info( HWND hwnd, void *info )
+     return TRUE;
+ }
+ 
++static BOOL send_sizing_message( HWND hwnd, UINT edge, RECT *raw_rect )
++{
++    RECT old_rect, rect, proposed;
++    DWORD style = get_window_long( hwnd, GWL_STYLE );
++    UINT context, dpi;
++    BOOL width_changed, height_changed;
++
++    if (!(style & WS_THICKFRAME) || (style & (WS_MINIMIZE | WS_MAXIMIZE | WS_CHILD))) return FALSE;
++    if (edge > WMSZ_BOTTOMRIGHT || IsRectEmpty( raw_rect ) || !get_window_rect( hwnd, &old_rect, -1 ))
++        return FALSE;
++
++    width_changed = raw_rect->right - raw_rect->left != old_rect.right - old_rect.left;
++    height_changed = raw_rect->bottom - raw_rect->top != old_rect.bottom - old_rect.top;
++    if (!width_changed && !height_changed) return FALSE;
++
++    if (!edge)
++    {
++        if (width_changed)
++            edge = raw_rect->left != old_rect.left && raw_rect->right == old_rect.right ? WMSZ_LEFT : WMSZ_RIGHT;
++        if (height_changed)
++        {
++            BOOL top = raw_rect->top != old_rect.top && raw_rect->bottom == old_rect.bottom;
++            if (edge == WMSZ_LEFT) edge = top ? WMSZ_TOPLEFT : WMSZ_BOTTOMLEFT;
++            else if (edge == WMSZ_RIGHT) edge = top ? WMSZ_TOPRIGHT : WMSZ_BOTTOMRIGHT;
++            else edge = top ? WMSZ_TOP : WMSZ_BOTTOM;
++        }
++    }
++
++    context = set_thread_dpi_awareness_context( get_window_dpi_awareness_context( hwnd ));
++    dpi = get_thread_dpi();
++    proposed = rect = map_rect_raw_to_virt( *raw_rect, dpi );
++    send_message( hwnd, WM_SIZING, edge, (LPARAM)&rect );
++    /* Preserve exact host coordinates when the application did not adjust them. */
++    if (!EqualRect( &rect, &proposed ) && !IsRectEmpty( &rect ))
++        *raw_rect = map_rect_virt_to_raw( rect, dpi );
++    set_thread_dpi_awareness_context( context );
++    return TRUE;
++}
++
+ static BOOL set_raw_window_pos( HWND hwnd, RECT rect, UINT flags, BOOL internal )
+ {
+     TRACE( "hwnd %p, rect %s, flags %#x, internal %u\n", hwnd, wine_dbgstr_rect(&rect), flags, internal );
+@@ -6726,6 +6765,12 @@ ULONG_PTR WINAPI NtUserCallHwndParam( HWND hwnd, DWORD_PTR param, DWORD code )
+         return set_raw_window_pos( hwnd, params->rect, params->flags, params->internal );
+     }
+ 
++    case NtUserCallHwndParam_SendSizingMessage:
++    {
++        struct send_sizing_message_params *params = (void *)param;
++        return send_sizing_message( hwnd, params->edge, params->rect );
++    }
++
+     default:
+         FIXME( "invalid code %u\n", code );
+         return 0;
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index d3e4cd05ceaf0402bb2bdf84bf4bc31d0a5bed7e..7a41961eda40fe176ff7c5193935821ea1a520ad 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -532,6 +532,7 @@ struct wayland_surface
+     struct wayland_surface_config pending, requested, processing, current;
+     struct wayland_toplevel_size_limits toplevel_size_limits;
+     BOOL resizing;
++    UINT resize_edge; /* WMSZ_* for a resize initiated through WM_SYSCOMMAND */
+     /* TODO: We can remove this once FSHack is implemented in opengl and vulkan upstream for all drivers.
+      * The opengl implementation is already merged. Then we would only need to ensure contents via expose. */
+     enum wayland_surface_ensure_type ensured_contents;
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index dc155e366ee382d544b7abf58aac68542bcc0d38..bea51157bcc7806ee656d4d9d6e86d639c12e8e3 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -1044,6 +1044,7 @@ static void wayland_configure_window(HWND hwnd)
+     INT width, height, window_width, window_height;
+     UINT flags = 0;
+     UINT state_cmd = 0;
++    UINT resize_edge;
+     uint32_t state;
+     DWORD style;
+     BOOL needs_enter_size_move = FALSE;
+@@ -1080,9 +1081,9 @@ static void wayland_configure_window(HWND hwnd)
+      * size adherence, in order to avoid spurious resizes.
+      * The tiled and maximized states have a strict size adherance, so
+      * their sizes cannot change while we are still processing the new config.
+-     * This allows us to respect the size hint on transitions of maximized/tiled
+-     * to a stateless regular window. */
+-    if ((state & ~WAYLAND_SURFACE_CONFIG_STATE_SUSPENDED) ||
++     * This also preserves the final size on leaving an interactive resize or
++     * transitioning from maximized/tiled to a stateless regular window. */
++    if ((state & ~WAYLAND_SURFACE_CONFIG_STATE_SUSPENDED) || surface->resizing ||
+         (surface->current.state & (WAYLAND_SURFACE_CONFIG_STATE_MAXIMIZED |
+                                    WAYLAND_SURFACE_CONFIG_STATE_TILED)))
+     {
+@@ -1105,6 +1106,8 @@ static void wayland_configure_window(HWND hwnd)
+         surface->resizing = FALSE;
+         needs_exit_size_move = TRUE;
+     }
++    resize_edge = surface->resize_edge;
++    if (needs_exit_size_move) surface->resize_edge = 0;
+ 
+     /* Only Win32 maximize and decoration transitions change non-client metrics.
+      * Fullscreen is a Wayland presentation state, not a Win32 window style. */
+@@ -1151,10 +1154,10 @@ static void wayland_configure_window(HWND hwnd)
+     TRACE("hwnd=%p processing=%s,%#x\n", hwnd, wine_dbgstr_rect(&rect), state);
+ 
+     if (needs_enter_size_move) send_message(hwnd, WM_ENTERSIZEMOVE, 0, 0);
+-    if (needs_exit_size_move) send_message(hwnd, WM_EXITSIZEMOVE, 0, 0);
+ 
+     if (state_cmd)
+     {
++        if (needs_exit_size_move) send_message(hwnd, WM_EXITSIZEMOVE, 0, 0);
+         TRACE("hwnd=%p queueing state update %#x rect=%s\n", hwnd, state_cmd,
+               wine_dbgstr_rect(&rect));
+         NtUserPostMessage(hwnd, WM_WINE_WINDOW_STATE_CHANGED, 0, 0);
+@@ -1191,7 +1194,16 @@ static void wayland_configure_window(HWND hwnd)
+         wayland_win_data_release(data);
+     }
+ 
++    if (((state & WAYLAND_SURFACE_CONFIG_STATE_RESIZING) || needs_exit_size_move) &&
++        !(flags & (SWP_NOSIZE | SWP_NOSENDCHANGING)))
++    {
++        RECT proposed = rect;
++        NtUserSendSizingMessage(hwnd, resize_edge, &rect);
++        if (rect.left != proposed.left || rect.top != proposed.top) flags &= ~SWP_NOMOVE;
++    }
++
+     NtUserSetRawWindowPos(hwnd, rect, flags, FALSE);
++    if (needs_exit_size_move) send_message(hwnd, WM_EXITSIZEMOVE, 0, 0);
+ 
+     /* Ack/promote the processed configure if rawpos did not flush it. */
+     if ((data = wayland_win_data_get(hwnd)))
+@@ -1490,6 +1502,7 @@ LRESULT WAYLAND_SysCommand(HWND hwnd, WPARAM wparam, LPARAM lparam, const POINT
+                 }
+                 else if (command == SC_SIZE)
+                 {
++                    surface->resize_edge = wparam & 0x0f;
+                     xdg_toplevel_resize(surface->xdg_toplevel, wl_seat, button_serial,
+                                         hittest_to_resize_edge(wparam & 0x0f));
+                 }
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index f45fee5c37bf8884db6b38a91fb20e5c6fac3570..f613e7696b672302d2d5e9040ad1d21bdb14d307 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -2090,6 +2090,8 @@ BOOL X11DRV_GetWindowStateUpdates( HWND hwnd, UINT *state_cmd, UINT *swp_flags,
+     struct x11drv_thread_data *thread_data = x11drv_thread_data();
+     struct x11drv_win_data *data;
+     HWND old_foreground;
++    UINT resize_edge = 0;
++    BOOL sizing = FALSE;
+ 
+     if (!state_cmd)
+     {
+@@ -2129,9 +2131,32 @@ BOOL X11DRV_GetWindowStateUpdates( HWND hwnd, UINT *state_cmd, UINT *swp_flags,
+         *state_cmd = window_update_client_state( data );
+         *swp_flags = window_update_client_config( data );
+         *rect = window_rect_from_visible( &data->rects, data->current_state.rect );
++        resize_edge = data->resize_edge;
++        sizing = !*state_cmd && *swp_flags && !(*swp_flags & (SWP_NOSIZE | SWP_NOSENDCHANGING)) &&
++                 !data->is_fullscreen && !data->embedded;
+         release_win_data( data );
+     }
+ 
++    if (sizing && !resize_edge)
++    {
++        Window root, child;
++        int root_x, root_y, x, y;
++        unsigned int mask;
++
++        /* Server-side decorations bypass WM_SYSCOMMAND. Only report sizing
++         * for mouse-driven changes, not ordinary window-manager placement. */
++        sizing = (old_foreground == hwnd || *foreground == hwnd) &&
++                 XQueryPointer( thread_data->display, root_window, &root, &child,
++                                &root_x, &root_y, &x, &y, &mask ) && (mask & Button1Mask);
++    }
++    /* Application callbacks must run after releasing the driver window lock. */
++    if (sizing)
++    {
++        RECT proposed = *rect;
++        NtUserSendSizingMessage( hwnd, resize_edge, rect );
++        if (rect->left != proposed.left || rect->top != proposed.top) *swp_flags &= ~SWP_NOMOVE;
++    }
++
+     if (!*state_cmd && !*swp_flags && !*foreground) return FALSE;
+     TRACE( "hwnd %p, returning state_cmd %#x, swp_flags %#x, rect %s, foreground %p\n",
+            hwnd, *state_cmd, *swp_flags, wine_dbgstr_rect(rect), *foreground );
+@@ -4081,6 +4106,7 @@ static LRESULT start_screensaver(void)
+ LRESULT X11DRV_SysCommand( HWND hwnd, WPARAM wparam, LPARAM lparam, const POINT *pos )
+ {
+     WPARAM hittest = wparam & 0x0f;
++    UINT old_resize_edge;
+     int dir;
+     struct x11drv_win_data *data;
+ 
+@@ -4138,8 +4164,16 @@ LRESULT X11DRV_SysCommand( HWND hwnd, WPARAM wparam, LPARAM lparam, const POINT
+         goto failed;
+     }
+ 
++    old_resize_edge = data->resize_edge;
++    data->resize_edge = (wparam & 0xfff0) == SC_SIZE && hittest >= WMSZ_LEFT && hittest <= WMSZ_BOTTOMRIGHT ?
++                       hittest : 0;
+     release_win_data( data );
+     move_resize_window( hwnd, dir, *pos );
++    if ((data = get_win_data( hwnd )))
++    {
++        data->resize_edge = old_resize_edge;
++        release_win_data( data );
++    }
+     return 0;
+ 
+ failed:
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 1e3f2132c3b55e9ffa9ce2c8f2ed6d60c236c456..4627c40cbe45169f4a84efa6e74e11362edf6e6f 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -706,6 +706,7 @@ struct x11drv_win_data
+     unsigned long *icon_bits;
+     unsigned int   icon_size;
+     Time           user_time;
++    UINT           resize_edge; /* WMSZ_* during a Wine-initiated native resize */
+ 
+     struct window_state desired_state; /* window state tracking the desired / win32 state */
+     struct window_state pending_state; /* window state tracking the pending / requested state */
+diff --git a/include/ntuser.h b/include/ntuser.h
+index d2109ff3cbf0a21810a591d44b0aa8b80e48d4d9..b9d6a0ca43b586a6a864bb00c88441c4b681dd05 100644
+--- a/include/ntuser.h
++++ b/include/ntuser.h
+@@ -1444,6 +1444,7 @@ enum
+     NtUserCallHwndParam_ExposeWindowSurface,
+     NtUserCallHwndParam_GetWinMonitorDpi,
+     NtUserCallHwndParam_SetRawWindowPos,
++    NtUserCallHwndParam_SendSizingMessage,
+ };
+ 
+ struct get_window_rects_params
+@@ -1674,4 +1675,17 @@ static inline BOOL NtUserSetRawWindowPos( HWND hwnd, RECT rect, UINT flags, BOOL
+     return NtUserCallHwndParam( hwnd, (UINT_PTR)&params, NtUserCallHwndParam_SetRawWindowPos );
+ }
+ 
++struct send_sizing_message_params
++{
++    RECT *rect;
++    UINT edge;
++};
++
++/* The rectangle is in raw screen coordinates; edge 0 infers the changed edges. */
++static inline BOOL NtUserSendSizingMessage( HWND hwnd, UINT edge, RECT *rect )
++{
++    struct send_sizing_message_params params = {.rect = rect, .edge = edge};
++    return NtUserCallHwndParam( hwnd, (UINT_PTR)&params, NtUserCallHwndParam_SendSizingMessage );
++}
++
+ #endif /* _NTUSER_ */

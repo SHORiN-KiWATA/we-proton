@@ -1,7 +1,7 @@
-From 8052c56c81124ca203129e98b73aab3cf8d8339e Mon Sep 17 00:00:00 2001
+From 2855718124aa0459b8dd04faadf0ac53d3cd237e Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Wed, 7 Oct 2026 17:19:50 +0900
-Subject: [PATCH 5/5] ntdll: Report written write-copy pages as read-write.
+Subject: [PATCH] ntdll: Report written write-copy pages as read-write.
 
 Windows tracks whether a write-copy page has been privately copied. Once
 it has been written, VirtualQuery() and the old protection returned by
@@ -30,7 +30,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  3 files changed, 95 insertions(+), 6 deletions(-)
 
 diff --git a/dlls/kernel32/tests/loader.c b/dlls/kernel32/tests/loader.c
-index 529b9de..43277af 100644
+index 529b9de870d..43277af73e3 100644
 --- a/dlls/kernel32/tests/loader.c
 +++ b/dlls/kernel32/tests/loader.c
 @@ -1983,9 +1983,7 @@ static void test_section_access(void)
@@ -45,7 +45,7 @@ index 529b9de..43277af 100644
  
          SetLastError(0xdeadbeef);
 diff --git a/dlls/kernel32/tests/virtual.c b/dlls/kernel32/tests/virtual.c
-index 4bf3bbb..ad80365 100644
+index 4bf3bbbf29c..ad8036587ea 100644
 --- a/dlls/kernel32/tests/virtual.c
 +++ b/dlls/kernel32/tests/virtual.c
 @@ -4278,7 +4278,7 @@ static void test_mapping( HANDLE hfile, DWORD sec_flags, BOOL readonly )
@@ -67,7 +67,7 @@ index 4bf3bbb..ad80365 100644
                             "VirtualProtect wrong prot, map %#lx, view %#lx, requested prot %#lx got %#lx\n",
                             page_prot[i], view[j].prot, page_prot[k], info.Protect );
 diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
-index 1cf3efc..5116c46 100644
+index 4eb51d8d089..c360a4a37f1 100644
 --- a/dlls/ntdll/unix/virtual.c
 +++ b/dlls/ntdll/unix/virtual.c
 @@ -270,6 +270,7 @@ struct file_view
@@ -186,7 +186,7 @@ index 1cf3efc..5116c46 100644
      status = STATUS_SUCCESS;
  
  done:
-@@ -5914,6 +5997,7 @@ NTSTATUS WINAPI NtProtectVirtualMemory( HANDLE process, PVOID *addr_ptr, SIZE_T
+@@ -5931,6 +6014,7 @@ NTSTATUS WINAPI NtProtectVirtualMemory( HANDLE process, PVOID *addr_ptr, SIZE_T
  
      if ((view = find_view( base, size )))
      {
@@ -194,7 +194,7 @@ index 1cf3efc..5116c46 100644
          /* Make sure all the pages are committed */
          if (get_committed_size( view, base, size, &vprot, VPROT_COMMITTED ) >= size && (vprot & VPROT_COMMITTED))
          {
-@@ -6084,9 +6168,16 @@ static unsigned int fill_basic_memory_info( const void *addr, MEMORY_BASIC_INFOR
+@@ -6101,9 +6185,16 @@ static unsigned int fill_basic_memory_info( const void *addr, MEMORY_BASIC_INFOR
      else
      {
          BYTE vprot;
@@ -212,6 +212,3 @@ index 1cf3efc..5116c46 100644
          info->State = (vprot & VPROT_COMMITTED) ? MEM_COMMIT : MEM_RESERVE;
          info->Protect = (vprot & VPROT_COMMITTED) ? get_win32_prot( vprot, view->protect ) : 0;
          info->AllocationProtect = get_win32_prot( view->protect, view->protect );
--- 
-2.56.0
-

@@ -1,0 +1,51 @@
+From 6d954c90d4d838612e2e3f17f3ad8fdf2cf5a55d Mon Sep 17 00:00:00 2001
+From: Michel Weinachter <michel@weinachter.com>
+Date: Mon, 31 Aug 2026 11:49:12 +0200
+Subject: [PATCH] ntoskrnl.exe: Implement MmMapLockedPagesSpecifyCache().
+
+(cherry picked from commit 2f53c1ab68cf6e5ff32da25d9e44d8913d0b187c)
+---
+ dlls/ntoskrnl.exe/ntoskrnl.c     | 17 ++++++++++++++---
+ dlls/ntoskrnl.exe/tests/driver.c |  1 -
+ 2 files changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.c b/dlls/ntoskrnl.exe/ntoskrnl.c
+index 267b5d06ac3..141e5c97374 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.c
++++ b/dlls/ntoskrnl.exe/ntoskrnl.c
+@@ -3203,9 +3203,20 @@ PVOID WINAPI MmMapLockedPages( MDL *mdl, KPROCESSOR_MODE mode )
+ PVOID WINAPI  MmMapLockedPagesSpecifyCache(PMDLX MemoryDescriptorList, KPROCESSOR_MODE AccessMode, MEMORY_CACHING_TYPE CacheType,
+                                            PVOID BaseAddress, ULONG BugCheckOnFailure, MM_PAGE_PRIORITY Priority)
+ {
+-    FIXME("(%p, %u, %u, %p, %lu, %u): stub\n", MemoryDescriptorList, AccessMode, CacheType, BaseAddress, BugCheckOnFailure, Priority);
+-
+-    return NULL;
++    TRACE("(%p, %u, %u, %p, %lu, %u)\n", MemoryDescriptorList, AccessMode, CacheType,
++          BaseAddress, BugCheckOnFailure, Priority);
++
++    if (BaseAddress) FIXME("requested base address %p ignored\n", BaseAddress);
++
++    /* Same treatment as MmMapLockedPages(), which already ignores AccessMode:
++     * drivers run in user space here, so the "user-mode" and "system" mappings
++     * of a descriptor are the same address.
++     *
++     * Note this returns an address in the driver host process.  A driver that
++     * maps a buffer expecting a *different* client process to dereference the
++     * result will not get shareable memory out of this -- that would need the
++     * pool to be section-backed, which is not the case. */
++    return MmMapLockedPages( MemoryDescriptorList, AccessMode );
+ }
+ 
+ /***********************************************************************
+diff --git a/dlls/ntoskrnl.exe/tests/driver.c b/dlls/ntoskrnl.exe/tests/driver.c
+index 99b84cd1b11..f793800e4f0 100644
+--- a/dlls/ntoskrnl.exe/tests/driver.c
++++ b/dlls/ntoskrnl.exe/tests/driver.c
+@@ -296,7 +296,6 @@ static void test_mdl_map(void)
+     MmUnmapLockedPages(addr, mdl);
+ 
+     addr = MmMapLockedPagesSpecifyCache(mdl, KernelMode, MmCached, NULL, FALSE, NormalPagePriority);
+-    todo_wine
+     ok(addr != NULL, "MmMapLockedPagesSpecifyCache failed\n");
+     if (addr != NULL)
+         ok(!kmemcmp(addr, buffer, sizeof(buffer)), "Unexpected data in mapped memory\n");

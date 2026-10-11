@@ -51,20 +51,13 @@ DIST_VERSION := $(DST_BASE)/version
 DEPLOY_DIR := ./deploy
 REDIST_DIR := ./redist
 
-HOST_CFLAGS    ?= -O2 -march=nocona -mtune=core-avx2
-CCOS_CFLAGS    := $(HOST_CFLAGS) -pipe
-i386_CFLAGS    := -mstackrealign $(CCOS_CFLAGS) -mfpmath=sse
-x86_64_CFLAGS  := -mcmodel=small $(CCOS_CFLAGS) -mfpmath=sse
-HOST_RUSTFLAGS   ?= -Copt-level=3 -Ctarget-cpu=nocona
-i386_RUSTFLAGS   := $(HOST_RUSTFLAGS)
-x86_64_RUSTFLAGS := $(HOST_RUSTFLAGS)
-aarch64_CFLAGS := -O2 -march=armv8.2-a -mtune=cortex-x3
-arm64ec_CFLAGS := -O2 -march=armv8.2-a -mtune=cortex-x3
-aarch64_RUSTFLAGS := -Copt-level=3 -Ctarget-cpu=armv8.2-a
-arm64ec_RUSTFLAGS := -Copt-level=3 -Ctarget-cpu=armv8.2-a
+i386_CFLAGS    := -mstackrealign -march=nocona -mtune=core-avx2 -mfpmath=sse
+x86_64_CFLAGS  := -mcmodel=small -march=nocona -mtune=core-avx2 -mfpmath=sse
+aarch64_CFLAGS := -march=armv8.2-a -mtune=cortex-x3
+arm64ec_CFLAGS := -march=armv8.2-a -mtune=cortex-x3
 
-CFLAGS  = -fwrapv -fno-strict-aliasing
-CFLAGS += -ffunction-sections -fdata-sections -fno-omit-frame-pointer
+CFLAGS  = -O2 -fwrapv -fno-strict-aliasing
+CFLAGS += -ggdb -ffunction-sections -fdata-sections -fno-omit-frame-pointer
 CFLAGS += -ffile-prefix-map=$(CCACHE_BASEDIR)=.
 
 ifneq ($(SUPPRESS_WARNINGS),)
@@ -82,10 +75,7 @@ ARCHS := i386-windows x86_64-windows
 TARGET_ARCH ?= x86_64
 
 ifeq ($(TARGET_ARCH),x86_64)
-	ARCHS += x86_64-unix
-ifneq ($(ENABLE_WOW64),1)
-	ARCHS += i386-unix
-endif
+	ARCHS += i386-unix x86_64-unix
 else ifeq ($(TARGET_ARCH),arm64)
 	ARCHS += aarch64-unix aarch64-windows arm64ec-windows
 else
@@ -108,20 +98,12 @@ ifeq ($(shell cc --version|grep 'clang'),)
 	TOOLCHAIN_PREFIX :=
 	OBJCOPY_FLAGS  := -p
 	MINGW_TYPE := gcc
-	i386_CFLAGS += -mno-avx -mno-avx2 -mno-avx512f
-	i386_CFLAGS += -fvect-cost-model=cheap
-	x86_64_CFLAGS += -mno-avx -mno-avx2 -mno-avx512f
-	x86_64_CFLAGS += -fvect-cost-model=cheap
-	i386_SANITY_FLAGS := -mpreferred-stack-boundary=2
 else
 	# CLANG-specific flags
 	TOOLCHAIN_PREFIX := llvm-
 	OBJCOPY_FLAGS  :=
 	MINGW_TYPE := clang
-	i386_CFLAGS += -mno-avx -mno-avx2 -mno-avx512f
-	x86_64_CFLAGS += -mno-avx -mno-avx2 -mno-avx512f
 	# TODO: move this to a configure option
-	i386_SANITY_FLAGS := -mstack-alignment=4
 endif
 
 OBJCOPY := $(TOOLCHAIN_PREFIX)objcopy
@@ -130,14 +112,10 @@ ifneq ($(UNSTRIPPED_BUILD),)
     STRIP :=
     INSTALL_PROGRAM_FLAGS :=
     MESON_STRIP_ARG :=
-    CFLAGS += -ggdb
 else
     STRIP := $(TOOLCHAIN_PREFIX)strip
     INSTALL_PROGRAM_FLAGS := -s
     MESON_STRIP_ARG := --strip
-ifeq ($(shell cc --version|grep 'clang'),)
-    CFLAGS += -s
-endif
 endif
 
 # all, all-dist and dist are basically synonyms
@@ -161,38 +139,11 @@ include $(SRC)/make/rules-wine-requests.mk
 include $(SRC)/make/rules-wine-tools.mk
 include $(SRC)/make/rules-cargo.mk
 
-
-##
-## patches
-##
-
-$(eval $(call rules-source,patches,$(SRCDIR)/patches))
-
-
 ##
 ## meson
 ##
 
 $(eval $(call rules-source,meson,$(SRCDIR)/meson))
-
-
-##
-## steamrtdeps
-##
-
-ifneq ($(WITHOUT_STEAMRT_DEPENDS),1)
-include $(SRC)/steamrtdeps/build-libwebp.mk
-include $(SRC)/steamrtdeps/build-libxml2.mk
-include $(SRC)/steamrtdeps/build-libxkbcommon.mk
-include $(SRC)/steamrtdeps/build-wayland-protocols.mk
-include $(SRC)/steamrtdeps/build-libpcap.mk
-include $(SRC)/steamrtdeps/build-pipewire.mk
-include $(SRC)/steamrtdeps/build-xz.mk
-include $(SRC)/steamrtdeps/build-sevenzip.mk
-include $(SRC)/steamrtdeps/build-speex.mk
-include $(SRC)/steamrtdeps/build-speexdsp.mk
-include $(SRC)/steamrtdeps/build-flac.mk
-endif # WITHOUT_STEAMRT_DEPENDS
 
 
 ##
@@ -218,11 +169,6 @@ LIBSOUP_MESON_ARGS = \
 	-Dautobahn=disabled \
 	-Dtls_check=false
 
-LIBSOUP_MESON_ARGS += \
-	-Dntlm=disabled \
-	-Dintrospection=disabled \
-	-Dtests=false
-
 $(eval $(call rules-source,libsoup,$(SRCDIR)/libsoup))
 $(eval $(call rules-meson,libsoup,i386,unix))
 $(eval $(call rules-meson,libsoup,x86_64,unix))
@@ -230,314 +176,211 @@ $(eval $(call rules-meson,libsoup,aarch64,unix))
 
 
 ##
-## gst-orc
+## libxml2
 ##
 
-GST_ORC_MESON_ARGS := \
-	-Dorc-test=disabled
+LIBXML2_MESON_ARGS := \
+	-Ddocs=disabled \
+	-Dicu=disabled \
+	-Dlegacy=enabled \
+	-Dpython=disabled
 
-GST_ORC_MESON_ARGS += \
-	-Dexamples=disabled \
-	-Dtests=disabled \
-	-Dbenchmarks=disabled \
-
-$(eval $(call rules-source,gst_orc,$(SRCDIR)/gst-orc))
-$(eval $(call rules-meson,gst_orc,i386,unix))
-$(eval $(call rules-meson,gst_orc,x86_64,unix))
-$(eval $(call rules-meson,gst_orc,aarch64,unix))
+$(eval $(call rules-source,libxml2,$(SRCDIR)/libxml2))
+$(eval $(call rules-meson,libxml2,i386,unix))
+$(eval $(call rules-meson,libxml2,x86_64,unix))
+$(eval $(call rules-meson,libxml2,aarch64,unix))
 
 
 ##
-## gstreamer
+## xkbcommon
 ##
 
-GSTREAMER_MESON_ARGS := \
-	-Dgst_parse=false \
-	-Dbenchmarks=disabled \
-	-Dtools=disabled \
-	-Dbash-completion=disabled
+LIBXKBCOMMON_MESON_ARGS := \
+	-Denable-xkbregistry=true \
+	-Denable-docs=false \
+	-Denable-x11=false \
+	-Denable-bash-completion=false \
+	-Denable-wayland=false
 
-GSTREAMER_MESON_ARGS += \
-	-Dptp-helper-permissions=capabilities \
-	-Ddbghelp=disabled \
-	-Dintrospection=disabled \
-	-Dnls=disabled \
-	-Dexamples=disabled \
-	-Dtests=disabled \
-	-Ddoc=disabled \
-	-Dgst_parse=true \
+LIBXKBCOMMON_DEPENDS = libxml2
 
-GSTREAMER_LDFLAGS = -lm
-GSTREAMER_DEPENDS = gst_orc
+$(eval $(call rules-source,libxkbcommon,$(SRCDIR)/libxkbcommon))
+$(eval $(call rules-meson,libxkbcommon,i386,unix))
+$(eval $(call rules-meson,libxkbcommon,x86_64,unix))
+$(eval $(call rules-meson,libxkbcommon,aarch64,unix))
 
-$(eval $(call rules-source,gstreamer,$(SRCDIR)/gstreamer/subprojects/gstreamer))
-$(eval $(call rules-meson,gstreamer,i386,unix))
-$(eval $(call rules-meson,gstreamer,x86_64,unix))
-$(eval $(call rules-meson,gstreamer,aarch64,unix))
 
+##
+## wayland-protocols
+##
+
+WAYLAND_PROTOCOLS_MESON_ARGS := \
+	-Dtests=false
+
+$(eval $(call rules-source,wayland-protocols,$(SRCDIR)/wayland-protocols))
+$(eval $(call rules-meson,wayland-protocols,aarch64,unix))
+
+
+##
+## libpcap
+##
+
+LIBPCAP_CONFIGURE_ARGS := \
+	--enable-shared \
+	--disable-static \
+	--disable-usb \
+	--disable-netmap \
+	--disable-bluetooth \
+	--disable-dbus \
+	--disable-rdma \
+	--with-pcap=linux \
+	--without-libnl
+
+$(eval $(call rules-source,libpcap,$(SRCDIR)/libpcap))
+$(eval $(call rules-configure,libpcap,i386,unix))
+$(eval $(call rules-configure,libpcap,x86_64,unix))
+$(eval $(call rules-configure,libpcap,aarch64,unix))
 
 ##
 ## graphene
 ##
-
-GRAPHENE_MESON_ARGS := \
-	-Dtests=false \
-	-Dintrospection=disabled \
-	-Dinstalled_tests=false
 
 $(eval $(call rules-source,graphene,$(SRCDIR)/graphene))
 $(eval $(call rules-meson,graphene,i386,unix))
 $(eval $(call rules-meson,graphene,x86_64,unix))
 $(eval $(call rules-meson,graphene,aarch64,unix))
 
-
-##
-## gst-plugins-base
-##
-
-GST_BASE_MESON_ARGS := \
-	-Dauto_features=disabled \
-	-Dadder=enabled \
-	-Dapp=enabled \
-	-Daudioconvert=enabled \
-	-Daudioresample=enabled \
-	-Dogg=enabled \
-	-Dopus=enabled \
-	-Dpbtypes=enabled \
-	-Dplayback=enabled \
-	-Dtheora=enabled \
-	-Dtypefind=enabled \
-	-Dvideoconvertscale=enabled \
-	-Dvorbis=enabled \
-	-Dorc=enabled \
-	-Dx11=enabled \
-	-Dgl=enabled \
-	-Dgl-graphene=enabled \
-	-Dgl_platform=glx,egl \
-	--wrap-mode nodownload \
-
-GST_BASE_MESON_ARGS += \
-	-Dintrospection=disabled \
-	-Dnls=disabled \
-	-Dexamples=disabled \
-	-Dtests=disabled \
-	-Ddoc=disabled \
-	-Dtools=disabled \
-	-Drawparse=enabled \
-	-Dgl_winsys=surfaceless,x11,wayland,egl \
-
-GST_BASE_LDFLAGS = -lm
-GST_BASE_DEPENDS = gst_orc graphene gstreamer
-GST_BASE_HOST_DEPENDS = gst_orc
-
-GST_BASE_DEPENDS += $(WAYLAND_PROTOCOLS_DEPENDENCY)
-
-$(eval $(call rules-source,gst_base,$(SRCDIR)/gstreamer/subprojects/gst-plugins-base))
-$(eval $(call rules-meson,gst_base,i386,unix))
-$(eval $(call rules-meson,gst_base,x86_64,unix))
-$(eval $(call rules-meson,gst_base,aarch64,unix))
-
-
-##
-## gst-plugins-good
-##
-
-GST_GOOD_MESON_ARGS := \
-	-Dapetag=enabled \
-	-Dauto_features=disabled \
-	-Daudioparsers=enabled \
-	-Dautodetect=enabled \
-	-Davi=enabled \
-	-Ddebugutils=enabled \
-	-Ddeinterlace=enabled \
-	-Dicydemux=enabled \
-	-Disomp4=enabled \
-	-Dmatroska=enabled \
-	-Dmpg123=enabled \
-	-Dvideobox=enabled \
-	-Dvideofilter=enabled \
-	-Dvpx=enabled \
-	-Dwavparse=enabled \
-	-Did3demux=enabled \
-	-Dmpg123=enabled \
-	-Dsoup=enabled \
-	-Dorc=enabled
-
-GST_GOOD_MESON_ARGS += \
-	-Dnls=disabled \
-	-Dexamples=disabled \
-	-Dtests=disabled \
-	-Ddoc=disabled \
-	-Dflv=enabled \
-	-Dflx=enabled \
-	-Dflac=enabled \
-	-Dspeex=enabled \
-	-Dxingmux=enabled \
-	-Dy4m=enabled \
-	-Dadaptivedemux2=enabled \
-	-Djpeg=enabled \
-
-GST_GOOD_DEPENDS = gst_orc gstreamer gst_base libsoup
-GST_GOOD_HOST_DEPENDS = gst_orc
-
-GST_GOOD_DEPENDS += $(LIBXML2_DEPENDENCY)
-
-GST_GOOD_i386_DEPENDS += $(SPEEX_DEPENDENCY)
-GST_GOOD_i386_DEPENDS += $(SPEEXDSP_DEPENDENCY)
-GST_GOOD_i386_DEPENDS += $(FLAC_DEPENDENCY)
-
-$(eval $(call rules-source,gst_good,$(SRCDIR)/gstreamer/subprojects/gst-plugins-good/))
-$(eval $(call rules-meson,gst_good,i386,unix))
-$(eval $(call rules-meson,gst_good,x86_64,unix))
-$(eval $(call rules-meson,gst_good,aarch64,unix))
-
-##
-## gst-plugins-bad
-##
-
-GST_BAD_MESON_ARGS := \
-	-Dauto_features=disabled \
-	-Dvideoparsers=enabled \
-	-Dhls=enabled \
-	-Dmpegtsdemux=enabled \
-	-Daudiobuffersplit=enabled
-
-GST_BAD_MESON_ARGS += \
-	-Dintrospection=disabled \
-	-Dnls=disabled \
-	-Dexamples=disabled \
-	-Dtests=disabled \
-	-Ddoc=disabled \
-	-Daccurip=enabled \
-	-Dadpcmdec=enabled \
-	-Dadpcmenc=enabled \
-	-Daiff=enabled \
-	-Dasfmux=enabled \
-	-Daudiobuffersplit=enabled \
-	-Daudiofxbad=enabled \
-	-Daudiomixmatrix=enabled \
-	-Daudiolatency=enabled \
-	-Daudiovisualizers=enabled \
-	-Dautoconvert=enabled \
-	-Dbayer=enabled \
-	-Dcamerabin2=enabled \
-	-Dcodectimestamper=enabled \
-	-Dcoloreffects=enabled \
-	-Ddebugutils=enabled \
-	-Ddvbsubenc=enabled \
-	-Ddvbsuboverlay=enabled \
-	-Ddvdspu=enabled \
-	-Dfaceoverlay=enabled \
-	-Dfestival=enabled \
-	-Dfieldanalysis=enabled \
-	-Dfreeverb=enabled \
-	-Dfrei0r=enabled \
-	-Dgaudieffects=enabled \
-	-Dgdp=enabled \
-	-Dgeometrictransform=enabled \
-	-Did3tag=enabled \
-	-Dinter=enabled \
-	-Dinterlace=enabled \
-	-Divfparse=enabled \
-	-Divtc=enabled \
-	-Djp2kdecimator=enabled \
-	-Djpegformat=enabled \
-	-Dlibrfb=enabled \
-	-Dmidi=enabled \
-	-Dmpegdemux=enabled \
-	-Dmpegpsmux=enabled \
-	-Dmpegtsmux=enabled \
-	-Dmxf=enabled \
-	-Dnetsim=enabled \
-	-Donvif=enabled \
-	-Dpcapparse=enabled \
-	-Dpnm=enabled \
-	-Dproxy=enabled \
-	-Drawparse=enabled \
-	-Dremovesilence=enabled \
-	-Drist=enabled \
-	-Drtmp2=enabled \
-	-Drtp=enabled \
-	-Dsdp=enabled \
-	-Dsegmentclip=enabled \
-	-Dsiren=enabled \
-	-Dsmooth=enabled \
-	-Dspeed=enabled \
-	-Dsubenc=enabled \
-	-Dswitchbin=enabled \
-	-Dtimecode=enabled \
-	-Dtranscode=enabled \
-	-Dvideofilters=enabled \
-	-Dvideoframe_audiolevel=enabled \
-	-Dvideosignal=enabled \
-	-Dvmnc=enabled \
-	-Ddvb=enabled \
-	-Dgtk3=disabled \
-	-Dipcpipeline=enabled \
-	-Dkms=disabled \
-	-Dshm=enabled \
-	-Duvch264=enabled \
-	-Dv4l2codecs=enabled \
-	-Dbz2=enabled \
-	-Ddash=enabled \
-	-Dopus=enabled \
-	-Dsctp=enabled \
-	-Dsmoothstreaming=enabled \
-	-Dwebp=enabled \
-	-Dwayland=enabled \
-	-Dx11=enabled \
-	-Dorc=enabled
-
-GST_BAD_MESON_ARGS += \
-	-Daes=disabled \
-	-Dclosedcaption=disabled \
-	-Dcolormanagement=disabled \
-	-Ddtls=disabled \
-	-Dopenal=disabled \
-	-Dsndfile=disabled \
-	-Dttml=disabled
-
-GST_BAD_DEPENDS = gst_orc gstreamer gst_base
-GST_BAD_HOST_DEPENDS = gst_orc
-
-GST_BAD_DEPENDS += $(LIBXML2_DEPENDENCY)
-GST_BAD_DEPENDS += $(WAYLAND_PROTOCOLS_DEPENDENCY)
-
-GST_BAD_i386_DEPENDS += $(LIBWEBP_DEPENDENCY)
-
-$(eval $(call rules-source,gst_bad,$(SRCDIR)/gstreamer/subprojects/gst-plugins-bad/))
-$(eval $(call rules-meson,gst_bad,i386,unix))
-$(eval $(call rules-meson,gst_bad,x86_64,unix))
-$(eval $(call rules-meson,gst_bad,aarch64,unix))
-
-##
-## gst-plugins-ugly
-##
-
-GST_UGLY_MESON_ARGS := \
-	-Dauto_features=disabled \
-	-Dnls=disabled \
-	-Dtests=disabled \
-	-Ddoc=disabled \
-	-Dasfdemux=enabled \
-	-Ddvdlpcmdec=enabled \
-	-Ddvdsub=enabled \
-	-Drealmedia=enabled \
-	-Dorc=enabled
-
-GST_UGLY_DEPENDS = gst_orc gstreamer gst_base
-GST_UGLY_HOST_DEPENDS = gst_orc
-
-$(eval $(call rules-source,gst_ugly,$(SRCDIR)/gstreamer/subprojects/gst-plugins-ugly/))
-$(eval $(call rules-meson,gst_ugly,i386,unix))
-$(eval $(call rules-meson,gst_ugly,x86_64,unix))
-$(eval $(call rules-meson,gst_ugly,aarch64,unix))
-
-default_pfx: gst_ugly
-
 ##
 ## FFmpeg
 ##
+
+XZ_CONFIGURE_ARGS := \
+	--enable-shared \
+	--disable-static \
+	--disable-xz \
+	--disable-xzdec \
+	--disable-lzmadec \
+	--disable-lzmainfo \
+	--disable-lzma-links \
+	--disable-scripts \
+	--disable-doc \
+	--disable-doxygen \
+	--disable-nls
+
+$(eval $(call rules-source,xz,$(SRCDIR)/xz))
+$(eval $(call rules-configure,xz,i386,unix))
+$(eval $(call rules-configure,xz,x86_64,unix))
+$(eval $(call rules-configure,xz,aarch64,unix))
+
+$(eval $(call rules-source,bzip2,$(SRCDIR)/bzip2))
+$(eval $(call create-rules-common,bzip2,BZIP2,i386,unix))
+$(eval $(call create-rules-common,bzip2,BZIP2,x86_64,unix))
+$(eval $(call create-rules-common,bzip2,BZIP2,aarch64,unix))
+
+$(OBJ)/.bzip2-%-configure:
+	@echo ":: configuring bzip2-$*..." >&2
+	touch $@
+
+$(OBJ)/.bzip2-%-build:
+	@echo ":: building bzip2-$*..." >&2
+	rsync --filter=:C --exclude '*~' --exclude .git --exclude compile_commands.json --info=name -Oarx --delete "$(BZIP2_SRC)/" "$(BZIP2_$*_OBJ)/" $(--quiet?)
+	+$(MAKE) -C "$(BZIP2_$*_OBJ)" -f Makefile-libbz2_so clean
+	+$(MAKE) -C "$(BZIP2_$*_OBJ)" -f Makefile-libbz2_so \
+	    CC="$($*-unix_TARGET)-gcc" \
+	    CFLAGS="-fpic -fPIC -Wall -Winline -O2 -g -D_FILE_OFFSET_BITS=64 $($*_CFLAGS) $(CFLAGS)" \
+	    LDFLAGS="$($*_LDFLAGS) $(LDFLAGS)"
+	mkdir -p "$(BZIP2_$*_LIBDIR)/$($*-unix_LIBDIR)" "$(BZIP2_$*_INCDIR)"
+	cp -a "$(BZIP2_$*_OBJ)/libbz2.so.1.0.8" "$(BZIP2_$*_LIBDIR)/$($*-unix_LIBDIR)/"
+	ln -sfn libbz2.so.1.0.8 "$(BZIP2_$*_LIBDIR)/$($*-unix_LIBDIR)/libbz2.so.1.0"
+	ln -sfn libbz2.so.1.0.8 "$(BZIP2_$*_LIBDIR)/$($*-unix_LIBDIR)/libbz2.so"
+	cp -a "$(BZIP2_$*_OBJ)/bzlib.h" "$(BZIP2_$*_INCDIR)/"
+	touch $@
+
+##
+## 7zip (from DW-Proton: the hololive Dreams protonfix unpacks version.dll
+## from a Windows image with files/utils/7zz)
+##
+
+$(eval $(call rules-source,sevenzip,$(SRCDIR)/7zip))
+$(eval $(call rules-common,sevenzip,x86_64,unix))
+$(eval $(call rules-common,sevenzip,aarch64,unix))
+
+SEVENZIP_ALONE2 := CPP/7zip/Bundles/Alone2
+
+SEVENZIP_x86_64_MAKE_ARGS := IS_X64=1
+SEVENZIP_aarch64_MAKE_ARGS := IS_ARM64=1 USE_ASM=1 ASM_FLAGS=-Wno-unused-macros
+
+$(OBJ)/.sevenzip-x86_64-build:
+	+env $(SEVENZIP_x86_64_ENV) $(MAKE) -C $(SEVENZIP_SRC)/$(SEVENZIP_ALONE2) -f makefile.gcc \
+		O=$(SEVENZIP_x86_64_OBJ) $(SEVENZIP_x86_64_MAKE_ARGS)
+	touch $@
+
+$(OBJ)/.sevenzip-aarch64-build:
+	+env $(SEVENZIP_aarch64_ENV) $(MAKE) -C $(SEVENZIP_SRC)/$(SEVENZIP_ALONE2) -f makefile.gcc \
+		O=$(SEVENZIP_aarch64_OBJ) $(SEVENZIP_aarch64_MAKE_ARGS)
+	touch $@
+
+$(OBJ)/.sevenzip-x86_64-dist:
+	mkdir -p $(DST_DIR)/utils
+	install -m 755 $(SEVENZIP_x86_64_OBJ)/7zz $(DST_DIR)/utils/7zz
+	touch $@
+
+$(OBJ)/.sevenzip-aarch64-dist:
+	mkdir -p $(DST_DIR)/utils
+	install -m 755 $(SEVENZIP_aarch64_OBJ)/7zz $(DST_DIR)/utils/7zz
+	touch $@
+
+all-dist: sevenzip
+
+##
+## PipeWire ALSA PCM plugin
+##
+
+$(eval $(call rules-source,pipewire-alsa,$(SRCDIR)/pipewire/pipewire-alsa/alsa-plugins))
+$(eval $(call create-rules-common,pipewire-alsa,PIPEWIRE_ALSA,x86_64,unix))
+$(eval $(call create-rules-common,pipewire-alsa,PIPEWIRE_ALSA,aarch64,unix))
+
+$(OBJ)/.pipewire-alsa-post-source:
+	patch -d "$(PIPEWIRE_ALSA_SRC)" -Np1 -i "$(realpath $(SRCDIR)/patches/pipewire/0001-alsa-pcm-support-aux-channel-map.patch)"
+	touch $@
+
+$(OBJ)/.pipewire-alsa-x86_64-configure:
+	@echo ":: configuring pipewire-alsa-x86_64..." >&2
+	touch $@
+
+$(OBJ)/.pipewire-alsa-aarch64-configure:
+	@echo ":: configuring pipewire-alsa-aarch64..." >&2
+	touch $@
+
+$(OBJ)/.pipewire-alsa-x86_64-build:
+	@echo ":: building pipewire-alsa-x86_64..." >&2
+	mkdir -p "$(PIPEWIRE_ALSA_x86_64_LIBDIR)/$(x86_64-unix_LIBDIR)/alsa-lib"
+	env $(PIPEWIRE_ALSA_x86_64_ENV) \
+	    "$(x86_64-unix_TARGET)-gcc" -shared -fPIC -DPIC \
+	    $$("$(x86_64-unix_TARGET)-pkg-config" --cflags alsa libpipewire-0.3 libspa-0.2) \
+	    $(x86_64_CFLAGS) $(CFLAGS) \
+	    -Wl,-soname,libasound_module_pcm_pipewire.so \
+	    -o "$(PIPEWIRE_ALSA_x86_64_LIBDIR)/$(x86_64-unix_LIBDIR)/alsa-lib/libasound_module_pcm_pipewire.so" \
+	    "$(PIPEWIRE_ALSA_SRC)/pcm_pipewire.c" \
+	    $$("$(x86_64-unix_TARGET)-pkg-config" --libs alsa libpipewire-0.3 libspa-0.2) \
+	    $(x86_64_LDFLAGS) $(LDFLAGS)
+	touch $@
+
+$(OBJ)/.pipewire-alsa-aarch64-build:
+	@echo ":: building pipewire-alsa-aarch64..." >&2
+	mkdir -p "$(PIPEWIRE_ALSA_aarch64_LIBDIR)/$(aarch64-unix_LIBDIR)/alsa-lib"
+	env $(PIPEWIRE_ALSA_aarch64_ENV) \
+	    "$(aarch64-unix_TARGET)-gcc" -shared -fPIC -DPIC \
+	    $$("$(aarch64-unix_TARGET)-pkg-config" --cflags alsa libpipewire-0.3 libspa-0.2) \
+	    $(aarch64_CFLAGS) $(CFLAGS) \
+	    -Wl,-soname,libasound_module_pcm_pipewire.so \
+	    -o "$(PIPEWIRE_ALSA_aarch64_LIBDIR)/$(aarch64-unix_LIBDIR)/alsa-lib/libasound_module_pcm_pipewire.so" \
+	    "$(PIPEWIRE_ALSA_SRC)/pcm_pipewire.c" \
+	    $$("$(aarch64-unix_TARGET)-pkg-config" --libs alsa libpipewire-0.3 libspa-0.2) \
+	    $(aarch64_LDFLAGS) $(LDFLAGS)
+	touch $@
+
+FFMPEG_DEPENDS = bzip2 dav1d xz
 
 FFMPEG_CONFIGURE_ARGS := \
 	--enable-shared \
@@ -546,162 +389,39 @@ FFMPEG_CONFIGURE_ARGS := \
 	--disable-programs \
 	--disable-doc \
 	--disable-inline-asm \
-	--enable-demuxer=matroska \
-
-FFMPEG_CONFIGURE_ARGS += \
-	--enable-decoders \
-	--enable-muxers \
+	--enable-lzma \
+	--enable-bzlib \
+	--enable-gnutls \
 	--enable-demuxers \
-	--enable-hwaccels \
-	--enable-parsers \
-	--enable-protocols \
-	--enable-filters \
+	--enable-protocol=https \
+	--enable-decoders \
+	--enable-encoders \
 	--enable-bsfs \
-	--enable-zlib \
-	--enable-libvpx \
-	--enable-libvorbis \
-	--enable-decoder=indeo5 \
-	--enable-decoder=adpcm_ms \
-	--enable-decoder=mpegvideo \
-	--enable-decoder=mpeg1video \
-	--enable-decoder=mp2 \
-	--enable-decoder=mpeg4 \
-	--enable-decoder=msmpeg4v1 \
-	--enable-decoder=msmpeg4v2 \
-	--enable-decoder=msmpeg4v3 \
-	--enable-decoder=vc1 \
-	--enable-decoder=vc1image \
-	--enable-decoder=wmav1 \
-	--enable-decoder=wmav2 \
-	--enable-decoder=wmapro \
-	--enable-decoder=wmalossless \
-	--enable-decoder=xma1 \
-	--enable-decoder=xma2 \
-	--enable-decoder=wmv3image \
-	--enable-decoder=wmv3 \
-	--enable-decoder=wmv2 \
-	--enable-decoder=wmv1 \
-	--enable-decoder=aac \
-	--enable-decoder=h264 \
-	--enable-decoder=hevc \
-	--enable-decoder=gif \
-	--enable-decoder=vorbis \
-	--enable-decoder=mp3 \
-	--enable-decoder=flac \
-	--enable-decoder=alac \
-	--enable-decoder=pcm* \
-	--enable-decoder=apng \
-	--enable-decoder=libvpx_vp8 \
-	--enable-decoder=libvpx_vp9 \
-	--enable-encoder=aac \
-	--enable-encoder=h264_vaapi \
-	--enable-encoder=hevc_vaapi \
-	--enable-demuxer=aac \
-	--enable-demuxer=gif \
-	--enable-demuxer=ogg \
-	--enable-demuxer=mov \
-	--enable-demuxer=mp3 \
-	--enable-demuxer=flac \
-	--enable-demuxer=wav \
-	--enable-demuxer=flv \
-	--enable-demuxer=apng \
-	--enable-demuxer=mpegts \
-	--enable-demuxer=asf \
-	--enable-demuxer=rtsp \
-	--enable-demuxer=xwma \
-	--enable-muxer=asf \
-	--enable-muxer=asf_stream \
-	--enable-muxer=flv \
-	--enable-muxer=mp4 \
-	--enable-muxer=dash \
-	--enable-muxer=webm \
-	--enable-muxer=mpegts \
-	--enable-parser=mpeg4video \
-	--enable-parser=h264 \
-	--enable-parser=hevc \
-	--enable-parser=vc1 \
-	--enable-parser=mpegaudio \
-	--enable-filter=scale \
-	--enable-protocol=file \
-	--enable-protocol=rtp \
-	--enable-protocol=rtmp \
-	--enable-protocol=rtsp \
+	--disable-decoder=vvc \
 
 FFMPEG_i386-unix_CONFIGURE_ARGS := \
 	--cross-prefix=i686-linux-gnu- \
 	--arch=x86 \
 	--target-os=linux
 
-FFMPEG_i386-unix_CONFIGURE_ARGS += \
-	--optflags="$(CFLAGS) $(i386_CFLAGS)"
-
 FFMPEG_x86_64-unix_CONFIGURE_ARGS := \
 	--cross-prefix=x86_64-linux-gnu- \
 	--arch=x86_64 \
 	--target-os=linux
-
-FFMPEG_x86_64-unix_CONFIGURE_ARGS += \
-	--optflags="$(CFLAGS) $(x86_64_CFLAGS)"
 
 FFMPEG_aarch64-unix_CONFIGURE_ARGS := \
 	--cross-prefix=aarch64-linux-gnu- \
 	--arch=aarch64 \
 	--target-os=linux
 
-FFMPEG_i386_DEPENDS += $(LIBWEBP_DEPENDENCY)
-FFMPEG_i386_DEPENDS += $(XZ_DEPENDENCY)
-
 $(eval $(call rules-source,ffmpeg,$(SRCDIR)/ffmpeg))
 $(eval $(call rules-configure,ffmpeg,i386,unix))
 $(eval $(call rules-configure,ffmpeg,x86_64,unix))
 $(eval $(call rules-configure,ffmpeg,aarch64,unix))
 
+$(OBJ)/.ffmpeg-%-configure: $(MAKEFILE_LIST)
 
-##
-## gst-libav
-##
-
-GST_LIBAV_MESON_ARGS := \
-    -Dtests=disabled \
-    -Ddoc=disabled \
-
-GST_LIBAV_DEPENDS = gst_orc gstreamer gst_base ffmpeg
-
-$(eval $(call rules-source,gst_libav,$(SRCDIR)/gstreamer/subprojects/gst-libav))
-$(eval $(call rules-meson,gst_libav,i386,unix))
-$(eval $(call rules-meson,gst_libav,x86_64,unix))
-$(eval $(call rules-meson,gst_libav,aarch64,unix))
-
-
-##
-## gst-plugins-rs
-##
-
-GST_PLUGINS_RS_CARGO_ARGS = \
-	-p gst-plugin-dav1d
-
-GST_PLUGINS_RS_DEPENDS = gst_orc gstreamer gst_base dav1d
-
-$(eval $(call rules-source,gst_plugins_rs,$(SRCDIR)/gst-plugins-rs))
-$(eval $(call rules-cargo,gst_plugins_rs,i386,unix))
-$(eval $(call rules-cargo,gst_plugins_rs,x86_64,unix))
-$(eval $(call rules-cargo,gst_plugins_rs,aarch64,unix))
-
-$(OBJ)/.gst_plugins_rs-x86_64-post-build:
-	mkdir -p $(GST_PLUGINS_RS_x86_64_DST)/lib/x86_64-linux-gnu/gstreamer-1.0/
-	cp -a $(GST_PLUGINS_RS_x86_64_OBJ)/x86_64-unknown-linux-gnu/release/libgstdav1d.so $(GST_PLUGINS_RS_x86_64_DST)/lib/x86_64-linux-gnu/gstreamer-1.0/
-	touch $@
-
-$(OBJ)/.gst_plugins_rs-i386-post-build:
-	mkdir -p $(GST_PLUGINS_RS_i386_DST)/lib/i386-linux-gnu/gstreamer-1.0/
-	cp -a $(GST_PLUGINS_RS_i386_OBJ)/i686-unknown-linux-gnu/release/libgstdav1d.so $(GST_PLUGINS_RS_i386_DST)/lib/i386-linux-gnu/gstreamer-1.0/
-	touch $@
-
-$(OBJ)/.gst_plugins_rs-aarch64-post-build:
-	mkdir -p $(GST_PLUGINS_RS_aarch64_DST)/lib/aarch64-linux-gnu/gstreamer-1.0/
-	cp -a $(GST_PLUGINS_RS_aarch64_OBJ)/aarch64-unknown-linux-gnu/release/libgstdav1d.so $(GST_PLUGINS_RS_aarch64_DST)/lib/aarch64-linux-gnu/gstreamer-1.0/
-	touch $@
-
+## ffmpeg is shipped: winedmo links against it at runtime for demuxing.
 
 ##
 ## Vulkan-Headers
@@ -734,16 +454,19 @@ $(eval $(call rules-cmake,glslang,i386,unix))
 $(eval $(call rules-cmake,glslang,x86_64,unix))
 $(eval $(call rules-cmake,glslang,aarch64,unix))
 
-$(OBJ)/.glslang-post-source: patches-source
-	$(foreach p,$(shell find $(PATCHES_SRC)/glslang/ -name "*.patch" | sort),patch -d $(GLSLANG_SRC) -Np1 -i $(p) &&) true
-	touch $@
-
 
 ##
 ## lsteamclient
 ##
 
 LSTEAMCLIENT_DEPENDS = wine
+
+ifeq ($(TARGET_ARCH),arm64)
+# Wine's ARM64X build installs its PE import libraries under the aarch64 build tree.
+LSTEAMCLIENT_i386_LIBFLAGS = -L$(WINE_aarch64_LIBDIR)/wine/i386-windows
+LSTEAMCLIENT_x86_64_LIBFLAGS = -L$(WINE_aarch64_LIBDIR)/wine/x86_64-windows
+LSTEAMCLIENT_arm64ec_LIBFLAGS = -L$(WINE_aarch64_LIBDIR)/wine/aarch64-windows
+endif
 
 $(eval $(call rules-source,lsteamclient,$(SRCDIR)/lsteamclient))
 $(eval $(call rules-makedep,lsteamclient,i386))
@@ -753,41 +476,15 @@ $(eval $(call rules-makedep,lsteamclient,aarch64))
 
 ##
 ## openxr
+## Note 32-bit is not supported by SteamVR, so we don't build it.
 ##
 
 OPENXR_CMAKE_ARGS = -DHAVE_FILESYSTEM_WITHOUT_LIB=0
 
 $(eval $(call rules-source,openxr,$(SRCDIR)/OpenXR-SDK))
-$(eval $(call rules-cmake,openxr,i386,unix))
+# $(eval $(call rules-cmake,openxr,i386,unix))
 $(eval $(call rules-cmake,openxr,x86_64,unix))
 $(eval $(call rules-cmake,openxr,aarch64,unix))
-
-
-##
-## wineopenxr
-##
-
-WINEOPENXR_LDFLAGS = -lopenxr_loader -lvulkan
-WINEOPENXR_DEPENDS = wine openxr
-
-WINEOPENXR_aarch64_PE_ARCHS = arm64ec i386 x86_64
-
-ifneq ($(findstring i386,$(unix_ARCHS)),)
-WINEOPENXR_CFLAGS = -DWINE_NO_LONG_TYPES
-else
-WINEOPENXR_CFLAGS = -Wno-format -Wno-pointer-to-int-cast
-endif
-
-$(eval $(call rules-source,wineopenxr,$(SRCDIR)/wineopenxr))
-$(eval $(call rules-makedep,wineopenxr,i386))
-$(eval $(call rules-makedep,wineopenxr,x86_64))
-$(eval $(call rules-makedep,wineopenxr,aarch64))
-
-WINEOPENXR64_JSON := $(DST_DIR)/share/openxr/wineopenxr64.json
-$(WINEOPENXR_SRC)/wineopenxr64.json: wineopenxr
-$(WINEOPENXR64_JSON): $(WINEOPENXR_SRC)/wineopenxr64.json
-	mkdir -p $(dir $@)
-	cp -a $< $@
 
 
 ##
@@ -815,8 +512,6 @@ $(eval $(call rules-makedep,steamexe,i386))
 $(eval $(call rules-makedep,steamexe,x86_64))
 $(eval $(call rules-makedep,steamexe,aarch64))
 
-
-ifneq ($(WITHOUT_TTS),1)
 
 ##
 ## piper
@@ -869,11 +564,6 @@ OPENFST_SOURCE_ARGS = \
   --exclude missing \
   --exclude test-driver \
 
-OPENFST_i386_CFLAGS := -mno-bmi2
-OPENFST_i386_CXXFLAGS := -mno-bmi2
-OPENFST_x86_64_CFLAGS := -mno-bmi2
-OPENFST_x86_64_CXXFLAGS := -mno-bmi2
-
 OPENFST_CONFIGURE_ARGS = \
   --enable-silent-rules \
   --enable-static \
@@ -919,11 +609,9 @@ $(eval $(call rules-cmake,kaldi,aarch64,unix))
 # the same source directory.
 #
 # The below assures that only a single configure/build step can run at a time.
-ifneq ($(findstring i386,$(unix_ARCHS)),)
 $(OBJ)/.kaldi-x86_64-configure: $(OBJ)/.kaldi-i386-configure
 $(OBJ)/.kaldi-i386-build: $(OBJ)/.kaldi-x86_64-configure
 $(OBJ)/.kaldi-i386-build: $(OBJ)/.kaldi-x86_64-build
-endif
 
 ##
 ## vosk
@@ -938,8 +626,6 @@ $(eval $(call rules-source,vosk,$(SRCDIR)/vosk-api))
 $(eval $(call rules-cmake,vosk,i386,unix))
 $(eval $(call rules-cmake,vosk,x86_64,unix))
 $(eval $(call rules-cmake,vosk,aarch64,unix))
-
-endif # WITHOUT_TTS
 
 
 ##
@@ -968,22 +654,12 @@ WINE_SOURCE_ARGS = \
   --exclude server/request_handlers.h \
   --exclude server/request_trace.h \
 
-WINE_CFLAGS += \
-  -Wno-stringop-overflow \
-  -Wno-incompatible-pointer-types \
-
 WINE_AUTOCONF_ARGS = \
-  --with-mingw=$(MINGW_TYPE) \
-  --enable-build-id \
-  --disable-tests
-
-WINE_AUTOCONF_ARGS += \
-  --with-x \
+  --enable-werror \
   --with-wayland \
-  --with-gstreamer \
+  --with-mingw=$(MINGW_TYPE) \
   --with-ffmpeg \
-  --with-pcap \
-  --without-oss \
+  --disable-tests
 
 WINE_x86_64_AUTOCONF_ARGS = \
   --enable-archs=$(call list-join,$(comma),x86_64 $(filter-out x86_64 $(unix_ARCHS),$(windows_ARCHS))) \
@@ -992,32 +668,17 @@ WINE_x86_64_AUTOCONF_ARGS = \
 WINE_aarch64_AUTOCONF_ARGS = \
   --enable-archs=$(call list-join,$(comma),arm64ec aarch64 $(filter-out arm64ec aarch64 $(unix_ARCHS),$(windows_ARCHS)))
 
-ifeq ($(shell cc --version|grep 'clang'),)
-ifneq ($(findstring i386,$(unix_ARCHS)),)
 WINE_i386_AUTOCONF_ARGS += \
   VKD3D_PE_CFLAGS="-I$(VULKAN_HEADERS_i386_DST)/include -I$(VKD3D_i386_DST)/include/vkd3d" \
   VKD3D_PE_LIBS="-L$(VKD3D_i386_LIBDIR)/vkd3d/i386-windows -l:libvkd3d-1.dll -l:libvkd3d-shader-1.dll -l:libvkd3d-utils-1.dll"
 WINE_x86_64_AUTOCONF_ARGS += \
   VKD3D_PE_CFLAGS="-I$(VULKAN_HEADERS_x86_64_DST)/include -I$(VKD3D_x86_64_DST)/include/vkd3d" \
   VKD3D_PE_LIBS="-L$(VKD3D_x86_64_LIBDIR)/vkd3d/x86_64-windows -l:libvkd3d-1.dll -l:libvkd3d-shader-1.dll -l:libvkd3d-utils-1.dll"
-WINE_VKD3D_DEPENDENCY = vkd3d
-endif
-endif
 
-ifneq ($(WITHOUT_TTS),1)
-WINE_DEPENDS = gst_orc gstreamer gst_base ffmpeg openfst kaldi vosk
-WINE_i386_DEPENDS = $(WINE_VKD3D_DEPENDENCY)
-WINE_x86_64_DEPENDS = piper $(WINE_VKD3D_DEPENDENCY)
-WINE_aarch64_DEPENDS = piper
-else
-WINE_DEPENDS = gst_orc gstreamer gst_base ffmpeg
-WINE_i386_DEPENDS = $(WINE_VKD3D_DEPENDENCY)
-WINE_x86_64_DEPENDS = $(WINE_VKD3D_DEPENDENCY)
-endif
-
-WINE_DEPENDS += $(LIBXML2_DEPENDENCY)
-WINE_DEPENDS += $(LIBXKBCOMMON_DEPENDENCY)
-WINE_DEPENDS += $(LIBPCAP_DEPENDENCY)
+WINE_DEPENDS = ffmpeg openfst kaldi vosk libxml2 libxkbcommon libpcap
+WINE_i386_DEPENDS = vkd3d
+WINE_x86_64_DEPENDS = piper vkd3d openxr
+WINE_aarch64_DEPENDS = piper openxr
 
 WINE_i386_LIBDIR = $(WINE_i386_DST)/lib
 WINE_x86_64_LIBDIR = $(WINE_x86_64_DST)/lib
@@ -1034,11 +695,13 @@ $(eval $(call rules-autoconf,wine,aarch64,unix))
 
 $(WINE_SRC)/configure: $(WINE_ORIGIN)/aclocal.m4
 
-$(OBJ)/.wine-post-source: patches-source
-	$(foreach p,$(shell find $(PATCHES_SRC)/wine/ -name "*.patch" | sort),patch -d $(WINE_SRC) -Np1 -i $(p) &&) true
+$(OBJ)/.wine-post-source:
 	cd $(WINE_SRC) && XDG_CACHE_HOME=$(OBJ) dlls/winevulkan/make_vulkan -x vk.xml -X video.xml
 	-cd $(WINE_SRC) && tools/make_specfiles
 	touch $@
+
+WINEOPENXR64_JSON := $(DST_DIR)/share/openxr/wineopenxr64.json
+WINEOPENXR64_JSON_SRC := $(SRCDIR)/wine/dlls/wineopenxr/wineopenxr64.json
 
 $(OBJ)/.wine-x86_64-post-build:
 	mkdir -p $(DST_DIR)/bin
@@ -1051,17 +714,30 @@ $(OBJ)/.wine-x86_64-post-build:
 
 	mkdir -p $(DST_DIR)/share
 	cp -a $(WINE_x86_64_DST)/share/wine $(DST_DIR)/share
+
+	# Install wineopenxr runtime json
+	mkdir -p $(DST_DIR)/share/openxr
+	if [ -f "$(WINEOPENXR64_JSON_SRC)" ]; then \
+		cp -a "$(WINEOPENXR64_JSON_SRC)" "$(WINEOPENXR64_JSON)"; \
+	fi
 	touch $@
 
 $(OBJ)/.wine-aarch64-post-build:
 	mkdir -p $(DST_DIR)/bin-arm64
 	$(call install-strip,$(WINE_aarch64_DST)/bin/wine,$(DST_DIR)/bin-arm64)
 	$(call install-strip,$(WINE_aarch64_DST)/bin/wineserver,$(DST_DIR)/bin-arm64)
+	ln -s bin-arm64 bin
+	cp -a bin $(DST_DIR)/
 	cp -a $(WINE_aarch64_DST)/bin/msidb $(DST_DIR)/bin-arm64/
 ifeq ($(findstring x86_64,$(unix_ARCHS)),)
 	mkdir -p $(DST_DIR)/share
 	cp -a $(WINE_aarch64_DST)/share/wine $(DST_DIR)/share
 endif
+	# Install wineopenxr runtime json
+	mkdir -p $(DST_DIR)/share/openxr
+	if [ -f "$(WINEOPENXR64_JSON_SRC)" ]; then \
+		cp -a "$(WINEOPENXR64_JSON_SRC)" "$(WINEOPENXR64_JSON)"; \
+	fi
 	touch $@
 
 ##
@@ -1075,6 +751,45 @@ $(eval $(call rules-makedep,vrclient,i386))
 $(eval $(call rules-makedep,vrclient,x86_64))
 $(eval $(call rules-makedep,vrclient,aarch64))
 
+
+##
+## discord-rpc-bridge
+##
+
+$(eval $(call rules-source,discord-rpc-bridge,$(SRCDIR)/discord-rpc-bridge))
+$(eval $(call create-rules-common,discord-rpc-bridge,DISCORD_RPC_BRIDGE,x86_64,unix))
+$(eval $(call create-rules-common,discord-rpc-bridge,DISCORD_RPC_BRIDGE,aarch64,unix))
+
+$(OBJ)/.discord-rpc-bridge-post-source:
+	patch_dir="$$(realpath "$(SRCDIR)/patches/discordrpc")"; \
+	if [ -d "$$patch_dir" ]; then \
+	    find "$$patch_dir" -name "0001-remove-darwin-syscall.patch" | sort | \
+	    while read -r p; do patch -d "$(DISCORD_RPC_BRIDGE_SRC)" -Np1 -i "$$p"; done; \
+	fi
+	touch $@
+
+$(OBJ)/.discord-rpc-bridge-x86_64-build:
+	@echo ":: building discord-rpc-bridge-x86_64..." >&2
+	rsync -arx "$(DISCORD_RPC_BRIDGE_SRC)/" "$(DISCORD_RPC_BRIDGE_x86_64_OBJ)/"
+	env $(DISCORD_RPC_BRIDGE_x86_64_ENV) \
+	    $(MAKE) -C "$(DISCORD_RPC_BRIDGE_x86_64_OBJ)" build
+	touch $@
+
+$(OBJ)/.discord-rpc-bridge-x86_64-post-build:
+	mkdir -p $(DISCORD_RPC_BRIDGE_x86_64_DST)/lib/wine/discord-rpc-bridge
+	$(call install-strip,$(DISCORD_RPC_BRIDGE_x86_64_OBJ)/build/bridge.exe,$(DISCORD_RPC_BRIDGE_x86_64_DST)/lib/wine/discord-rpc-bridge)
+	touch $@
+
+$(OBJ)/.discord-rpc-bridge-aarch64-build:
+	touch $@
+
+$(OBJ)/.discord-rpc-bridge-aarch64-post-build:
+	touch $@
+
+$(OBJ)/.discord-rpc-bridge-aarch64-dist:
+	touch $@
+
+default_pfx: discord-rpc-bridge
 
 ##
 ## dxvk
@@ -1091,24 +806,17 @@ DXVK_SOURCE_ARGS = \
 DXVK_arm64ec_CFLAGS = -marm64x
 DXVK_arm64ec_LDFLAGS = -marm64x
 
-DXVK_MESON_ARGS = -Db_ndebug=true --force-fallback-for=libdisplay-info
 DXVK_i386_MESON_ARGS = --bindir=$(DXVK_i386_DST)/lib/wine/dxvk/i386-windows
 DXVK_x86_64_MESON_ARGS = --bindir=$(DXVK_x86_64_DST)/lib/wine/dxvk/x86_64-windows
 DXVK_arm64ec_MESON_ARGS = --bindir=$(DXVK_arm64ec_DST)/lib/wine/dxvk/aarch64-windows
 DXVK_HOST_DEPENDS = glslang
-
-DXVK_i386_CFLAGS = -O3 -mno-avx $(i386_SANITY_FLAGS)
-DXVK_x86_64_CFLAGS = -O3 -mno-avx
-DXVK_CPPFLAGS = -msse -msse2
-DXVK_LDFLAGS = -static -static-libgcc -static-libstdc++
 
 $(eval $(call rules-source,dxvk,$(SRCDIR)/dxvk))
 $(eval $(call rules-meson,dxvk,i386,windows))
 $(eval $(call rules-meson,dxvk,x86_64,windows))
 $(eval $(call rules-meson,dxvk,arm64ec,windows))
 
-$(OBJ)/.dxvk-post-source: patches-source
-	$(foreach p,$(shell find $(PATCHES_SRC)/dxvk/ -name "*.patch" | sort),patch -d $(DXVK_SRC) -Np1 -i $(p) &&) true
+$(OBJ)/.dxvk-post-source:
 	sed -re 's#@VCS_TAG@#$(shell git -C $(SRCDIR)/dxvk describe --always --abbrev=15 --dirty=0 || echo deadbeef)#' \
 	    $(SRCDIR)/dxvk/version.h.in > $(DXVK_SRC)/version.h.in
 	mkdir -p $(DST_LIBDIR)/wine/dxvk
@@ -1118,18 +826,40 @@ $(OBJ)/.dxvk-post-source: patches-source
 
 
 ##
+## d7vk
+##
+
+# D7VK provides a 32-bit ddraw.dll for D3D7/6/5/3. Keep it separate from
+# regular DXVK so d3d8/9/10/11 continue to use the primary DXVK package.
+D7VK_i386_SOURCE_DATE_EPOCH := $(shell expr $(i386_SOURCE_DATE_EPOCH) - 2)
+
+D7VK_SOURCE_ARGS = \
+  --exclude version.h.in \
+
+D7VK_MESON_ARGS = -Db_ndebug=true --force-fallback-for=libdisplay-info \
+  -Denable_dxgi=false -Denable_d3d8=false -Denable_d3d10=false -Denable_d3d11=false
+D7VK_i386_MESON_ARGS = --bindir=$(D7VK_i386_DST)/lib/wine/d7vk/i386-windows
+D7VK_HOST_DEPENDS = glslang
+
+$(eval $(call rules-source,d7vk,$(SRCDIR)/d7vk))
+$(eval $(call rules-meson,d7vk,i386,windows))
+
+$(OBJ)/.d7vk-post-source:
+	sed -re 's#@VCS_TAG@#$(shell git -C $(SRCDIR)/d7vk describe --always --abbrev=15 --dirty=0 || echo deadbeef)#' \
+	    $(SRCDIR)/d7vk/version.h.in > $(D7VK_SRC)/version.h.in
+	mkdir -p $(DST_LIBDIR)/wine/d7vk
+	rm -rf $(DST_LIBDIR)/wine/d7vk/version
+	echo "$(shell git -C $(SRCDIR)/d7vk rev-parse HEAD 2>/dev/null || echo no-git-repo-info)" > $(DST_LIBDIR)/wine/d7vk/version
+	touch $@
+
+
+##
 ## dxvk-nvapi
 ##
 
-DXVK_NVAPI_MESON_ARGS = -Db_ndebug=true
 DXVK_NVAPI_i386_MESON_ARGS = --bindir=$(DXVK_NVAPI_i386_DST)/lib/wine/nvapi/i386-windows
 DXVK_NVAPI_x86_64_MESON_ARGS = --bindir=$(DXVK_NVAPI_x86_64_DST)/lib/wine/nvapi/x86_64-windows
 DXVK_NVAPI_arm64ec_MESON_ARGS = --bindir=$(DXVK_NVAPI_arm64ec_DST)/lib/wine/nvapi/aarch64-windows
-
-DXVK_NVAPI_i386_CFLAGS = -O3 $(i386_SANITY_FLAGS)
-DXVK_NVAPI_x86_64_CFLAGS = -O3
-DXVK_NVAPI_CPPFLAGS = -msse -msse2
-DXVK_NVAPI_LDFLAGS = -static -static-libgcc -static-libstdc++
 
 $(eval $(call rules-source,dxvk-nvapi,$(SRCDIR)/dxvk-nvapi))
 $(eval $(call rules-meson,dxvk-nvapi,i386,windows))
@@ -1190,9 +920,6 @@ VKD3D_AUTOCONF_ARGS = \
 VKD3D_CFLAGS = -fno-lto
 VKD3D_LDFLAGS = -static-libgcc $(CROSSLDFLAGS)
 VKD3D_DEPENDS = vulkan-headers spirv-headers
-
-VKD3D_i386_CFLAGS = -O3 $(i386_SANITY_FLAGS)
-VKD3D_x86_64_CFLAGS = -O3
 
 VKD3D_i386_LIBDIR = $(VKD3D_i386_DST)/lib
 VKD3D_x86_64_LIBDIR = $(VKD3D_x86_64_DST)/lib
@@ -1256,31 +983,15 @@ ifneq ($(UNSTRIPPED_BUILD),)
 	VKD3D_PROTON_MESON_ARGS = -Denable_trace=true
 endif
 
-VKD3D_PROTON_i386_CFLAGS = -O3 $(i386_SANITY_FLAGS)
-VKD3D_PROTON_x86_64_CFLAGS = -O3
-VKD3D_PROTON_CPPFLAGS = -msse -msse2
-VKD3D_PROTON_LDFLAGS = -static -static-libgcc -static-libstdc++
-
 $(eval $(call rules-source,vkd3d-proton,$(SRCDIR)/vkd3d-proton))
 $(eval $(call rules-meson,vkd3d-proton,i386,windows))
 $(eval $(call rules-meson,vkd3d-proton,x86_64,windows))
 $(eval $(call rules-meson,vkd3d-proton,arm64ec,windows))
 
-# vkd3d_build is vkd3d-proton's shader cache key. With patches/vkd3d-proton applied
-# the tree is effectively dirty, so tag it that way (hash + 0, version + '+').
-ifneq ($(wildcard $(SRCDIR)/patches/vkd3d-proton/*.patch),)
-VKD3D_PROTON_BUILD_TAG = $(addsuffix 0,$(shell git -C $(SRCDIR)/vkd3d-proton describe --always --exclude=* --abbrev=15))
-VKD3D_PROTON_VERSION_TAG = $(addsuffix +,$(shell git -C $(SRCDIR)/vkd3d-proton describe --always --tags))
-else
-VKD3D_PROTON_BUILD_TAG = $(shell git -C $(SRCDIR)/vkd3d-proton describe --always --exclude=* --abbrev=15 --dirty=0)
-VKD3D_PROTON_VERSION_TAG = $(shell git -C $(SRCDIR)/vkd3d-proton describe --always --tags --dirty=+)
-endif
-
-$(OBJ)/.vkd3d-proton-post-source: patches-source
-	$(foreach p,$(shell find $(PATCHES_SRC)/vkd3d-proton/ -name "*.patch" | sort),patch -d $(VKD3D_PROTON_SRC) -Np1 -i $(p) &&) true
-	sed -re 's#@VCS_TAG@#$(or $(VKD3D_PROTON_BUILD_TAG),deadbeef)#' \
+$(OBJ)/.vkd3d-proton-post-source:
+	sed -re 's#@VCS_TAG@#$(shell git -C $(SRCDIR)/vkd3d-proton describe --always --exclude=* --abbrev=15 --dirty=0 || echo deadbeef)#' \
 	    $(SRCDIR)/vkd3d-proton/vkd3d_build.h.in > $(VKD3D_PROTON_SRC)/vkd3d_build.h.in
-	sed -re 's#@VCS_TAG@#$(or $(VKD3D_PROTON_VERSION_TAG),deadbeef)#' \
+	sed -re 's#@VCS_TAG@#$(shell git -C $(SRCDIR)/vkd3d-proton describe --always --tags --dirty=+ || echo deadbeef)#' \
 	    $(SRCDIR)/vkd3d-proton/vkd3d_version.h.in > $(VKD3D_PROTON_SRC)/vkd3d_version.h.in
 	mkdir -p $(DST_LIBDIR)/wine/vkd3d-proton
 	rm -rf $(DST_LIBDIR)/wine/vkd3d-proton/version
@@ -1289,29 +1000,17 @@ $(OBJ)/.vkd3d-proton-post-source: patches-source
 
 
 ##
-## extras
-##
-
-ifneq ($(WITHOUT_EXTRAS),1)
-include $(SRC)/extras/build-dxvk-sarek.mk
-include $(SRC)/extras/build-d7vk.mk
-include $(SRC)/extras/build-dxvk-low-latency.mk
-include $(SRC)/extras/build-vkd3d-low-latency.mk
-include $(SRC)/extras/build-discord-rpc-bridge.mk
-endif # WITHOUT_EXTRAS
-
-
-##
 ## nvidia-libs
 ##
+ifeq ($(TARGET_ARCH),x86_64)
 ifneq ($(WITHOUT_NVIDIA_LIBS),1)
-include $(SRC)/nvidia-libs/build-dxvk-nvapi.mk
 include $(SRC)/make/rules-nvidia-libs.mk
 include $(SRC)/nvidia-libs/build-nvcuda.mk
 include $(SRC)/nvidia-libs/build-nvenc.mk
 include $(SRC)/nvidia-libs/build-wine-nvml.mk
 include $(SRC)/nvidia-libs/build-wine-nvoptix.mk
 endif # WITHOUT_NVIDIA_LIBS
+endif # TARGET_ARCH=x86_64
 
 
 ##
@@ -1323,6 +1022,7 @@ include $(SRC)/vklayers/build-dxvk-nvapi-vkreflex-layer.mk
 include $(SRC)/vklayers/build-pyroveil.mk
 include $(SRC)/vklayers/build-low_latency_layer.mk
 include $(SRC)/vklayers/build-vkbasalt.mk
+include $(SRC)/vklayers/build-steam-overlay-wayland.mk
 endif # WITHOUT_VKLAYERS
 
 
@@ -1332,17 +1032,11 @@ endif # WITHOUT_VKLAYERS
 
 ifneq ($(findstring aarch64,$(unix_ARCHS)),)
 FEX_COMMON_CMAKE_ARGS = \
-  -DENABLE_FEXCORE_PROFILER=True -DENABLE_LTO=False \
+  -DENABLE_FEXCORE_PROFILER=True -DCMAKE_BUILD_TYPE=Release -DENABLE_LTO=False \
   -DBUILD_TESTING=False -DTUNE_CPU=none -DRANGES_NATIVE=OFF \
   -DBUILD_STEAM_SUPPORT=True \
   -DOVERRIDE_VERSION=$$(cat $(FEX_SRC)/.git_describe) \
   -DOVERRIDE_HASH=$$(cat $(FEX_SRC)/.git_rev)
-
-ifneq ($(UNSTRIPPED_BUILD),)
-FEX_COMMON_CMAKE_ARGS += -DCMAKE_BUILD_TYPE=RelWithDebInfo
-else
-FEX_COMMON_CMAKE_ARGS += -DCMAKE_BUILD_TYPE=Release
-endif
 
 FEX_CMAKE_ARGS = $(FEX_COMMON_CMAKE_ARGS) \
   -DCMAKE_TOOLCHAIN_FILE=$(FEX_SRC)/Data/CMake/toolchain_mingw.cmake \
@@ -1710,6 +1404,8 @@ GECKO_x86_64_TARBALL := wine-gecko-$(GECKO_VER)-x86_64.tar.xz
 GECKO_x86_64_TARBALL_URL := https://dl.winehq.org/wine/wine-gecko/$(GECKO_VER)/$(GECKO_x86_64_TARBALL)
 GECKO_i386_TARBALL_URL := https://dl.winehq.org/wine/wine-gecko/$(GECKO_VER)/$(GECKO_i386_TARBALL)
 GECKO_DST := $(DST_DIR)/share/wine/gecko
+GECKO_i386_DST := $(GECKO_DST)/wine-gecko-$(GECKO_VER)-x86
+GECKO_x86_64_DST := $(GECKO_DST)/wine-gecko-$(GECKO_VER)-x86_64
 
 $(SRC)/contrib/$(GECKO_x86_64_TARBALL):
 	mkdir -p $(dir $@)
@@ -1719,16 +1415,20 @@ $(SRC)/contrib/$(GECKO_i386_TARBALL):
 	mkdir -p $(dir $@)
 	wget --no-use-server-timestamps -O $@ $(GECKO_i386_TARBALL_URL) || (rm $@; false)
 
-$(OBJ)/.gecko-i386-dist: $(SRC)/contrib/$(GECKO_i386_TARBALL)
+$(GECKO_i386_DST): $(SRC)/contrib/$(GECKO_i386_TARBALL)
 	mkdir -p $(GECKO_DST)
 	rm -rf $(GECKO_DST)/wine-gecko-$(GECKO_VER)-x86
 	tar --no-same-owner -xf $< -C $(GECKO_DST)
-	touch $@
 
-$(OBJ)/.gecko-x86_64-dist: $(SRC)/contrib/$(GECKO_x86_64_TARBALL)
+$(GECKO_x86_64_DST): $(SRC)/contrib/$(GECKO_x86_64_TARBALL)
 	mkdir -p $(GECKO_DST)
 	rm -rf $(GECKO_DST)/wine-gecko-$(GECKO_VER)-x86_64
 	tar --no-same-owner -xf $< -C $(GECKO_DST)
+
+$(OBJ)/.gecko-i386-dist: $(GECKO_i386_DST)
+	touch $@
+
+$(OBJ)/.gecko-x86_64-dist: $(GECKO_x86_64_DST)
 	touch $@
 
 all-dist: $(OBJ)/.gecko-i386-dist $(OBJ)/.gecko-x86_64-dist
@@ -1743,7 +1443,7 @@ distclean: gecko-distclean
 ## wine-mono
 ##
 
-WINEMONO_VER := 11.3.0
+include $(SRC)/patches/wine-mono/source.conf
 WINEMONO_x86_64_TARBALL := wine-mono-$(WINEMONO_VER)-x86.tar.xz
 WINEMONO_aarch64_TARBALL := wine-mono-$(WINEMONO_VER)-arm64.tar.xz
 ifeq ($(TARGET_ARCH),arm64)
@@ -1753,16 +1453,63 @@ WINEMONO_TARBALL := $(WINEMONO_x86_64_TARBALL)
 endif
 DIST_WINEMONO_DIR := $(DST_DIR)/share/wine/mono
 DIST_WINEMONO := $(OBJ)/.wine-mono-dist
+DIST_WINEMONO_TARGET := $(DIST_WINEMONO_DIR)/wine-mono-$(WINEMONO_VER)
 MONO_TARBALL_URL := https://github.com/madewokherd/wine-mono/releases/download/wine-mono-$(WINEMONO_VER)/$(WINEMONO_TARBALL)
+
+# Rebuild the native runtimes and patched class libraries from the matching release.
+WINEMONO_PREPARED := $(SRC)/wine-mono/.proton-prepared
+WINEMONO_RUNTIME_SRC := $(OBJ)/src-wine-mono-$(WINEMONO_VER)
+WINEMONO_SOURCE_STAMP := $(OBJ)/.wine-mono-$(WINEMONO_VER)-source
+WINEMONO_RUNTIME_STAMP := $(OBJ)/.wine-mono-$(WINEMONO_VER)-runtime
+WINEMONO_DRAWING_STAMP := $(OBJ)/.wine-mono-$(WINEMONO_VER)-drawing
+WINEMONO_DRAWING_SRC := $(WINEMONO_RUNTIME_SRC)/mono/mcs/class/lib/net_4_x-win32
+DIST_WINEMONO_DRAWING := $(DIST_WINEMONO_TARGET)/lib/mono/gac/System.Drawing/4.0.0.0__b03f5f7f11d50a3a
+WINEMONO_PATCHES := $(sort $(wildcard $(SRC)/patches/wine-mono/*.patch))
 
 $(SRC)/contrib/$(WINEMONO_TARBALL):
 	mkdir -p $(dir $@)
 	wget --no-use-server-timestamps -O $@ $(MONO_TARBALL_URL) || (rm $@; false)
 
-$(DIST_WINEMONO): $(SRC)/contrib/$(WINEMONO_TARBALL)
+$(WINEMONO_PREPARED): $(SRC)/patches/wine-mono/source.conf $(SRC)/patches/wine-mono/prepare.sh $(WINEMONO_PATCHES)
+	@echo "Wine-Mono source is missing or stale; run ./patches/protonprep-valve-staging.sh first." >&2
+	@exit 1
+
+$(WINEMONO_SOURCE_STAMP): $(WINEMONO_PREPARED) $(SRC)/Makefile.in
+	rm -rf $(WINEMONO_RUNTIME_SRC)
+	mkdir -p $(WINEMONO_RUNTIME_SRC)
+	rsync -a --exclude .proton-prepared $(SRC)/wine-mono/ $(WINEMONO_RUNTIME_SRC)/
+	touch $@
+
+$(WINEMONO_RUNTIME_STAMP): $(WINEMONO_SOURCE_STAMP)
+	mkdir -p $(WINEMONO_RUNTIME_SRC)/build $(WINEMONO_RUNTIME_SRC)/image
+	# mono.make appends a PDB filename even for DWARF; override its PDB linker flags.
+	# Keep GCC support code in the DLL; the SDK's libgcc DLL is not distributed.
+	+$(MAKE) -C $(WINEMONO_RUNTIME_SRC) AUTO_LLVM_MINGW=0 \
+	    MINGW_x86=$(i386-windows_TARGET) MINGW_x86_64=$(x86_64-windows_TARGET) \
+	    ENABLE_DEBUG_SYMBOLS=1 PREFER_DWARF_SYMBOLS=1 \
+	    PDB_LDFLAGS_LIBMONO_x86=-static-libgcc PDB_LDFLAGS_LIBMONO_x86_64=-static-libgcc \
+	    libmono-2.0-x86.dll libmono-2.0-x86_64.dll
+	touch $@
+
+$(WINEMONO_DRAWING_STAMP): $(WINEMONO_RUNTIME_STAMP)
+	# Use Mono's own compiler bootstrap and Windows class-library profile.
+	# Only System.Drawing is packaged; keep the other release assemblies intact.
+	+$(MAKE) -C $(WINEMONO_RUNTIME_SRC) AUTO_LLVM_MINGW=0 \
+	    BUILDDIR=$(WINEMONO_RUNTIME_SRC)/build build_profiles=net_4_x \
+	    $(WINEMONO_RUNTIME_SRC)/build/mono-unix/.built-win32
+	test -s $(WINEMONO_DRAWING_SRC)/System.Drawing.dll
+	touch $@
+
+$(DIST_WINEMONO_TARGET): $(SRC)/contrib/$(WINEMONO_TARBALL)
 	mkdir -p $(DIST_WINEMONO_DIR)
 	rm -rf $(DIST_WINEMONO_DIR)/wine-mono-$(WINEMONO_VER)
 	tar --no-same-owner -xf $< -C $(DIST_WINEMONO_DIR)
+
+$(DIST_WINEMONO): $(DIST_WINEMONO_TARGET) $(WINEMONO_DRAWING_STAMP)
+	cp $(WINEMONO_RUNTIME_SRC)/image/bin/libmono-2.0-x86.dll $(WINEMONO_RUNTIME_SRC)/image/bin/libmono-2.0-x86_64.dll $(DIST_WINEMONO_TARGET)/bin/
+	cp $(WINEMONO_RUNTIME_SRC)/image/bin/libmono-2.0-x86.dbg $(WINEMONO_RUNTIME_SRC)/image/bin/libmono-2.0-x86_64.dbg $(DIST_WINEMONO_TARGET)/bin/
+	cp $(WINEMONO_DRAWING_SRC)/System.Drawing.dll $(DIST_WINEMONO_DRAWING)/
+	if test -f $(WINEMONO_DRAWING_SRC)/System.Drawing.pdb; then cp $(WINEMONO_DRAWING_SRC)/System.Drawing.pdb $(DIST_WINEMONO_DRAWING)/; fi
 	rm -f $(DIST_WINEMONO_DIR)/wine-mono; ln -s wine-mono-$(WINEMONO_VER) $(DIST_WINEMONO_DIR)/wine-mono
 	touch $@
 
@@ -1786,13 +1533,14 @@ XALIA_ZIP := xalia-$(XALIA_VER)-net48-mono.zip
 endif
 DIST_XALIA_DIR := $(DST_DIR)/share/xalia
 DIST_XALIA := $(OBJ)/.xalia-dist
+DIST_XALIA_MAIN := $(DIST_XALIA_DIR)/main.gudl
 XALIA_ZIP_URL := https://github.com/madewokherd/xalia/releases/download/xalia-$(XALIA_VER)/$(XALIA_ZIP)
 
 $(SRC)/contrib/$(XALIA_ZIP):
 	mkdir -p $(dir $@)
 	wget --no-use-server-timestamps -O $@ $(XALIA_ZIP_URL) || (rm $@; false)
 
-$(DIST_XALIA): $(SRC)/contrib/$(XALIA_ZIP) $(SRC)/xalia-fixups.gudl
+$(DIST_XALIA_MAIN): $(SRC)/contrib/$(XALIA_ZIP) $(SRC)/xalia-fixups.gudl
 	rm -rf $(DIST_XALIA_DIR)
 	mkdir -p $(DIST_XALIA_DIR)
 	unzip $< -d $(DIST_XALIA_DIR)
@@ -1805,6 +1553,8 @@ ifeq ($(TARGET_ARCH),arm64)
 else
 	ln -s ../wine/mono/wine-mono/lib/x86_64/SDL3.dll $(DIST_XALIA_DIR)/SDL3.dll
 endif
+
+$(DIST_XALIA): $(DIST_XALIA_MAIN)
 	touch $@
 
 all-dist: $(DIST_XALIA)
@@ -1821,27 +1571,36 @@ distclean: xalia-distclean
 ICU_VER := 6.8.2
 ICU_x86_64_DIST_DIR := $(DST_LIBDIR)/wine/icu/x86_64-windows
 ICU_x86_64_TARBALL := icu-$(ICU_VER)-x86_64.tar.xz
+ICU_x86_64_DIST := $(ICU_x86_64_DIST_DIR)/icudt68.dll
 ICU_i386_DIST_DIR := $(DST_LIBDIR)/wine/icu/i386-windows
 ICU_i386_TARBALL := icu-$(ICU_VER)-x86.tar.xz
+ICU_i386_DIST := $(ICU_i386_DIST_DIR)/icudt68.dll
 ICU_aarch64_DIST_DIR := $(DST_LIBDIR)/wine/icu/aarch64-windows
 ICU_aarch64_TARBALL := icu-$(ICU_VER)-x86_64.tar.xz # TODO: Build ICU for arm64(ec/x).
+ICU_aarch64_DIST := $(ICU_aarch64_DIST_DIR)/icudt68.dll
 
-$(OBJ)/.icu-x86_64-dist: $(SRC)/icu/$(ICU_x86_64_TARBALL)
+$(ICU_x86_64_DIST): $(SRC)/icu/$(ICU_x86_64_TARBALL)
 	mkdir -p $(ICU_x86_64_DIST_DIR)
 	rm -rf $(ICU_x86_64_DIST_DIR)/*.dll
 	tar --no-same-owner -xf $< -C $(ICU_x86_64_DIST_DIR)
-	touch $@
 
-$(OBJ)/.icu-i386-dist: $(SRC)/icu/$(ICU_i386_TARBALL)
+$(ICU_i386_DIST): $(SRC)/icu/$(ICU_i386_TARBALL)
 	mkdir -p $(ICU_i386_DIST_DIR)
 	rm -rf $(ICU_i386_DIST_DIR)/*.dll
 	tar --no-same-owner -xf $< -C $(ICU_i386_DIST_DIR)
-	touch $@
 
-$(OBJ)/.icu-aarch64-dist: $(SRC)/icu/$(ICU_aarch64_TARBALL)
+$(ICU_aarch64_DIST): $(SRC)/icu/$(ICU_aarch64_TARBALL)
 	mkdir -p $(ICU_aarch64_DIST_DIR)
 	rm -rf $(ICU_aarch64_DIST_DIR)/*.dll
 	tar --no-same-owner -xf $< -C $(ICU_aarch64_DIST_DIR)
+
+$(OBJ)/.icu-x86_64-dist: $(ICU_x86_64_DIST)
+	touch $@
+
+$(OBJ)/.icu-i386-dist: $(ICU_i386_DIST)
+	touch $@
+
+$(OBJ)/.icu-aarch64-dist: $(ICU_aarch64_DIST)
 	touch $@
 
 all-dist: $(OBJ)/.icu-x86_64-dist $(OBJ)/.icu-i386-dist
@@ -1865,6 +1624,62 @@ $(DIST_X11_LOCALE): $(SRC)/locale
 	cp -R $< $(DIST_X11_LOCALE)
 
 all-dist: $(DIST_X11_LOCALE)
+
+##
+## xrandr
+##
+
+XRANDR_VER := 1.5.4
+XRANDR_TARBALL := xrandr-$(XRANDR_VER).tar.xz
+XRANDR_TARBALL_URL := https://www.x.org/releases/individual/app/$(XRANDR_TARBALL)
+XRANDR_SRC := $(OBJ)/src-xrandr
+XRANDR_ARCH := $(if $(filter arm64,$(TARGET_ARCH)),aarch64,x86_64)
+XRANDR_OBJ := $(OBJ)/obj-xrandr-$(XRANDR_ARCH)
+XRANDR_DST := $(OBJ)/dst-xrandr-$(XRANDR_ARCH)
+XRANDR_BINDIR := $(if $(filter arm64,$(TARGET_ARCH)),$(DST_DIR)/bin-arm64,$(DST_DIR)/bin)
+XRANDR_ENV = \
+	CC="$($(XRANDR_ARCH)-unix_TARGET)-gcc" \
+	PKG_CONFIG="$($(XRANDR_ARCH)-unix_TARGET)-pkg-config" \
+	PKG_CONFIG_LIBDIR="/usr/lib/$($(XRANDR_ARCH)-unix_LIBDIR)/pkgconfig:/usr/share/pkgconfig" \
+	CFLAGS="$($(XRANDR_ARCH)_CFLAGS) $(CFLAGS)" \
+	LDFLAGS="$($(XRANDR_ARCH)_LDFLAGS) $(LDFLAGS)"
+XRANDR_DIST := $(XRANDR_BINDIR)/xrandr
+
+$(SRC)/contrib/$(XRANDR_TARBALL):
+	mkdir -p $(SRC)/contrib
+	wget --no-use-server-timestamps -O $@ $(XRANDR_TARBALL_URL) || (rm $@; false)
+
+$(XRANDR_SRC)/configure: $(SRC)/contrib/$(XRANDR_TARBALL)
+	rm -rf $(XRANDR_SRC)
+	mkdir -p $(XRANDR_SRC)
+	tar --no-same-owner --strip-components=1 -xf $< -C $(XRANDR_SRC)
+
+$(OBJ)/.xrandr-source: $(XRANDR_SRC)/configure
+	touch $@
+
+$(OBJ)/.xrandr-configure $(OBJ)/.xrandr-build $(XRANDR_DIST): CCACHE_BASEDIR = $(XRANDR_SRC)
+
+$(XRANDR_OBJ)/config.status: $(OBJ)/.xrandr-source $(XRANDR_SRC)/configure
+	rm -rf $(XRANDR_OBJ) $(XRANDR_DST)
+	mkdir -p $(XRANDR_OBJ)
+	cd $(XRANDR_OBJ) && env $(XRANDR_ENV) $(XRANDR_SRC)/configure $(--quiet?) -C \
+	    --prefix="$(XRANDR_DST)" \
+	    --bindir="$(XRANDR_DST)/bin" \
+	    --host="$($(XRANDR_ARCH)-unix_TARGET)"
+
+$(OBJ)/.xrandr-configure: $(XRANDR_OBJ)/config.status
+	touch $@
+
+$(OBJ)/.xrandr-build: $(OBJ)/.xrandr-configure $(XRANDR_OBJ)/config.status
+	cd $(XRANDR_OBJ) && env $(XRANDR_ENV) $(MAKE)
+	cd $(XRANDR_OBJ) && env $(XRANDR_ENV) $(MAKE) install
+	touch $@
+
+$(XRANDR_DIST): $(OBJ)/.xrandr-build | $(DST_DIR)
+	mkdir -p $(XRANDR_BINDIR)
+	$(call install-strip,$(XRANDR_DST)/bin/xrandr,$(XRANDR_BINDIR))
+
+all-dist: $(XRANDR_DIST)
 
 ##
 ## openvr
@@ -1897,7 +1712,7 @@ endif
 ## default_pfx
 ##
 
-default_pfx: wine gst_good gst_bad gst_libav gst_plugins_rs lsteamclient steamexe vrclient wineopenxr $(WINEOPENXR64_JSON) dxvk dxvk-nvapi dxvk-igdext vkd3d-proton
+default_pfx: wine lsteamclient steamexe vrclient dxvk d7vk dxvk-nvapi dxvk-igdext vkd3d-proton
 	find $(DST_LIBDIR)/wine -type f -execdir chmod a-w '{}' '+'
 	rm -rf $(abspath $(DIST_PREFIX))
 	rm -rf $(abspath $(DIST_PREFIX_ARM64))
@@ -1965,10 +1780,6 @@ all-dist: $(DIST_LICENSE) $(DIST_OFL_LICENSE) $(DIST_AV1_PATENTS)
 $(eval $(call rules-source,protonfixes,$(SRCDIR)/protonfixes))
 $(eval $(call rules-common,protonfixes,x86_64,unix))
 $(eval $(call rules-common,protonfixes,aarch64,unix))
-
-$(OBJ)/.protonfixes-post-source: patches-source
-	$(foreach p,$(shell find $(PATCHES_SRC)/protonfixes/ -name "*.patch" | sort),patch --follow-symlinks -d $(PROTONFIXES_SRC) -Np1 -i $(p) &&) true
-	touch $@
 
 $(OBJ)/.protonfixes-x86_64-build:
 	cd $(PROTONFIXES_SRC) && \
@@ -2039,7 +1850,7 @@ $(DIST_COPY_TARGETS): | $(DST_DIR)
 all-dist: $(DIST_COPY_TARGETS)
 
 all-dist:
-	echo `date '+%s'` $$(GIT_DIR=$(abspath $(SRCDIR)/.git) git describe --tags 2>/dev/null || echo $(BUILD_NAME)) > $(DIST_VERSION)
+	echo `date '+%s'` `GIT_DIR=$(abspath $(SRCDIR)/.git) git describe --tags` > $(DIST_VERSION)
 
 
 ##
@@ -2065,10 +1876,10 @@ redist: all
 	mkdir -p $(REDIST_DIR)
 	rsync --delete -arx $(DST_BASE)/ $(REDIST_DIR)
 	mv $(REDIST_DIR) $(BUILD_NAME)
-	XZ_OPT="-9 -T$(J)" tar -cvJf $(BUILD_NAME).tar.xz $(BUILD_NAME)
-	sha512sum $(BUILD_NAME).tar.xz > $(BUILD_NAME).sha512sum
-	@echo "Proton build available at $(BUILD_NAME).tar.xz"
-
+	tar -cvzf $(BUILD_NAME).tar.gz $(BUILD_NAME)
+	sha512sum $(BUILD_NAME).tar.gz > $(BUILD_NAME).sha512sum
+	sha256sum $(BUILD_NAME).* > SHA256SUMS
+	@echo "Proton build available at $(BUILD_NAME).tar.gz"
 
 ##
 ## make distclean

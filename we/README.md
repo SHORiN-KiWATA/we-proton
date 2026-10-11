@@ -1,19 +1,19 @@
 # WE-Proton
 
-[DW-Proton](https://dawn.wine/dawn-winery/dwproton) 的个人 fork，攒一些 Wine（和 vkd3d-proton）的 bug 修复。自己和朋友用，不往上游提。
+基于 [GE-Proton](https://github.com/GloriousEggroll/proton-ge-custom) 和 [DW-Proton](https://dawn.wine/dawn-winery/dwproton) 的个人 Proton，攒一些 Wine（和 vkd3d-proton）的 bug 修复。自己和朋友用，不往上游提。
 
-- 分支 `we-proton`，基于 tag `dwproton-11.0-14`
-- 上游远程叫 `dwproton`
-- Wine 的修复放在 `patches/wine/`，构建时由 `Makefile.in` 自动打到 wine 源码上（`.wine-post-source`）。`wine/` 子模块保持在上游 commit 不动
-- vkd3d-proton 的修复放在 `patches/vkd3d-proton/`（路径相对 vkd3d-proton 根目录），`Makefile.in` 的 `.vkd3d-proton-post-source` 照 dxvk 的方式打上（这一段是 WE-Proton 加的）。`vkd3d-proton/` 子模块同样不动
-- protonfixes 的修复放在 `patches/protonfixes/`：官方发布包已经带着基础版本里的那些（DW 的），比基础版本多出来的由 `overlay-build.sh` 打到发布包的 `protonfixes/` 上。`protonfixes/` 子模块同样不动
-- `wine/`、`protonfixes/` 子模块和 `vkd3d-proton/subprojects/dxil-spirv` 里各有本地分支 `we-patches`，就是这些补丁对应的提交，rebase 时用
+- 顶层是 GE-Proton 的仓库，从 tag `GE-Proton11-7` 起的分支。子模块版本用 GE-Proton 的，只有 dxvk、vkd3d-proton、protonfixes 换成了 DW-Proton 用的更新版本（比较见 [`ge-dw-merge.md`](ge-dw-merge.md)）
+- Wine 子模块不改：`patches/protonprep-valve-staging.sh`（GE-Proton 的脚本）在构建前往 Valve 的 Wine 上打 GE-Proton 的补丁和 staging，最后打 `patches/dwproton/` 和 `patches/wine/`
+- `patches/dwproton/`：DW-Proton（`dwproton-11.0-14`）的 Wine 提交里 GE-Proton 没有的那些，冲突解决过。怎么挑的、丢了哪些、冲突怎么解的，见 [`ge-dw-merge.md`](ge-dw-merge.md)
+- `patches/wine/`：WE-Proton 自己的 Wine 补丁，编号沿用原来的（中间的空号是这一版不再需要的，见下表）
+- vkd3d-proton 的修复是 `patches/vkd3d-proton/we-*.patch`（路径相对 vkd3d-proton 根目录），排在 GE-Proton 的补丁后面
+- DW-Proton 的 protonfixes 游戏修复是 `patches/protonfixes/0003`–`0005`（WE-Proton 自己的 protonfixes 补丁是 `0051`），dxvk 的 HDR 检测是 `patches/dxvk/dw-hdr-detection-via-displayconfig.patch`
 
 ## 补丁
 
 | 补丁 | 修什么 |
 |---|---|
-| `wine/0001-ntoskrnl-Implement-a-few-functions-needed-by-third-p` | 第三方 KMDF 驱动需要的 `ZwQueryValueKey`（容忍值名末尾的 NUL）、`IoGetBaseFileSystemDeviceObject`、`InbvAcquireDisplayOwnership`/`InbvResetDisplay`、`SeQueryInformationToken` |
+| `wine/0001-ntoskrnl-Implement-a-few-functions-needed-by-third-p` | （这一版没有：和撤回它的 0018 一起去掉了）第三方 KMDF 驱动需要的 `ZwQueryValueKey`（容忍值名末尾的 NUL）、`IoGetBaseFileSystemDeviceObject`、`InbvAcquireDisplayOwnership`/`InbvResetDisplay`、`SeQueryInformationToken` |
 | `wine/0002-server-Free-thread-input-attachments-when-either-que` | wineserver 在 `attach_thread_input` 里释放后使用 |
 | `wine/0003-ntdll-Return-from-native-syscalls-without-writing-be` | 原生 `syscall` 指令返回时写坏 `[rsp-8]` |
 | `wine/0004-server-Follow-Windows-connect-semantics-for-datagram` | UDP socket `connect()` 到全零地址的 Windows 语义 |
@@ -24,44 +24,49 @@
 | `wine/0009-d3dcompiler-Handle-the-ISG1-OSG1-and-PSG1-signature-` | d3dcompiler 的反射和 `D3DGetBlobPart` 能读最低精度签名段（ISG1/OSG1/PSG1），和 Windows 一致 |
 | `wine/0010-winhttp-Skip-empty-lines-in-front-of-the-first-reque` | WinHttpAddRequestHeaders 跳过开头的空行（`\r\n` 等），和 Windows 一致 |
 | `wine/0011-explorer-Show-systray-icons-as-StatusNotifierItems` | 会话里有 StatusNotifierWatcher 时，通知区图标用 StatusNotifierItem（D-Bus）显示，面板上的点击转成和嵌入式图标相同的回调，气泡变成桌面通知 |
-| `wine/0012-qcap-Clear-pUnk-in-media-types-returned-to-32-bit-ca` | WoW64 下视频采集返回给 32 位程序的媒体类型把 `pUnk` 设成 NULL，和 64 位一致 |
+| `wine/0012-qcap-Clear-pUnk-in-media-types-returned-to-32-bit-ca` | （这一版没有：GE-Proton 的 `qcap-dshow-fixes` 修了同一个 bug）WoW64 下视频采集返回给 32 位程序的媒体类型把 `pUnk` 设成 NULL，和 64 位一致 |
 | `wine/0013-kernelbase-Implement-private-namespaces` | 实现私有命名空间：边界描述符、`Create/Open/ClosePrivateNamespace`，以及 `<别名>\<名字>` 对象名的解析；用它们做单实例检测的程序不再一启动就崩 |
 | `wine/0014-win32u-Deliver-input-method-text-to-threads-with-the` | 线程被 `ImmDisableIME` 关掉 IME 后，宿主输入法提交的文字以 `WM_IME_CHAR` 送到焦点窗口，不再丢掉 |
 | `wine/0015-iphlpapi-Implement-setting-interfaces-unicast-addres` | 实现 iphlpapi/NSI 的设置通路（改接口参数、加/删地址和路由），底层用 netlink 真正改 Linux 的网络配置 |
 | `wine/0016-wintun-Implement-the-Wintun-userspace-tunnel-driver-` | 用 wintun 接口建虚拟网卡的程序在 Wine 里建不了网卡；内置 wintun.dll 把接口接到 Linux 的 `/dev/net/tun`，出口、LUID 和会话语义按 Windows 实测对齐 |
 | `wine/0017-ntdll-Make-IP_UNICAST_IF-work-for-TCP-sockets-as-wel` | 程序用 `IP_UNICAST_IF` 指定出口网卡时，TCP 也真的从该网卡出去（Linux 的选项只管 UDP）；TUN 类程序“直连”的连接不再被自己的隧道吃掉 |
-| `wine/0018-Revert-ntoskrnl-Implement-a-few-functions-needed-by-` | 撤回 0001：带上它时有程序报运行环境异常，见 0001 的报告 |
+| `wine/0018-Revert-ntoskrnl-Implement-a-few-functions-needed-by-` | （这一版没有）撤回 0001：带上它时有程序报运行环境异常，见 0001 的报告 |
 | `wine/0019-ntoskrnl-Implement-InbvAcquireDisplayOwnership-and-Inbv` | 把 0018 一起撤掉的 `InbvAcquireDisplayOwnership`/`InbvResetDisplay` 加回来（空操作）：驱动调用它们时不再 abort |
 | `wine/0020-win32u-Implement-NtUserGetWindowBand` | 实现 `NtUserGetWindowBand`（以及 user32 的 `GetWindowBand`）：程序查询窗口所在的 z 序层级时不再被当成未实现函数中止；Wine 只有桌面层级，有效窗口都返回它 |
 | `wine/0021-msvcp140-msvcp140_2-vcruntime140_1-Report-a-version-` | 内置 VC++ 运行库（`msvcp140`、`msvcp140_2`、`vcruntime140_1`）的版本号报 14.99.65535，比任何已发布的运行库都高：按最低版本检查运行库的程序不再判它缺失 |
 | `wine/0022-wineboot-Keep-the-Visual-C-runtime-version-in-the-re` | wineboot 每次启动时，把 `VC\Runtimes\<arch>` 注册表键里比 `msvcp140.dll` 旧的版本提到它的版本：旧前缀（`wine.inf` 不覆盖已有值）和被写低的键也能跟上 |
 | `wine/0023-winex11-Keep-pointer-input-for-click-through-regular` | XWayland 下，带 `WS_EX_TRANSPARENT` 的普通窗口（托管、非置顶）不清空输入区域、不去掉指针事件：X 收不到穿透窗口上的指针，靠低级鼠标钩子或 `GetCursorPos()` 看光标、决定何时恢复输入的程序永远等不到鼠标回来。置顶和非托管窗口照旧穿透 |
-| `wine/0024-ntdll-Reuse-the-effective-range-after-clearing-nativ` | （GE）清掉 native view 后重试分配用有效的地址范围，不再必然失败 |
-| `wine/0025-msxml3-Add-GB2312-support-for-builtin-character-conv` | （staging）内置 msxml3 认 GB2312 编码 |
-| `wine/0026-ntdll-Reserve-some-space-for-top-down-allocation-in-` | （GE，上游 f4c5b041）大地址感知的 32 位程序在 WoW64 下保留顶部地址空间 |
-| `wine/0027-winex11-Poll-resize-completion-with-a-busy-message-q` | （GE）拖动/缩放窗口时消息队列一直忙也能结束 |
-| `wine/0028-urlmon-Pump-thread-user-messages-during-synchronous-` | （GE）同步 bind 时泵线程的所有消息 |
-| `wine/0029-ntdll-Finish-process-exit-instead-of-waiting-on-orph` | （GE）进程退出时不在已退出线程持有的 SRW 锁上永久等待 |
-| `wine/0030-win32u-Accept-SPI_SETSTICKYKEYS-SPI_SETFILTERKEYS-as` | （GE）`SPI_SETSTICKYKEYS`/`SPI_SETFILTERKEYS` 返回成功 |
-| `wine/0031-kernelbase-Don-t-dereference-NULL-in-CharPrevA-CharP` | （GE）`CharPrevA`/`CharPrevExA` 遇到 NULL 不崩 |
-| `wine/0032-server-Fix-numpad-vkey-handling` | （GE）小键盘的 vkey 处理 |
-| `wine/0033-ntdll-Read-QueryPerformanceCounter-from-the-TSC-in-u` | （GE）QueryPerformanceCounter 在用户态读 TSC（`WINE_DISABLE_QPC_TSC=1` 关闭） |
-| `wine/0034-ntdll-Allow-AI-LIMIT-to-reuse-DXBC-compute-shaders-i` | （GE，按游戏）AI LIMIT 的 DX12 计算着色器回退 |
-| `wine/0035-Revert-dwrite-Release-file-streams-when-building-col` | （GE）撤回 dwrite 的“建集合时释放文件流”（Assetto Corsa 的 HUD） |
-| `wine/0036-ntdll-Fix-Max-Payne-s-truncated-CPUID-leaf-count` | （GE，按游戏）Max Payne 的 CPUID 叶数 |
-| `wine/0037-Import-silence-starcitizen-unsupported-os-from-GE-Pr` | （GE，按游戏）Star Citizen 的“不支持的 Windows”弹窗 |
-| `wine/0038-winex11-Keep-Forza-backing-windows-unmapped-on-wlroo` | （GE，按游戏）Forza 的后台窗口在 wlroots 上保持不映射 |
-| `wine/0039-Import-unity_crash_hotfix-from-GE-Proton` | （GE）wined3d 路径下 dxgi 的一处 Unity 崩溃 |
-| `wine/0040-win32u-Restore-Return-to-Krondor-s-text-bitmap-readb` | （GE，按游戏）Return to Krondor 的文字位图读回 |
-| `wine/0041-win32u-Keep-Black-Desert-fullscreen-across-applicati` | （GE，按游戏）黑色沙漠失去焦点时保持全屏 |
-| `wine/0042-winex11-Shaped-and-real-alpha-transparency-for-layer` | （GE，默认关闭）桌面覆盖类游戏的分层窗口做形状或真透明 |
+| `wine/0024-ntdll-Reuse-the-effective-range-after-clearing-nativ` | （这一版没有：GE-Proton 直接带着原版）（GE）清掉 native view 后重试分配用有效的地址范围，不再必然失败 |
+| `wine/0025-msxml3-Add-GB2312-support-for-builtin-character-conv` | （这一版没有：GE-Proton 直接带着原版）（staging）内置 msxml3 认 GB2312 编码 |
+| `wine/0026-ntdll-Reserve-some-space-for-top-down-allocation-in-` | （这一版没有：GE-Proton 直接带着原版）（GE，上游 f4c5b041）大地址感知的 32 位程序在 WoW64 下保留顶部地址空间 |
+| `wine/0027-winex11-Poll-resize-completion-with-a-busy-message-q` | （这一版没有：GE-Proton 直接带着原版）（GE）拖动/缩放窗口时消息队列一直忙也能结束 |
+| `wine/0028-urlmon-Pump-thread-user-messages-during-synchronous-` | （这一版没有：GE-Proton 直接带着原版）（GE）同步 bind 时泵线程的所有消息 |
+| `wine/0029-ntdll-Finish-process-exit-instead-of-waiting-on-orph` | （这一版没有：GE-Proton 直接带着原版）（GE）进程退出时不在已退出线程持有的 SRW 锁上永久等待 |
+| `wine/0030-win32u-Accept-SPI_SETSTICKYKEYS-SPI_SETFILTERKEYS-as` | （这一版没有：GE-Proton 直接带着原版）（GE）`SPI_SETSTICKYKEYS`/`SPI_SETFILTERKEYS` 返回成功 |
+| `wine/0031-kernelbase-Don-t-dereference-NULL-in-CharPrevA-CharP` | （这一版没有：GE-Proton 直接带着原版）（GE）`CharPrevA`/`CharPrevExA` 遇到 NULL 不崩 |
+| `wine/0032-server-Fix-numpad-vkey-handling` | （这一版没有：GE-Proton 直接带着原版）（GE）小键盘的 vkey 处理 |
+| `wine/0033-ntdll-Read-QueryPerformanceCounter-from-the-TSC-in-u` | （这一版没有：GE-Proton 直接带着原版）（GE）QueryPerformanceCounter 在用户态读 TSC（`WINE_DISABLE_QPC_TSC=1` 关闭） |
+| `wine/0034-ntdll-Allow-AI-LIMIT-to-reuse-DXBC-compute-shaders-i` | （这一版没有：GE-Proton 直接带着原版）（GE，按游戏）AI LIMIT 的 DX12 计算着色器回退 |
+| `wine/0035-Revert-dwrite-Release-file-streams-when-building-col` | （这一版没有：GE-Proton 直接带着原版）（GE）撤回 dwrite 的“建集合时释放文件流”（Assetto Corsa 的 HUD） |
+| `wine/0036-ntdll-Fix-Max-Payne-s-truncated-CPUID-leaf-count` | （这一版没有：GE-Proton 直接带着原版）（GE，按游戏）Max Payne 的 CPUID 叶数 |
+| `wine/0037-Import-silence-starcitizen-unsupported-os-from-GE-Pr` | （这一版没有：GE-Proton 直接带着原版）（GE，按游戏）Star Citizen 的“不支持的 Windows”弹窗 |
+| `wine/0038-winex11-Keep-Forza-backing-windows-unmapped-on-wlroo` | （这一版没有：GE-Proton 直接带着原版）（GE，按游戏）Forza 的后台窗口在 wlroots 上保持不映射 |
+| `wine/0039-Import-unity_crash_hotfix-from-GE-Proton` | （这一版没有：GE-Proton 直接带着原版）（GE）wined3d 路径下 dxgi 的一处 Unity 崩溃 |
+| `wine/0040-win32u-Restore-Return-to-Krondor-s-text-bitmap-readb` | （这一版没有：GE-Proton 直接带着原版）（GE，按游戏）Return to Krondor 的文字位图读回 |
+| `wine/0041-win32u-Keep-Black-Desert-fullscreen-across-applicati` | （这一版没有：GE-Proton 直接带着原版）（GE，按游戏）黑色沙漠失去焦点时保持全屏 |
+| `wine/0042-winex11-Shaped-and-real-alpha-transparency-for-layer` | （这一版没有：GE-Proton 直接带着原版）（GE，默认关闭）桌面覆盖类游戏的分层窗口做形状或真透明 |
 | `wine/0048-wintun-Report-the-adapter-description-Windows-prog` | 内置 wintun 把 Windows 风格的网卡描述（`<tunnel type> Tunnel`）写进接口 alias，nsiproxy 报给 `GetAdaptersInfo`/`GetAdaptersAddresses`；按描述找自己建的虚拟网卡的程序（网易 UU 的路由模式，报 50004）不再找不到网卡 |
-| `vkd3d-proton/0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
-| `vkd3d-proton/0002-vkd3d-bound-present-waits-during-swapchain-drain` | （GE）销毁交换链时等待呈现有上限，不再卡死 |
-| `dxvk/0002`–`0007` | （GE）分层覆盖窗口的 DXVK 一半、获取图像受阻时保留交换链、《最终幻想14》多屏失焦不缩窗（三个）、黑色沙漠的 DXVK 一半；接在 DWProton 的 `dxvk/0001` 后面 |
+| `wine/0049-win32u-Leave-notification-icons-to-explorer` | GE-Proton 在 win32u 里另有一套 StatusNotifierItem 托盘实现，会先于 explorer 接手通知区图标；它转图标时只要颜色平面有 alpha 就不看 AND 掩码，靠掩码挖空形状的图标（WeGame 的托盘图标）透明处变成不透明的黑色。让 win32u 不接手，图标交给 0011 的 explorer 实现 |
+| `wine/0050-winewayland-Keep-a-fullscreen-state-the-compositor-a` | Wayland 驱动：合成器自己发起的全屏（全屏快捷键）不再被立刻撤销。驱动原来按窗口样式推算全屏，带标题栏或可拖动边框的窗口永远不算全屏，于是马上发 `unset_fullscreen`；交帧的线程拿着 configure 之前的窗口状态更新时也会发。这种全屏只由合成器结束，结束时没给尺寸就恢复进入前的尺寸 |
+| `wine/0052-winewayland-Don-t-ask-for-activation-of-a-window-tha` | Wayland 驱动：窗口因为合成器给了键盘焦点而被激活时，不再用 xdg_activation 向合成器再申请一次激活（niri 分支的网格概览收到申请就关掉） |
 | `protonfixes/0051-protonfixes-Also-run-fixes-for-run-when-PROTONFIXES_` | 设了 `PROTONFIXES_RUN_VERB=1` 时，用 `proton run` 启动的程序也执行 protonfixes（`waitforexitandrun` 要先等 wineserver 退出，往运行中的会话里加程序只能用 `run`）；`PROTONFIXES_DISABLE` 仍然优先 |
+| `vkd3d-proton/we-0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
+| `vkd3d-proton/0002-vkd3d-bound-present-waits-during-swapchain-drain` | （这一版没有：GE-Proton 直接带着原版）（GE）销毁交换链时等待呈现有上限，不再卡死 |
+| `dxvk/0002`–`0007` | （这一版没有：GE-Proton 直接带着原版）（GE）分层覆盖窗口的 DXVK 一半、获取图像受阻时保留交换链、《最终幻想14》多屏失焦不缩窗（三个）、黑色沙漠的 DXVK 一半 |
 
 每个补丁的现象、根因、Windows 实测、验证和排查过程见 `we/fixes/`。
+
+0003、0016、0023 在换到 GE-Proton 底座时改过（0049、0050、0052 是换底座之后新加的）：0003 改到 GE-Proton 新的 SIGSYS 处理函数里；0016 修了一处 `-Werror` 下报错的格式串；0023 和 GE-Proton 覆盖层窗口的条件合并。
 
 ## 测试
 
@@ -85,13 +90,15 @@
 - `window_band_probe`（0020，另有 32 位的 `window_band_probe32.exe`）：对各种窗口调用 `GetWindowBand`/`NtUserGetWindowBand`，打印返回值、层级和错误码；参数 `nullptr`、`nullhwnd` 测输出指针为空。是 stub 时进程被 abort
 - `input_shape_probe`（0023）：模仿 Electron 的 `setIgnoreMouseEvents(true, { forward: true })`，窗口一秒后加上 `WS_EX_LAYERED | WS_EX_TRANSPARENT`，低级鼠标钩子看到光标到了窗口上就去掉这两个样式，最后打印钩子看到的移动和窗口是否恢复；参数 `topmost` 让窗口置顶，像覆盖层。`input_shape_probe.sh [--topmost]` 在无头 gamescope（XWayland）里跑它，读出穿透时 X 输入区域的矩形数（0 = 点击穿透）和是否选了指针移动事件，再用 XTest 把指针从窗口外移进来。XTest 下 X 服务器总知道指针在哪，复现不出 niri 下的卡死，只能看 X 这一侧的状态
 - `vcrt_version_probe`（0021、0022）：打印 `VC\Runtimes\<arch>` 在两个注册表视图里的值和 system32、syswow64 里运行库 DLL 的文件版本，再按“注册表和 `msvcp140_2.dll`、`vcruntime140_1.dll` 的文件版本都不低于最低版本”检查（默认 14.44.35211，参数可改）。`wine24-redist` 是装了官方 14.44.35211 运行库之后的输出
-- `dxil-spirv/run.sh`（vkd3d-proton 0001）：用 dxil-spirv 的 `structurize-test` 跑 `*.st` 控制流图，检查生成的 SPIR-V 能通过校验。源码取 `build/overlay/src-vkd3d-proton`（先跑 `overlay-build.sh`）；`--unpatched` 用未打补丁的子模块，应该失败
+- `dxil-spirv/run.sh`（vkd3d-proton 0001）：用 dxil-spirv 的 `structurize-test` 跑 `*.st` 控制流图，检查生成的 SPIR-V 能通过校验。源码取打过补丁的 `vkd3d-proton/`（先跑 `we/build.sh` 或 protonprep）；`--unpatched` 用未打补丁的子模块，应该失败
 
-Wine 自己的测试：用 `build/overlay/src-wine` 另配一个 `--enable-tests` 的构建目录，编 `dlls/kernel32/tests`、`dlls/ntdll/tests`、`dlls/user32/tests`（0008 是 `dlls/oleaut32/tests`、`dlls/rpcrt4/tests`，0009 是 `dlls/d3dcompiler_47/tests`、`dlls/d3dcompiler_43/tests`、`dlls/d3d10/tests`，0010 是 `dlls/winhttp/tests`（winhttp:winhttp），0011 是 `dlls/shell32/tests`（shell32:systray，有和没有 watcher 各跑一遍），0012 是 `dlls/qcap/tests`（i386 和 x86_64 都编，`WINEARCH=wow64`，要接着摄像头），0014 是 `dlls/imm32/tests`（imm32:imm32）），用新旧 runner 各跑一遍、逐条比对失败项（0005 起都这样验证）。
+`regress.sh <runner> <输出目录>` 一次跑完上面大部分探测（在 Steam Linux Runtime 4.0 里，和 wegame-launcher 相同的方式）；`regress.sh --compare <旧> <新>` 屏蔽掉句柄和地址后比较。每次发布的结果存在 `regress-<名字>/`，下次和它比。
+
+Wine 自己的测试：用打过补丁的 `wine/`（跑过 protonprep 之后）另配一个 `--enable-tests` 的构建目录，编 `dlls/kernel32/tests`、`dlls/ntdll/tests`、`dlls/user32/tests`（0008 是 `dlls/oleaut32/tests`、`dlls/rpcrt4/tests`，0009 是 `dlls/d3dcompiler_47/tests`、`dlls/d3dcompiler_43/tests`、`dlls/d3d10/tests`，0010 是 `dlls/winhttp/tests`（winhttp:winhttp），0011 是 `dlls/shell32/tests`（shell32:systray，有和没有 watcher 各跑一遍），0012 是 `dlls/qcap/tests`（i386 和 x86_64 都编，`WINEARCH=wow64`，要接着摄像头），0014 是 `dlls/imm32/tests`（imm32:imm32）），用新旧 runner 各跑一遍、逐条比对失败项（0005 起都这样验证）。
 
 ## 诊断
 
-诊断补丁在 `we/diag/`，不进正式构建，打在发布版上构建成 `build/diag-runner`：
+诊断补丁在 `we/diag/`，不进正式构建。要用时临时复制进 `patches/wine/`，构建一个单独命名的 runner（`we/build.sh --name we-proton-diag`），用完删掉：
 
 - `0001-trace-skip-noisy-syscalls.patch`：`+syscall` 跟踪跳过 QPC、yield、查询系统时间
 - `0002-server-log-afd-poll.patch`：wineserver 记录可能阻塞的 AFD poll 和数据报 connect
@@ -107,62 +114,51 @@ Wine 自己的测试：用 `build/overlay/src-wine` 另配一个 `--enable-tests
 
 ## 构建
 
-快速构建（约 1–2 分钟，第二次之后只编改动的部分）：
-
 ```
-we/overlay-build.sh --install
+we/build.sh --name we-proton-<版本> [--install] [--jobs N] [--skip-prep]
 ```
 
-脚本做的事：
+需要 docker。第一次要几个小时，之后靠 ccache（`~/.ccache`）快一些。脚本做的事：
 
-1. 下载官方 `dwproton-11.0-14` 发布包到 `~/.cache/we-proton/`，校验 sha512
-2. 从 `wine/` 导出源码，打 `patches/wine/*.patch`，生成 configure 和 vulkan 头文件
-3. 在 `Makefile.in` 指定的 Steam Linux Runtime 4.0 SDK 镜像里（docker）配置、编译 Wine，编译参数照抄 `Makefile.in`（`-march=nocona`、禁用 AVX、`-mcmodel=small` 等），unix 库只依赖运行时里有的库（在宿主机上编会链接宿主机的 `libunwind`，进不了运行时）。只编补丁动到的东西：`dlls/ntdll/unix` → `ntdll.so`，`server` → `wineserver`，`dlls/ntoskrnl.exe` → `ntoskrnl.exe`，`dlls/win32u` → `win32u.so`，`dlls/rpcrt4` → 64 位和 32 位的 `rpcrt4.dll`（所以配置了 i386 和 x86_64 两个 PE 架构），`dlls/d3dcompiler_43` → 共用这份源码的 `d3d10.dll` 和 `d3dcompiler_33`～`43`、`46`、`47`（两个架构）。补丁动到别的目录时脚本会报错，要先在 `TARGETS` 里加映射（`*/tests/*` 不发布，跳过）
-4. `patches/vkd3d-proton/` 有补丁时：同步 `vkd3d-proton/` 源码到 `build/overlay/src-vkd3d-proton`，打补丁，用 meson 交叉编译 x86_64 和 i386 的 `d3d12.dll`、`d3d12core.dll`，编译参数照抄 `Makefile.in`（`-march=nocona`、禁用 AVX、`-O3`、静态 libstdc++）。需要 `git submodule update --init --recursive vkd3d-proton`；widl 用 overlay 里 wine 编出来的
-5. `patches/protonfixes/` 里比 `dwproton-11.0-14` 多出来的补丁，打到发布包的 `protonfixes/` 上（Python，不用编译）；基础版本已有的补丁被改动或删掉时脚本报错，要走完整构建
-6. 替换进发布包，改名为 `we-proton-11.0-14-<N>`，输出到 `build/`，再生成三个发布文件：`<名字>.tar.xz`（runner）、`<名字>.sha512sum`、`<名字>-source.tar.xz`（构建用的、打好补丁的 Wine 和 vkd3d-proton 源码，满足 LGPL 提供源码的要求）
-7. `--install` 时复制到 `~/.local/share/proton/runners/WE-Proton Latest`
+1. `git submodule update --init --force --filter=tree:0 --recursive`：子模块回到这棵树钉住的提交。子模块里没提交的改动会丢，要改 Wine 在开发分支上改（见「跟进上游新版本」）
+2. 跑 `patches/protonprep-valve-staging.sh`（日志 `build/protonprep.log`，`LC_ALL=C`）：重置并打补丁 dxvk、vkd3d-proton（包括它嵌套的 dxil-spirv）、protonfixes 等子模块，准备 wine-mono 源码，往 Valve 的 Wine 上打 GE-Proton 的补丁、staging、`patches/dwproton/`、`patches/wine/`，最后 `autoreconf` 和 `make_requests`。脚本本身不会因为补丁打不上而停下，`build.sh` 在日志里找 patch、`git apply`、`git revert` 的报错（`FAILED`、`error:`、`fatal:`、`Failed to apply`、文件不存在等），以及打补丁的目录里有没有 `.rej`，有就报错退出
+3. 在 `build/obj` 里 `configure.sh --build-name=<名字>`，`make redist`（日志 `build/make.log`），全部在 `Makefile.in` 指定的 Steam Linux Runtime 4.0 SDK 镜像里编
+4. 把结果移到 `build/<名字>`，`version` 文件改成 `<时间> <名字>`（`Makefile.in` 写的是 `git describe`，启动器从这里读 runner 名字），加上 `we-proton-build-info` 和 `README-WE-Proton.md`
+5. 生成三个发布文件：`<名字>.tar.xz`（runner）、`<名字>.sha512sum`、`<名字>-source.tar.xz`（打好补丁的 Wine、vkd3d-proton、dxvk 源码和 7-Zip 源码，满足 LGPL 提供源码的要求）。`files/utils/7zz` 的许可证复制成 `LICENSE.7zip`、`COPYING.7zip`
+6. `--install` 时复制到 `~/.local/share/proton/runners/WE-Proton Latest`
 
-`--release N` 改发布号，`--jobs N` 改并行数。
+每次都清空 `build/obj` 从头编：`Makefile.in` 对 xz 这种在源码副本里生成 configure 的组件做不了第二次构建（下次同步时发现源码副本多了生成的文件，重新同步、把它们删掉，configure 的完成标记却还在，接着编就找不到 `build-aux/missing`）。有 ccache，从头编一次大约一个多小时。想试增量，可以自己在 `build/obj` 里跑 `make redist`，碰到上面的错误再清空。
 
-完整构建走上游的容器流程（`make redist`，几个小时），结果应该一样，没试过。
+`--skip-prep` 跳过第 1、2 步，用在补丁已经打好、不想重新打一遍的时候。
+
+只改了 Wine 补丁、想快点验证时，可以先单独编 Wine：在 SDK 镜像里对打好补丁的 `wine/` 跑 `dlls/winevulkan/make_vulkan -x vk.xml -X video.xml`、`tools/make_specfiles`，再用 `Makefile.in` 里 `WINE_AUTOCONF_ARGS` 的参数（`--enable-werror` 等）配置编译。这一步只查编译错误，不出 runner。
 
 ## 发布
 
-tag 和 Release 名都用 runner 的名字（`we-proton-11.0-14-<N>`），tag 打在构建用的那个提交上（`we-proton-build-info` 里的 `we-proton:` 一行），三个文件原样上传：
+名字用 `we-proton-ge<GE-Proton 版本>-<N>`，例如 `we-proton-ge11-7-25`。`N` 接着之前基于 DW-Proton 的 `we-proton-11.0-14-<N>` 往下编。wegame-launcher 把名字里的数字依次比大小来挑最新的 runner（`11.0-14-24` 是 (11, 0, 14, 24)，`ge11-7-25` 是 (11, 7, 25)），所以新名字排在旧的后面。
+
+tag 和 Release 名都用 runner 的名字，tag 打在构建用的那个提交上（`we-proton-build-info` 里的 `we-proton:` 一行），三个文件原样上传：
 
 ```
-gh release create we-proton-11.0-14-<N> --target <提交> --title we-proton-11.0-14-<N> --notes-file <说明> \
-    build/we-proton-11.0-14-<N>.tar.xz build/we-proton-11.0-14-<N>.sha512sum build/we-proton-11.0-14-<N>-source.tar.xz
+gh release create <名字> --target <提交> --title <名字> --notes-file <说明> \
+    build/<名字>.tar.xz build/<名字>.sha512sum build/<名字>-source.tar.xz
 ```
 
 [wegame-launcher](https://github.com/SHORiN-KiWATA/wegame-launcher) 从最新的 Release 下载 `<tag>.tar.xz`，用 `<tag>.sha512sum` 校验，所以这两个文件名不能改。
 
 ## 用法
 
-runner 名字是 `we-proton-11.0-14-<N>`，在启动器里手动选。`proton` 脚本里的 `CURRENT_PREFIX_VERSION` 没改，还是 `dwproton-11.0-14`，在 dwproton 和 WE-Proton 之间切换不会触发前缀升级。
+runner 名字就是 `we-proton-ge…`，wegame-launcher 自动选找到的最新 WE-Proton，其他启动器里手动选。`proton` 脚本里的 `CURRENT_PREFIX_VERSION` 是 GE-Proton 的（`GE-Proton11-7`），从基于 DW-Proton 的旧版换过来时前缀会升级一次。
 
 ## 跟进上游新版本
 
-```
-git fetch dwproton --tags
-git rebase --onto dwproton-11.0-NN dwproton-11.0-14 we-proton
-git submodule update wine
-cd wine && git rebase --onto <新的 wine commit> b585905 we-patches   # 冲突在这里解决
-git format-patch -o ../patches/wine <新的 wine commit>
-```
+照 [`upstream-sync.md`](upstream-sync.md) 一步一步做（写给 AI agent 的操作手册，每一步有命令和检查，判断不了的地方会让你停下问用户）。大致是：
 
-vkd3d-proton 同理：`git submodule update --init --recursive vkd3d-proton` 之后，在 `vkd3d-proton/subprojects/dxil-spirv` 里把 `we-patches` rebase 到新的 dxil-spirv commit，再导出：
-
-```
-git format-patch --src-prefix=a/subprojects/dxil-spirv/ --dst-prefix=b/subprojects/dxil-spirv/ -o ../../../patches/vkd3d-proton <新的 dxil-spirv commit>
-```
-
-上游修了同一个问题的话，删掉对应的补丁即可（`patches/vkd3d-proton/` 空了 `overlay-build.sh` 就不编 vkd3d-proton）。
-
-然后把 `overlay-build.sh` 里的 `BASE` 改成新 tag，重新构建，再跑一遍 `we/tests` 和 `we/tests/dxil-spirv/run.sh`。
+- GE-Proton 出新版：合并 GE-Proton 的新 tag，解决顶层冲突（protonprep 里我们的三处改动、7zip 段、子模块版本）；`we/sync/wine-dev.sh` 在 `wine/` 里重建开发分支（GE-Proton 打完补丁的基底 + `patches/dwproton/` + `patches/wine/`）；`we/sync/dup-titles.py` 找出 GE-Proton 新版本已经带上的 DW-Proton 补丁并删掉；`we/sync/export-patches.py` 导出；构建，`we/tests/regress.sh` 和上一版的基线比较
+- DW-Proton 出新版：在 DW-Proton 的 Wine 仓库里列出新增的提交，按规则（GE-Proton 已有的不要，视频相关的不要，其余能打上的要）cherry-pick 到 `we-dw` 上，再接上 WE-Proton 的补丁，导出、构建、测试，记进 `ge-dw-merge-commits.txt` 和 `dw-proton-version`
+- 上游修了同一个问题：删掉对应的补丁
 
 ## 注意
 
 - 根目录的 `AGENTS.md` 是给 AI agent 的规定（问题报到哪里、反作弊和竞技游戏、补丁和报告的写法），动手前先看
-- 不要以 DWProton 的名义发布，也不要往上游提 issue/PR
+- 不要以 GE-Proton 或 DW-Proton 的名义发布，也不要往上游提 issue/PR

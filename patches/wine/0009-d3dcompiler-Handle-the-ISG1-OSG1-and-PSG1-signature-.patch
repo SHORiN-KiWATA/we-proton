@@ -1,4 +1,4 @@
-From a3c9210e014ff8902f61518a9a811121859ff2f2 Mon Sep 17 00:00:00 2001
+From 329f4bcb92c172dfca780600897ef523163a645a Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Thu, 8 Oct 2026 20:07:17 +0900
 Subject: [PATCH] d3dcompiler: Handle the ISG1, OSG1 and PSG1 signature chunks.
@@ -590,6 +590,3 @@ index 85c2097c0fb..712c945e815 100644
 +    test_reflection_min_precision();
 +#endif
  }
--- 
-2.56.0
-

@@ -1,7 +1,7 @@
-From 6963f0df3ee29d1a6cce437b2e3e42d4311aa62f Mon Sep 17 00:00:00 2001
+From ab2cf51c31c982a0ebfada6ce9d603d48f759db1 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Wed, 7 Oct 2026 14:26:58 +0900
-Subject: [PATCH 4/5] server: Follow Windows connect() semantics for datagram
+Subject: [PATCH] server: Follow Windows connect() semantics for datagram
  sockets.
 
 Measured on Windows 11 (26200):
@@ -26,7 +26,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  2 files changed, 49 insertions(+), 4 deletions(-)
 
 diff --git a/dlls/ws2_32/tests/afd.c b/dlls/ws2_32/tests/afd.c
-index b011c0d..a9c1db9 100644
+index b011c0da69f..a9c1db9a2de 100644
 --- a/dlls/ws2_32/tests/afd.c
 +++ b/dlls/ws2_32/tests/afd.c
 @@ -854,7 +854,7 @@ static void test_poll(void)
@@ -39,7 +39,7 @@ index b011c0d..a9c1db9 100644
      {
          ok(!io.Status, "got %#lx\n", io.Status);
 diff --git a/server/sock.c b/server/sock.c
-index d12afc0..db87670 100644
+index d12afc0e25f..db8767049e3 100644
 --- a/server/sock.c
 +++ b/server/sock.c
 @@ -301,6 +301,7 @@ struct sock
@@ -150,6 +150,3 @@ index d12afc0..db87670 100644
                  if (sock->errors[i])
                  {
                      error = sock->errors[i];
--- 
-2.56.0
-

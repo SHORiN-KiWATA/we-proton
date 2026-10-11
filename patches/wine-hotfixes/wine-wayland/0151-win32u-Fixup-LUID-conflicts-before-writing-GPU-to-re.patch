@@ -1,0 +1,50 @@
+From e64f906e8034869522d1e481fa78694cb84ebec2 Mon Sep 17 00:00:00 2001
+From: Etaash Mathamsetty
+ <45927311+Etaash-mathamsetty@users.noreply.github.com>
+Date: Wed, 24 Jun 2026 17:35:41 -0400
+Subject: [PATCH 151/285] win32u: Fixup LUID conflicts before writing GPU to
+ registry.
+
+---
+ dlls/win32u/sysparams.c | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
+index 1f3a1087721..6cc9c13e7b7 100644
+--- a/dlls/win32u/sysparams.c
++++ b/dlls/win32u/sysparams.c
+@@ -1813,7 +1813,7 @@ static void add_gpu( const char *name, const struct pci_id *pci_id, const GUID *
+     KEY_VALUE_PARTIAL_INFORMATION *value = (void *)buffer;
+     struct gpu_info *vulkan_gpu = NULL, *opengl_gpu = NULL;
+     ULONGLONG memory = 0;
+-    struct gpu *gpu;
++    struct gpu *gpu, *temp;
+     unsigned int i;
+     HKEY hkey, subkey;
+     DWORD len;
+@@ -1892,6 +1892,22 @@ static void add_gpu( const char *name, const struct pci_id *pci_id, const GUID *
+ 
+     NtClose( hkey );
+ 
++    /* fixup LUID conflicts, hard cap at 10 iterations */
++    for (i = 0; i < 10; i++)
++    {
++        LIST_FOR_EACH_ENTRY( temp, &gpus, struct gpu, entry )
++        {
++            if (temp->luid.HighPart == gpu->luid.HighPart &&
++                temp->luid.LowPart == gpu->luid.LowPart)
++            {
++                NtAllocateLocallyUniqueId( &gpu->luid );
++                ERR( "New LUID %08x%08x\n", gpu->luid.HighPart, gpu->luid.LowPart );
++                continue;
++            }
++        }
++        break;
++    }
++
+     if (!memory && vulkan_gpu) memory = vulkan_gpu->memory;
+     if (!memory && opengl_gpu) memory = opengl_gpu->memory;
+     if (!memory) memory = 1024 * 1024 * 1024;
+-- 
+2.55.0
+

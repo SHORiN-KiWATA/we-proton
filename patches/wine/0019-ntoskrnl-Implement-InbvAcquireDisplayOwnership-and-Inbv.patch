@@ -1,4 +1,4 @@
-From cdc5bac3e2cc4688e65a1439a9d3f38b41328536 Mon Sep 17 00:00:00 2001
+From 579683b58546888e50c64f4d6e7ed53d5a042d08 Mon Sep 17 00:00:00 2001
 From: SHORiN-KIWATA <shorin@users.noreply.github.com>
 Date: Fri, 9 Oct 2026 02:21:21 +0900
 Subject: [PATCH] ntoskrnl: Implement InbvAcquireDisplayOwnership and
@@ -10,10 +10,10 @@ Subject: [PATCH] ntoskrnl: Implement InbvAcquireDisplayOwnership and
  2 files changed, 17 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/ntoskrnl.exe/ntoskrnl.c b/dlls/ntoskrnl.exe/ntoskrnl.c
-index 95d7e74964d..59c29a61a72 100644
+index dbac4f7050d..469689ff4ca 100644
 --- a/dlls/ntoskrnl.exe/ntoskrnl.c
 +++ b/dlls/ntoskrnl.exe/ntoskrnl.c
-@@ -3193,6 +3193,21 @@ BOOLEAN WINAPI MmIsAddressValid(PVOID VirtualAddress)
+@@ -3239,6 +3239,21 @@ BOOLEAN WINAPI MmIsAddressValid(PVOID VirtualAddress)
      return !IsBadReadPtr(VirtualAddress, 1);
  }
  
@@ -36,7 +36,7 @@ index 95d7e74964d..59c29a61a72 100644
   *           MmGetPhysicalAddress   (NTOSKRNL.EXE.@)
   */
 diff --git a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
-index b1c8582086b..9c0216e37c6 100644
+index 886f367bf3e..a8a31b4f732 100644
 --- a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
 +++ b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
 @@ -314,7 +314,7 @@
@@ -57,6 +57,3 @@ index b1c8582086b..9c0216e37c6 100644
  @ stub InbvSetScrollRegion
  @ stub InbvSetTextColor
  @ stub InbvSolidColorFill
--- 
-2.56.0
-

@@ -1,0 +1,103 @@
+From 0985560e09171bd2bda960a13c3dafd59e0d0a37 Mon Sep 17 00:00:00 2001
+From: Nello De Gregoris <bluechxindv@gmail.com>
+Date: Tue, 22 Sep 2026 17:59:36 +0200
+Subject: [PATCH] rsaenh: Pad the HMAC key with the block length of the hash
+ algorithm.
+
+The block length is 16 bytes for MD2 and 128 for SHA-384 and SHA-512, not 64 for all of them.
+
+(cherry picked from commit 31342cd5535084f4b8556a3ec0c87bae12a71787)
+
+CW-Bug-Id: #27698
+---
+ dlls/rsaenh/implglue.h |  5 +++++
+ dlls/rsaenh/rsaenh.c   | 18 ++++++++++--------
+ 2 files changed, 15 insertions(+), 8 deletions(-)
+
+diff --git a/dlls/rsaenh/implglue.h b/dlls/rsaenh/implglue.h
+index 222809b8367..6a0ccf9c7a4 100644
+--- a/dlls/rsaenh/implglue.h
++++ b/dlls/rsaenh/implglue.h
+@@ -66,6 +66,11 @@ static inline DWORD hash_len_impl(const struct hash *hash)
+     return hash->desc->hashsize;
+ }
+ 
++static inline DWORD hash_block_len_impl(const struct hash *hash)
++{
++    return hash->desc->blocksize;
++}
++
+ BOOL export_public_key_impl(BYTE *pbDest, const KEY_CONTEXT *pKeyContext, DWORD dwKeyLen,
+                             DWORD *pdwPubExp);
+ BOOL import_public_key_impl(const BYTE *pbSrc, KEY_CONTEXT *pKeyContext, DWORD dwKeyLen,
+diff --git a/dlls/rsaenh/rsaenh.c b/dlls/rsaenh/rsaenh.c
+index 9bc43afcca1..fc8e72b1923 100644
+--- a/dlls/rsaenh/rsaenh.c
++++ b/dlls/rsaenh/rsaenh.c
+@@ -620,14 +620,14 @@ static inline void free_hmac_info(PHMAC_INFO hmac_info) {
+  * NOTES
+  *  See Internet RFC 2104 for details on the HMAC algorithm.
+  */
+-static BOOL copy_hmac_info(PHMAC_INFO *dst, const HMAC_INFO *src) {
++static BOOL copy_hmac_info(PHMAC_INFO *dst, const HMAC_INFO *src, DWORD block_len) {
+     if (!src) return FALSE;
+     *dst = malloc(sizeof(HMAC_INFO));
+     if (!*dst) return FALSE;
+     **dst = *src;
+     (*dst)->pbInnerString = NULL;
+     (*dst)->pbOuterString = NULL;
+-    if ((*dst)->cbInnerString == 0) (*dst)->cbInnerString = RSAENH_HMAC_DEF_PAD_LEN;
++    if ((*dst)->cbInnerString == 0) (*dst)->cbInnerString = block_len;
+     (*dst)->pbInnerString = malloc((*dst)->cbInnerString);
+     if (!(*dst)->pbInnerString) {
+         free_hmac_info(*dst);
+@@ -636,8 +636,8 @@ static BOOL copy_hmac_info(PHMAC_INFO *dst, const HMAC_INFO *src) {
+     if (src->cbInnerString) 
+         memcpy((*dst)->pbInnerString, src->pbInnerString, src->cbInnerString);
+     else 
+-        memset((*dst)->pbInnerString, RSAENH_HMAC_DEF_IPAD_CHAR, RSAENH_HMAC_DEF_PAD_LEN);
+-    if ((*dst)->cbOuterString == 0) (*dst)->cbOuterString = RSAENH_HMAC_DEF_PAD_LEN;
++        memset((*dst)->pbInnerString, RSAENH_HMAC_DEF_IPAD_CHAR, block_len);
++    if ((*dst)->cbOuterString == 0) (*dst)->cbOuterString = block_len;
+     (*dst)->pbOuterString = malloc((*dst)->cbOuterString);
+     if (!(*dst)->pbOuterString) {
+         free_hmac_info(*dst);
+@@ -646,7 +646,7 @@ static BOOL copy_hmac_info(PHMAC_INFO *dst, const HMAC_INFO *src) {
+     if (src->cbOuterString) 
+         memcpy((*dst)->pbOuterString, src->pbOuterString, src->cbOuterString);
+     else 
+-        memset((*dst)->pbOuterString, RSAENH_HMAC_DEF_OPAD_CHAR, RSAENH_HMAC_DEF_PAD_LEN);
++        memset((*dst)->pbOuterString, RSAENH_HMAC_DEF_OPAD_CHAR, block_len);
+     return TRUE;
+ }
+ 
+@@ -2517,7 +2517,7 @@ BOOL WINAPI RSAENH_CPDuplicateHash(HCRYPTPROV hUID, HCRYPTHASH hHash, DWORD *pdw
+     if (*phHash != (HCRYPTHASH)INVALID_HANDLE_VALUE)
+     {
+         *pDestHash = *pSrcHash;
+-        copy_hmac_info(&pDestHash->pHMACInfo, pSrcHash->pHMACInfo);
++        copy_hmac_info(&pDestHash->pHMACInfo, pSrcHash->pHMACInfo, 0);
+         copy_data_blob(&pDestHash->tpPRFParams.blobLabel, &pSrcHash->tpPRFParams.blobLabel);
+         copy_data_blob(&pDestHash->tpPRFParams.blobSeed, &pSrcHash->tpPRFParams.blobSeed);
+     }
+@@ -4748,7 +4748,7 @@ BOOL WINAPI RSAENH_CPSetHashParam(HCRYPTPROV hProv, HCRYPTHASH hHash, DWORD dwPa
+     CRYPTHASH *pCryptHash;
+     CRYPTKEY *pCryptKey;
+     struct hash inner;
+-    DWORD i;
++    DWORD block_len, i;
+ 
+     TRACE("(hProv=%08Ix, hHash=%08Ix, dwParam=%08lx, pbData=%p, dwFlags=%08lx)\n",
+            hProv, hHash, dwParam, pbData, dwFlags);
+@@ -4780,8 +4780,10 @@ BOOL WINAPI RSAENH_CPSetHashParam(HCRYPTPROV hProv, HCRYPTHASH hHash, DWORD dwPa
+                 return FALSE;
+             }
+ 
++            block_len = hash_block_len_impl(&inner);
++
+             free_hmac_info(pCryptHash->pHMACInfo);
+-            if (!copy_hmac_info(&pCryptHash->pHMACInfo, (PHMAC_INFO)pbData)) return FALSE;
++            if (!copy_hmac_info(&pCryptHash->pHMACInfo, (PHMAC_INFO)pbData, block_len)) return FALSE;
+ 
+             if (!lookup_handle(&handle_table, pCryptHash->hKey, RSAENH_MAGIC_KEY, 
+                                (OBJECTHDR**)&pCryptKey)) 

@@ -1,4 +1,4 @@
-From 7e6456c89e6c4b6fa78317174929c78aebfe5f1c Mon Sep 17 00:00:00 2001
+From b6f165309689383f609fff80c85ded4ad60a0b5e Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Thu, 8 Oct 2026 18:58:06 +0900
 Subject: [PATCH] rpcrt4: Marshal type library parameters without a direction
@@ -66,6 +66,3 @@ index 1006bf1d3a0..69063dd811c 100644
  
      hr = get_param_info(typeinfo, tdesc, is_in, is_out, byval, &server_size, &flags,
              &basetype, &tfs_tdesc);
--- 
-2.56.0
-

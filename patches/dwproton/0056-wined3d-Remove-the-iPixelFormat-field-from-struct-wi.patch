@@ -1,0 +1,91 @@
+From 5fa96e7259d9ba290ab2221d0131489dfba7967c Mon Sep 17 00:00:00 2001
+From: Elizabeth Figura <zfigura@codeweavers.com>
+Date: Tue, 17 Feb 2026 19:16:10 -0600
+Subject: [PATCH] wined3d: Remove the "iPixelFormat" field from struct
+ wined3d_pixel_format.
+
+It's redundant with the array index.
+
+(cherry picked from commit 60fbf1034c9b53ee0d4cb1e2abcd5c0f94f9a6ad)
+---
+ dlls/wined3d/adapter_gl.c      | 6 ++----
+ dlls/wined3d/context_gl.c      | 2 +-
+ dlls/wined3d/wined3d_gl.h      | 1 +
+ dlls/wined3d/wined3d_private.h | 1 -
+ 4 files changed, 4 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/wined3d/adapter_gl.c b/dlls/wined3d/adapter_gl.c
+index 68c45b62293..af9d765be5f 100644
+--- a/dlls/wined3d/adapter_gl.c
++++ b/dlls/wined3d/adapter_gl.c
+@@ -4006,7 +4006,6 @@ static void wined3d_adapter_init_fb_cfgs(struct wined3d_adapter_gl *adapter_gl,
+             if (!GL_EXTCALL(wglGetPixelFormatAttribivARB(dc, format_id, 0, attrib_count, attribs, values)))
+                 continue;
+ 
+-            cfg->iPixelFormat = format_id;
+             cfg->redSize = values[0];
+             cfg->greenSize = values[1];
+             cfg->blueSize = values[2];
+@@ -4039,7 +4038,7 @@ static void wined3d_adapter_init_fb_cfgs(struct wined3d_adapter_gl *adapter_gl,
+ 
+             TRACE("iPixelFormat=%d, iPixelType=%#x, doubleBuffer=%d, RGBA=%d/%d/%d/%d, "
+                     "depth=%d, stencil=%d, samples=%d, windowDrawable=%d\n",
+-                    cfg->iPixelFormat, cfg->iPixelType, cfg->doubleBuffer,
++                    format_id, cfg->iPixelType, cfg->doubleBuffer,
+                     cfg->redSize, cfg->greenSize, cfg->blueSize, cfg->alphaSize,
+                     cfg->depthSize, cfg->stencilSize, cfg->numSamples, cfg->windowDrawable);
+ 
+@@ -4072,7 +4071,6 @@ static void wined3d_adapter_init_fb_cfgs(struct wined3d_adapter_gl *adapter_gl,
+                 continue;
+             }
+ 
+-            cfg->iPixelFormat = format_id;
+             cfg->redSize = pfd.cRedBits;
+             cfg->greenSize = pfd.cGreenBits;
+             cfg->blueSize = pfd.cBlueBits;
+@@ -4089,7 +4087,7 @@ static void wined3d_adapter_init_fb_cfgs(struct wined3d_adapter_gl *adapter_gl,
+ 
+             TRACE("iPixelFormat=%d, iPixelType=%#x, doubleBuffer=%d, RGBA=%d/%d/%d/%d, "
+                     "depth=%d, stencil=%d, windowDrawable=%d\n",
+-                    cfg->iPixelFormat, cfg->iPixelType, cfg->doubleBuffer,
++                    format_id, cfg->iPixelType, cfg->doubleBuffer,
+                     cfg->redSize, cfg->greenSize, cfg->blueSize, cfg->alphaSize,
+                     cfg->depthSize, cfg->stencilSize, cfg->windowDrawable);
+ 
+diff --git a/dlls/wined3d/context_gl.c b/dlls/wined3d/context_gl.c
+index 830ff95ad40..07587d88c3d 100644
+--- a/dlls/wined3d/context_gl.c
++++ b/dlls/wined3d/context_gl.c
+@@ -1728,7 +1728,7 @@ static int context_choose_pixel_format(const struct wined3d_device *device, HDC
+ 
+         if (value > current_value)
+         {
+-            iPixelFormat = cfg->iPixelFormat;
++            iPixelFormat = i + 1;
+             current_value = value;
+         }
+     }
+diff --git a/dlls/wined3d/wined3d_gl.h b/dlls/wined3d/wined3d_gl.h
+index 4e74c769ab0..c8de3e6ccae 100644
+--- a/dlls/wined3d/wined3d_gl.h
++++ b/dlls/wined3d/wined3d_gl.h
+@@ -827,6 +827,7 @@ struct wined3d_adapter_gl
+ 
+     struct wined3d_gl_info gl_info;
+ 
++    /* Indexed by the WGL pixel format index minus 1. */
+     struct wined3d_pixel_format *pixel_formats;
+     unsigned int pixel_format_count;
+ };
+diff --git a/dlls/wined3d/wined3d_private.h b/dlls/wined3d/wined3d_private.h
+index bb0ec039dab..634d48594b6 100644
+--- a/dlls/wined3d/wined3d_private.h
++++ b/dlls/wined3d/wined3d_private.h
+@@ -2072,7 +2072,6 @@ extern const struct wined3d_light WINED3D_default_light;
+ 
+ struct wined3d_pixel_format
+ {
+-    int iPixelFormat; /* WGL pixel format */
+     int iPixelType; /* WGL pixel type e.g. WGL_TYPE_RGBA_ARB, WGL_TYPE_RGBA_FLOAT_ARB or WGL_TYPE_COLORINDEX_ARB */
+     int redSize, greenSize, blueSize, alphaSize, colorSize;
+     int depthSize, stencilSize;

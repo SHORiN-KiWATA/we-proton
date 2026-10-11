@@ -1,0 +1,51 @@
+From 1973823a038d8318377d6c818132c59123fc2b5a Mon Sep 17 00:00:00 2001
+From: Nello De Gregoris <bluechxindv@gmail.com>
+Date: Wed, 23 Sep 2026 11:54:38 +0200
+Subject: [PATCH] rsaenh: Use the hash implementation for the HMAC key in
+ CPSetHashParam().
+
+(cherry picked from commit 5dc1fbd12b8297810af22f56fd2e6699faea033d)
+
+CW-Bug-Id: #27698
+---
+ dlls/rsaenh/rsaenh.c | 26 +++++---------------------
+ 1 file changed, 5 insertions(+), 21 deletions(-)
+
+diff --git a/dlls/rsaenh/rsaenh.c b/dlls/rsaenh/rsaenh.c
+index 3cfce34c05c..9bc43afcca1 100644
+--- a/dlls/rsaenh/rsaenh.c
++++ b/dlls/rsaenh/rsaenh.c
+@@ -4791,28 +4791,12 @@ BOOL WINAPI RSAENH_CPSetHashParam(HCRYPTPROV hProv, HCRYPTHASH hHash, DWORD dwPa
+             }
+ 
+             if (pCryptKey->aiAlgid == CALG_HMAC && !pCryptKey->dwKeyLen) {
+-                HCRYPTHASH hKeyHash;
+-                DWORD keyLen;
+-
+-                if (!RSAENH_CPCreateHash(hProv, ((PHMAC_INFO)pbData)->HashAlgid, 0, 0,
+-                    &hKeyHash))
+-                    return FALSE;
+-                if (!RSAENH_CPHashData(hProv, hKeyHash, pCryptKey->blobHmacKey.pbData,
+-                    pCryptKey->blobHmacKey.cbData, 0))
+-                {
+-                    RSAENH_CPDestroyHash(hProv, hKeyHash);
+-                    return FALSE;
+-                }
+-                keyLen = sizeof(pCryptKey->abKeyValue);
+-                if (!RSAENH_CPGetHashParam(hProv, hKeyHash, HP_HASHVAL, pCryptKey->abKeyValue,
+-                    &keyLen, 0))
+-                {
+-                    RSAENH_CPDestroyHash(hProv, hKeyHash);
+-                    return FALSE;
+-                }
+-                pCryptKey->dwKeyLen = keyLen;
+-                RSAENH_CPDestroyHash(hProv, hKeyHash);
++                update_hash_impl(&inner, pCryptKey->blobHmacKey.pbData,
++                                 pCryptKey->blobHmacKey.cbData);
++                pCryptKey->dwKeyLen = hash_len_impl(&inner);
++                finalize_hash_impl(&inner, pCryptKey->abKeyValue, pCryptKey->dwKeyLen);
+             }
++
+             for (i=0; i<RSAENH_MIN(pCryptKey->dwKeyLen,pCryptHash->pHMACInfo->cbInnerString); i++) {
+                 pCryptHash->pHMACInfo->pbInnerString[i] ^= pCryptKey->abKeyValue[i];
+             }

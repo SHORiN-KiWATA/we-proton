@@ -11,14 +11,10 @@ VKBASALT_MESON_ARGS = \
 
 VKBASALT_DEPENDS = vulkan-headers spirv-headers
 
-$(eval $(call rules-source,vkbasalt,$(SRCDIR)/vklayers/vkbasalt))
+$(eval $(call rules-source,vkbasalt,$(SRCDIR)/vklayers/vkBasalt))
 $(eval $(call rules-meson,vkbasalt,i386,unix))
 $(eval $(call rules-meson,vkbasalt,x86_64,unix))
 $(eval $(call rules-meson,vkbasalt,aarch64,unix))
-
-$(OBJ)/.vkbasalt-post-source: patches-source
-	$(foreach p,$(shell find $(PATCHES_SRC)/vklayers/vkbasalt/ -name "*.patch" | sort),patch -d $(VKBASALT_SRC) -Np1 -i $(p) &&) true
-	touch $@
 
 $(OBJ)/.vkbasalt-x86_64-post-build:
 	mkdir -p $(DST_DIR)/share/vkbasalt/implicit_layer.d/

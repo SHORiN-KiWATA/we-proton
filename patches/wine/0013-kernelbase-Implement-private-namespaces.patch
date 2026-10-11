@@ -1,4 +1,4 @@
-From a913459d4d934b42b2af99f010b4e13389eeda5e Mon Sep 17 00:00:00 2001
+From 4ca2f434e023aba4d5017625b225bec845f10e84 Mon Sep 17 00:00:00 2001
 From: SHORiN-KiWATA <feng13862095732@gmail.com>
 Date: Thu, 8 Oct 2026 22:18:35 +0900
 Subject: [PATCH] kernelbase: Implement private namespaces.
@@ -18,7 +18,7 @@ Subject: [PATCH] kernelbase: Implement private namespaces.
  11 files changed, 524 insertions(+), 18 deletions(-)
 
 diff --git a/dlls/kernel32/kernel32.spec b/dlls/kernel32/kernel32.spec
-index 1a3f5576f6d..177d251b0a6 100644
+index 1e007bde175..9a2218ec1bb 100644
 --- a/dlls/kernel32/kernel32.spec
 +++ b/dlls/kernel32/kernel32.spec
 @@ -141,11 +141,11 @@
@@ -64,7 +64,7 @@ index 1a3f5576f6d..177d251b0a6 100644
  @ stdcall DeleteCriticalSection(ptr) NTDLL.RtlDeleteCriticalSection
  @ stdcall -import DeleteFiber(ptr)
  @ stdcall -import DeleteFileA(str)
-@@ -1157,8 +1157,8 @@
+@@ -1158,8 +1158,8 @@
  @ stdcall OpenJobObjectW(long long wstr)
  @ stdcall OpenMutexA(long long str)
  @ stdcall -import OpenMutexW(long long wstr)
@@ -76,10 +76,10 @@ index 1a3f5576f6d..177d251b0a6 100644
  @ stdcall -import OpenProcessToken(long long ptr)
  @ stdcall OpenProfileUserMapping()
 diff --git a/dlls/kernel32/kernel_main.c b/dlls/kernel32/kernel_main.c
-index edf54e84b72..08426a32ceb 100644
+index 54bb0e67b09..fe059649ba9 100644
 --- a/dlls/kernel32/kernel_main.c
 +++ b/dlls/kernel32/kernel_main.c
-@@ -220,6 +220,65 @@ BOOL WINAPI GetSystemRegistryQuota(PDWORD pdwQuotaAllowed, PDWORD pdwQuotaUsed)
+@@ -220,8 +220,67 @@ BOOL WINAPI GetSystemRegistryQuota(PDWORD pdwQuotaAllowed, PDWORD pdwQuotaUsed)
   */
  HANDLE WINAPI CreateBoundaryDescriptorA(LPCSTR name, ULONG flags)
  {
@@ -147,6 +147,8 @@ index edf54e84b72..08426a32ceb 100644
 +    RtlFreeUnicodeString( &aliasW );
 +    return ret;
  }
+ 
+ /******************************************************************************
 diff --git a/dlls/kernel32/kernel_private.h b/dlls/kernel32/kernel_private.h
 index 3c35a4b1bba..76773ac2f57 100644
 --- a/dlls/kernel32/kernel_private.h
@@ -180,7 +182,7 @@ index b354b1c5653..33ab2458b71 100644
  }
  
 diff --git a/dlls/kernelbase/kernelbase.spec b/dlls/kernelbase/kernelbase.spec
-index 2f924ee47e7..6f42667a5ae 100644
+index bba5e007161..8a554136553 100644
 --- a/dlls/kernelbase/kernelbase.spec
 +++ b/dlls/kernelbase/kernelbase.spec
 @@ -25,7 +25,7 @@
@@ -770,7 +772,7 @@ index 483afbc625d..0219ed842dc 100644
  WINADVAPI  BOOL        WINAPI OpenProcessToken(HANDLE,DWORD,PHANDLE);
  WINBASEAPI HANDLE      WINAPI OpenSemaphoreA(DWORD,BOOL,LPCSTR);
 diff --git a/include/winternl.h b/include/winternl.h
-index 9a794b0157d..62f43588691 100644
+index 264e4b35a88..9fc2154c0e2 100644
 --- a/include/winternl.h
 +++ b/include/winternl.h
 @@ -3820,6 +3820,28 @@ typedef struct _DIRECTORY_BASIC_INFORMATION {

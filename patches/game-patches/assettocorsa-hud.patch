@@ -1,0 +1,34 @@
+From 0b242db6d63ec466c09d47020596ba941ce7cdf2 Mon Sep 17 00:00:00 2001
+From: GloriousEggroll <gloriouseggroll@gmail.com>
+Date: Sat, 16 May 2020 20:05:38 -0600
+Subject: [PATCH] Revert "dwrite: Release file streams when building
+ collections."
+
+This reverts commit d19e34d8f072514cb903bda89767996ba078bae4.
+---
+ dlls/dwrite/font.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/dwrite/font.c b/dlls/dwrite/font.c
+index 3baa8d2d92042a5f0be7a9437da05d7da869d2e2..3fcd108f17ad7ff2e665e0203d6c32c18b56a49e 100644
+--- a/dlls/dwrite/font.c
++++ b/dlls/dwrite/font.c
+@@ -4796,6 +4796,7 @@ HRESULT create_font_collection_from_set(IDWriteFactory7 *factory, IDWriteFontSet
+     struct dwrite_fontcollection *collection;
+     HRESULT hr = S_OK;
+     size_t i;
++    const char *sgi = getenv("SteamGameId");
+ 
+     *ret = NULL;
+ 
+@@ -4836,7 +4837,9 @@ HRESULT create_font_collection_from_set(IDWriteFactory7 *factory, IDWriteFontSet
+         if (FAILED(hr = collection_add_font_entry(collection, &desc)))
+             WARN("Failed to add font collection element, hr %#lx.\n", hr);
+ 
+-        IDWriteFontFileStream_Release(stream);
++        if ((!sgi) | (sgi && strcmp(sgi, "244210"))) {
++            IDWriteFontFileStream_Release(stream);
++        }
+     }
+ 
+     if (family_model == DWRITE_FONT_FAMILY_MODEL_WEIGHT_STRETCH_STYLE)

@@ -1,0 +1,71 @@
+From a998ad4d3be8fb4404cb3b086bf957ef4049d090 Mon Sep 17 00:00:00 2001
+From: Michel Weinachter <michel@weinachter.com>
+Date: Tue, 1 Sep 2026 11:03:55 +0200
+Subject: [PATCH] ntoskrnl.exe: Implement MmUnmapLockedPages().
+
+MmMapLockedPages() hands back StartVa + ByteOffset without allocating
+anything, so there is no mapping to tear down here; clearing
+MDL_MAPPED_TO_SYSTEM_VA is the whole of the observable behaviour.
+
+Windows 8.1 leaves MappedSystemVa pointing at the now-stale mapping rather
+than clearing it, so it is left alone here as well.  The base argument is
+unused for the same reason MmMapLockedPages() creates no mapping.
+
+(cherry picked from commit 27983a716bc55aa85d0837791b2e7273b09c5f2e)
+---
+ dlls/ntoskrnl.exe/ntoskrnl.c     | 12 +++---------
+ dlls/ntoskrnl.exe/tests/driver.c |  4 ++--
+ 2 files changed, 5 insertions(+), 11 deletions(-)
+
+diff --git a/dlls/ntoskrnl.exe/ntoskrnl.c b/dlls/ntoskrnl.exe/ntoskrnl.c
+index 141e5c97374..b104cae6024 100644
+--- a/dlls/ntoskrnl.exe/ntoskrnl.c
++++ b/dlls/ntoskrnl.exe/ntoskrnl.c
+@@ -3208,14 +3208,6 @@ PVOID WINAPI  MmMapLockedPagesSpecifyCache(PMDLX MemoryDescriptorList, KPROCESSO
+ 
+     if (BaseAddress) FIXME("requested base address %p ignored\n", BaseAddress);
+ 
+-    /* Same treatment as MmMapLockedPages(), which already ignores AccessMode:
+-     * drivers run in user space here, so the "user-mode" and "system" mappings
+-     * of a descriptor are the same address.
+-     *
+-     * Note this returns an address in the driver host process.  A driver that
+-     * maps a buffer expecting a *different* client process to dereference the
+-     * result will not get shareable memory out of this -- that would need the
+-     * pool to be section-backed, which is not the case. */
+     return MmMapLockedPages( MemoryDescriptorList, AccessMode );
+ }
+ 
+@@ -3224,7 +3216,9 @@ PVOID WINAPI  MmMapLockedPagesSpecifyCache(PMDLX MemoryDescriptorList, KPROCESSO
+  */
+ void WINAPI MmUnmapLockedPages( void *base, MDL *mdl )
+ {
+-    FIXME( "(%p %p_\n", base, mdl );
++    TRACE( "%p %p\n", base, mdl );
++
++    mdl->MdlFlags &= ~MDL_MAPPED_TO_SYSTEM_VA;
+ }
+ 
+ /***********************************************************************
+diff --git a/dlls/ntoskrnl.exe/tests/driver.c b/dlls/ntoskrnl.exe/tests/driver.c
+index 1850c881a4f..e8d5d03dcec 100644
+--- a/dlls/ntoskrnl.exe/tests/driver.c
++++ b/dlls/ntoskrnl.exe/tests/driver.c
+@@ -299,7 +299,7 @@ static void test_mdl_map(void)
+         ok(!kmemcmp(addr, buffer, sizeof(buffer)), "Unexpected data in mapped memory\n");
+ 
+     MmUnmapLockedPages(addr, mdl);
+-    todo_wine ok(!(mdl->MdlFlags & MDL_MAPPED_TO_SYSTEM_VA), "got flags %#x\n", mdl->MdlFlags);
++    ok(!(mdl->MdlFlags & MDL_MAPPED_TO_SYSTEM_VA), "got flags %#x\n", mdl->MdlFlags);
+     todo_wine ok(mdl->MdlFlags & MDL_PAGES_LOCKED, "got flags %#x\n", mdl->MdlFlags);
+ 
+     addr = MmMapLockedPagesSpecifyCache(mdl, KernelMode, MmCached, NULL, FALSE, NormalPagePriority);
+@@ -310,7 +310,7 @@ static void test_mdl_map(void)
+         ok(!kmemcmp(addr, buffer, sizeof(buffer)), "Unexpected data in mapped memory\n");
+ 
+     MmUnmapLockedPages(addr, mdl);
+-    todo_wine ok(!(mdl->MdlFlags & MDL_MAPPED_TO_SYSTEM_VA), "got flags %#x\n", mdl->MdlFlags);
++    ok(!(mdl->MdlFlags & MDL_MAPPED_TO_SYSTEM_VA), "got flags %#x\n", mdl->MdlFlags);
+ 
+     MmUnlockPages(mdl);
+     ok(!(mdl->MdlFlags & MDL_PAGES_LOCKED), "got flags %#x\n", mdl->MdlFlags);

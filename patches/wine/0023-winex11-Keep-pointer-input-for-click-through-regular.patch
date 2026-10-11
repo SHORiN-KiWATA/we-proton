@@ -1,8 +1,8 @@
-From cecda0f7b96b135a86f3960f54ed32b1b09a9e72 Mon Sep 17 00:00:00 2001
+From e06fa034c0cba6c0126736833cc9621bac66d28f Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Sun, 11 Oct 2026 22:07:47 +0900
-Subject: [PATCH 23/42] winex11: Keep pointer input for click-through regular
- windows under XWayland.
+Subject: [PATCH] winex11: Keep pointer input for click-through regular windows
+ under XWayland.
 
 A WS_EX_TRANSPARENT window gets an empty X input shape and no pointer
 events, so that the mouse goes through it. Under XWayland the X server
@@ -28,10 +28,10 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  1 file changed, 28 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 03cf0bf5ad2..3ddd6c91d7e 100644
+index 50688be8baa..29295d4cc70 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -562,6 +562,29 @@ static unsigned long get_mwm_decorations( struct x11drv_win_data *data, DWORD st
+@@ -575,6 +575,29 @@ static unsigned long get_mwm_decorations( struct x11drv_win_data *data, DWORD st
  }
  
  
@@ -61,27 +61,27 @@ index 03cf0bf5ad2..3ddd6c91d7e 100644
  /***********************************************************************
   *              get_window_attributes
   *
-@@ -580,8 +603,8 @@ static int get_window_attributes( struct x11drv_win_data *data, XSetWindowAttrib
-     attr->event_mask        = (ExposureMask | KeyPressMask | KeyReleaseMask |
+@@ -595,8 +618,8 @@ static int get_window_attributes( struct x11drv_win_data *data, XSetWindowAttrib
                                 FocusChangeMask | KeymapStateMask | StructureNotifyMask | PropertyChangeMask);
-     /* for transparent windows, exclude mouse events to allow mouse pass-through */
--    if (!(ex_style & WS_EX_TRANSPARENT)) attr->event_mask |= (PointerMotionMask | ButtonPressMask |
--                                                              ButtonReleaseMask | EnterWindowMask);
-+    if (!(ex_style & WS_EX_TRANSPARENT) || keep_pointer_input( data, ex_style ))
+     /* for transparent windows, exclude mouse events to allow mouse pass-through
+        (overlay-shape mode keeps input so the shaped overlay stays interactive) */
+-    if (!(ex_style & WS_EX_TRANSPARENT) || overlay) attr->event_mask |= (PointerMotionMask | ButtonPressMask |
+-                                                                       ButtonReleaseMask | EnterWindowMask);
++    if (!(ex_style & WS_EX_TRANSPARENT) || overlay || keep_pointer_input( data, ex_style ))
 +        attr->event_mask |= (PointerMotionMask | ButtonPressMask | ButtonReleaseMask | EnterWindowMask);
  
      return (CWSaveUnder | CWColormap | CWBorderPixel | CWBackPixel |
              CWEventMask | CWBitGravity | CWBackingStore);
-@@ -614,7 +637,7 @@ static void sync_window_input_shape( struct x11drv_win_data *data )
+@@ -632,7 +655,7 @@ static void sync_window_input_shape( struct x11drv_win_data *data )
       */
      if ((sgi = getenv( "SteamGameId" )) && !strcmp( sgi, "3678970" )) return;
  
--    if (ex_style & WS_EX_TRANSPARENT)
-+    if ((ex_style & WS_EX_TRANSPARENT) && !keep_pointer_input( data, ex_style ))
+-    if ((ex_style & WS_EX_TRANSPARENT) && !overlay)
++    if ((ex_style & WS_EX_TRANSPARENT) && !overlay && !keep_pointer_input( data, ex_style ))
      {
          /* For transparent windows, set an empty input shape to allow mouse pass-through */
          static XRectangle empty_rect;
-@@ -1954,6 +1977,8 @@ static void window_set_managed( struct x11drv_win_data *data, BOOL new_managed )
+@@ -1982,6 +2005,8 @@ static void window_set_managed( struct x11drv_win_data *data, BOOL new_managed )
      TRACE( "window %p/%lx, requesting override-redirect %u -> %u serial %lu\n", data->hwnd, data->whole_window,
             !old_managed, !new_managed, NextRequest( data->display ) );
      XChangeWindowAttributes( data->display, data->whole_window, CWOverrideRedirect, &attr );
@@ -90,6 +90,3 @@ index 03cf0bf5ad2..3ddd6c91d7e 100644
  
      window_set_wm_state( data, wm_state, activate ); /* queue another WM_STATE request with the desired state */
  }
--- 
-2.56.0
-

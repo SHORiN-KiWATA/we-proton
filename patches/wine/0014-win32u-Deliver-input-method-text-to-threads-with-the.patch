@@ -1,4 +1,4 @@
-From b43057058f97863558372ab991b9d01646d392a5 Mon Sep 17 00:00:00 2001
+From 98cd3175e7be3462b7702be726d8a7995a921431 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Thu, 8 Oct 2026 22:07:17 +0900
 Subject: [PATCH] win32u: Deliver input method text to threads with the IME
@@ -41,6 +41,3 @@ index 0008a19839d..7a10dfa2959 100644
      comp_len = comp_str ? wcslen( comp_str ) + 1 : 0;
      result_len = result_str ? wcslen( result_str ) + 1 : 0;
  
--- 
-2.56.0
-
