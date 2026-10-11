@@ -1,7 +1,7 @@
-/* Does a window that gets WS_EX_TRANSPARENT (and with "layered" also WS_EX_LAYERED)
- * still take the mouse? Prints what the server's hit test (WindowFromPoint) says
- * about the centre of the window before and after; whether the X window still
- * takes input is read from outside, see input_shape_probe.sh.
+/* A window that gets WS_EX_TRANSPARENT (with "layered" also WS_EX_LAYERED) after
+ * a second; prints what the server's hit test (WindowFromPoint) says about the
+ * centre of the window before and after. Its X input shape is read from
+ * outside, see input_shape_probe.sh.
  *
  *   input_shape_probe.exe <log file> [layered]
  *

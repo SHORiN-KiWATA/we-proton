@@ -1,4 +1,4 @@
-From 5ea6acb97e0118c8a3b29333ee8321a1abc13d95 Mon Sep 17 00:00:00 2001
+From eb2f00477e32d4a726f8e720b458a478adaa1581 Mon Sep 17 00:00:00 2001
 From: GloriousEggroll <gloriouseggroll@gmail.com>
 Date: Sun, 11 Oct 2026 20:29:35 +0900
 Subject: [PATCH 40/42] win32u: Restore Return to Krondor's text bitmap

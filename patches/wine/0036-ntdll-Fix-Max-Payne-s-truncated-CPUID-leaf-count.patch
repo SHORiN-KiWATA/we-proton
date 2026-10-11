@@ -1,4 +1,4 @@
-From 09f1a20d9062dba9ffb14e7b4acbde48a98f7da9 Mon Sep 17 00:00:00 2001
+From e18bb4f15a61e2b14fb6cbd3f0e337697f12217d Mon Sep 17 00:00:00 2001
 From: GloriousEggroll <gloriouseggroll@gmail.com>
 Date: Sun, 11 Oct 2026 20:28:17 +0900
 Subject: [PATCH 36/42] ntdll: Fix Max Payne's truncated CPUID leaf count.

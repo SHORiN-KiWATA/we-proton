@@ -1,4 +1,4 @@
-From ed28c46738aa35cce046dc2c46e96ec1654c6398 Mon Sep 17 00:00:00 2001
+From 615fb1a513e6d54cc521890418902afd102fab9b Mon Sep 17 00:00:00 2001
 From: GloriousEggroll <gloriouseggroll@gmail.com>
 Date: Sun, 11 Oct 2026 20:30:13 +0900
 Subject: [PATCH 41/42] win32u: Keep Black Desert fullscreen across application

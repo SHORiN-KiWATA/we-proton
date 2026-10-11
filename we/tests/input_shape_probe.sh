@@ -1,34 +1,34 @@
 #!/bin/bash
-# Run input_shape_probe.exe on a private Xvfb and print, next to its own output,
-# how many rectangles the X input shape of its window has (0 = clicks go through).
+# In headless gamescope (an XWayland server), run input_shape_probe.exe, read the
+# X input shape of its window once it is WS_EX_TRANSPARENT (0 rectangles = clicks
+# go through), then take the focus away and give it back, and read it again.
 #
-#   input_shape_probe.sh <wine command...> -- [layered]
+#   input_shape_probe.sh <wine command...>
 #
-# e.g. with a runner and a prefix:
-#   WINEPREFIX=/tmp/pfx input_shape_probe.sh <runner>/files/bin/wine -- layered
-# Needs Xvfb and python-xlib.
+# e.g. a script that runs an exe with a runner and a prefix. Needs gamescope and
+# python-xlib.
 set -e
+if [ -z "$INPUT_SHAPE_PROBE_INNER" ]; then
+    INPUT_SHAPE_PROBE_INNER=1 exec gamescope --backend headless -- "$0" "$@" 2>/dev/null
+fi
 cd "$(dirname "$0")"
-cmd=()
-while [ $# -gt 0 ] && [ "$1" != "--" ]; do cmd+=("$1"); shift; done
-shift || true
 log=$(mktemp)
-Xvfb :123 -screen 0 1280x800x24 -nolisten tcp >/dev/null 2>&1 & XV=$!
-trap 'kill $XV 2>/dev/null; rm -f "$log"' EXIT
-sleep 1
-DISPLAY=:123 "${cmd[@]}" input_shape_probe.exe "$log" "$@" >/dev/null 2>&1 &
+"$@" "$PWD/input_shape_probe.exe" "Z:$log" >/dev/null 2>&1 &
 PROBE=$!
-for i in $(seq 60); do sleep 1; grep -q after "$log" 2>/dev/null && break; done
-DISPLAY=:123 python3 - <<'PY'
-from Xlib import display
+for i in $(seq 90); do sleep 1; grep -q after "$log" 2>/dev/null && break; done
+python3 - <<'PY'
+import time
+from Xlib import display, X
 from Xlib.ext import shape
 d = display.Display(); root = d.screen().root
-for w in root.query_tree().children:
-    n = w.get_full_property(d.intern_atom("_NET_WM_NAME"), 0)
-    if n and n.value == b"input_shape_probe":
-        print("X input shape rectangles:", len(w.shape_get_rectangles(shape.SK.Input).rectangles))
+print("XWAYLAND:", d.query_extension("XWAYLAND") is not None)
+w = next(w for w in root.query_tree().children
+         if (lambda n: n and n.value == b"input_shape_probe")(w.get_full_property(d.intern_atom("_NET_WM_NAME"), 0)))
+print("after WS_EX_TRANSPARENT: input rectangles", len(w.shape_get_rectangles(shape.SK.Input).rectangles))
+root.set_input_focus(X.RevertToPointerRoot, X.CurrentTime); d.sync(); time.sleep(0.5)
+w.set_input_focus(X.RevertToParent, X.CurrentTime); d.sync(); time.sleep(1.5)
+print("after it got the focus again: input rectangles", len(w.shape_get_rectangles(shape.SK.Input).rectangles))
 PY
-cat "$log"
-# the window stays up a few more seconds; don't wait for a launcher that lingers
+cat "$log"; rm -f "$log"
 for i in $(seq 15); do kill -0 $PROBE 2>/dev/null || break; sleep 1; done
 kill $PROBE 2>/dev/null || true

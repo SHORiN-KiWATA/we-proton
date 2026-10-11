@@ -26,7 +26,7 @@
 | wine 0020 | 《暗区突围：无限》进游戏两分多钟后闪退：查询窗口层级的 `NtUserGetWindowBand` 在 Wine 里是一调用就中止进程的 stub | `0020-win32u-window-band/` |
 | wine 0021 | 《诡秘之主》启动时提示缺少 Microsoft Visual C++ 2015-2022 Redistributable (x64)：引导程序要求注册表和 DLL 的版本都 ≥ 14.44.35211，Wine 内置的是 14.42.34433；把内置 DLL 的版本号改成 14.99.65535 | `0021-vcruntime-version/` |
 | wine 0022 | 同上，注册表那一项：`wine.inf` 不覆盖已有值，旧前缀的运行库版本停在建前缀时的值；wineboot 每次启动把它提到 `msvcp140.dll` 的版本 | `0021-vcruntime-version/` |
-| wine 0023 | 《诡秘之主》启动器等窗口有时点不动：只带 `WS_EX_TRANSPARENT` 的窗口被 X11 驱动清空了输入区域，Windows 和 wineserver 却要分层 + 透明才让鼠标穿透 | `0023-winex11-input-shape/` |
+| wine 0023 | 《诡秘之主》的启动器切走再切回来就点不动：程序失去焦点时把窗口设成鼠标穿透，靠轮询鼠标位置决定何时恢复，而 XWayland 下 X 收不到穿透窗口上的指针；窗口拿到焦点时恢复输入 | `0023-winex11-input-shape/` |
 | wine 0024–0042、vkd3d-proton 0002、dxvk 0002–0007 | 从 GE-Proton 导入的通用修复和按游戏的兼容处理（没有逐个审代码） | `0024-ge-proton-imports/` |
 | vkd3d-proton 0001 | dxil-spirv 生成非法的结构化控制流，RADV 拒绝后崩溃 | `vkd3d-0001-dxil-spirv-loop-breaks/` |
 

@@ -1,0 +1,113 @@
+From e67bb36263d88b4624610c380321d8fbe2a4686c Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Sun, 11 Oct 2026 21:32:36 +0900
+Subject: [PATCH 23/42] winex11: Let click-through windows take input again
+ when they get the focus under XWayland.
+
+A WS_EX_TRANSPARENT window gets an empty X input shape, so that the mouse
+goes through it. Under XWayland the X server only learns where the
+pointer is while it is over an X window that takes input, so programs
+that make their window click-through once the cursor leaves it and poll
+GetCursorPos() to take input again never see the cursor come back: the
+position stays where it left, and the window can't be used until its
+style happens to change. On X11 the server always sees the pointer.
+
+When such a window gets the focus under XWayland, give it its input
+shape back; the next style change syncs the shape as before.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/winex11.drv/event.c  |  1 +
+ dlls/winex11.drv/window.c | 30 ++++++++++++++++++++++++++++++
+ dlls/winex11.drv/x11drv.h |  2 ++
+ 3 files changed, 33 insertions(+)
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+index ab408e36a42..4f8022ec087 100644
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -922,6 +922,7 @@ static BOOL X11DRV_FocusIn( HWND hwnd, XEvent *xev )
+     if (event->mode == NotifyGrab || event->mode == NotifyUngrab) return FALSE;
+ 
+     xim_set_focus( hwnd, TRUE );
++    restore_window_input_shape( hwnd );
+ 
+     /* Bug 27087: Need for Speed™ Hot Pursuit Remastered (1328660) no input in fullscreen in Gamescope
+      *
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 03cf0bf5ad2..583959ee04f 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -620,6 +620,7 @@ static void sync_window_input_shape( struct x11drv_win_data *data )
+         static XRectangle empty_rect;
+         XShapeCombineRectangles( data->display, data->whole_window, ShapeInput, 0, 0,
+                                  &empty_rect, 1, ShapeSet, YXBanded );
++        data->input_transparent = TRUE;
+         TRACE( "window %p/%lx set empty input shape for WS_EX_TRANSPARENT\n",
+                data->hwnd, data->whole_window );
+     }
+@@ -627,12 +628,41 @@ static void sync_window_input_shape( struct x11drv_win_data *data )
+     {
+         /* For normal windows, reset input shape to default (full window) */
+         XShapeCombineMask( data->display, data->whole_window, ShapeInput, 0, 0, None, ShapeSet );
++        data->input_transparent = FALSE;
+         TRACE( "window %p/%lx reset input shape to default\n",
+                data->hwnd, data->whole_window );
+     }
+ #endif
+ }
+ 
++/***********************************************************************
++ *              restore_window_input_shape
++ *
++ * Under XWayland the X server only learns where the pointer is while it is
++ * over an X window that takes input. Programs that make their window
++ * click-through (WS_EX_TRANSPARENT, which empties its input shape) once the
++ * cursor leaves it, and poll GetCursorPos() to take input again, then never
++ * see the cursor come back: the position stays where it left, and the window
++ * stays unusable. When such a window gets the focus, let it take input again
++ * until its style changes, so that the pointer reaches it and the program
++ * notices.
++ */
++void restore_window_input_shape( HWND hwnd )
++{
++#ifdef HAVE_LIBXSHAPE
++    struct x11drv_win_data *data;
++
++    if (!(data = get_win_data( hwnd ))) return;
++    if (data->input_transparent && data->whole_window && X11DRV_HasWindowManager( "xwayland" ))
++    {
++        TRACE( "window %p/%lx restoring the input shape on focus\n", hwnd, data->whole_window );
++        XShapeCombineMask( data->display, data->whole_window, ShapeInput, 0, 0, None, ShapeSet );
++        data->input_transparent = FALSE;
++    }
++    release_win_data( data );
++#endif
++}
++
+ /***********************************************************************
+  *              sync_window_style
+  *
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index b51362ba2e3..c0980d026a1 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -367,6 +367,7 @@ struct x11drv_escape_get_drawable
+ };
+ 
+ extern BOOL needs_offscreen_rendering( HWND hwnd );
++extern void restore_window_input_shape( HWND hwnd );
+ extern void set_dc_drawable( HDC hdc, Drawable drawable, const RECT *rect, int mode, const XVisualInfo *vis );
+ extern Drawable get_dc_drawable( HDC hdc, RECT *rect );
+ extern XVisualInfo get_other_process_visual( HWND hwnd );
+@@ -692,6 +693,7 @@ struct x11drv_win_data
+     UINT        shaped : 1;     /* is window using a custom region shape? */
+     UINT        layered : 1;    /* is window layered and with valid attributes? */
+     UINT        use_alpha : 1;  /* does window use an alpha channel? */
++    UINT        input_transparent : 1; /* input shape emptied for a WS_EX_TRANSPARENT window */
+     UINT        skip_taskbar : 1; /* does window should be deleted from taskbar */
+     UINT        add_taskbar : 1; /* does window should be added to taskbar regardless of style */
+     UINT        is_fullscreen : 1; /* is the window visible rect fullscreen */
+-- 
+2.56.0
+

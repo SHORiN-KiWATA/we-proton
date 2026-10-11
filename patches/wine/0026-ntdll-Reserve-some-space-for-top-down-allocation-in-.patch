@@ -1,4 +1,4 @@
-From 30db840d9d9e80892c13276e73880eac85d59a1a Mon Sep 17 00:00:00 2001
+From 7d782c5d4a1b3f4ece764908eedd79e4a8fcbba8 Mon Sep 17 00:00:00 2001
 From: Alexandre Julliard <julliard@winehq.org>
 Date: Tue, 18 Aug 2026 12:45:10 +0200
 Subject: [PATCH 26/42] ntdll: Reserve some space for top-down allocation in

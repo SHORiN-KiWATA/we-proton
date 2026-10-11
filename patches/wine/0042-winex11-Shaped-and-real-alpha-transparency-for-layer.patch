@@ -1,6 +1,6 @@
-From 2504e58de569c74f8ae559110cc5e599598137c3 Mon Sep 17 00:00:00 2001
+From 2cfb1fda06ed2765ff25d7ffcee79774f32b47a6 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
-Date: Sun, 11 Oct 2026 20:31:21 +0900
+Date: Sun, 11 Oct 2026 21:33:02 +0900
 Subject: [PATCH 42/42] winex11: Shaped and real-alpha transparency for layered
  3D-overlay windows.
 
@@ -9,9 +9,7 @@ turns it on (see GE-Proton's patch for the details). Based on the original
 XShape patch by Solarisfire.
 
 Imported from GE-Proton11-7 patches/game-patches/layered-overlay-wine.patch;
-the input-shape condition it extends is the one from the previous patch
-(layered and transparent), and its declarations moved to where
-needs_offscreen_rendering() is declared here.
+its declarations moved to where needs_offscreen_rendering() is declared here.
 ---
  dlls/winex11.drv/init.c   | 386 +++++++++++++++++++++++++++++++++++++-
  dlls/winex11.drv/window.c |  31 ++-
@@ -472,7 +470,7 @@ index 0b4e65ad5b8..81f3a0bc130 100644
      else colormap = XCreateColormap( gdi_display, get_dummy_parent(), visual.visual, visual_class_alloc( visual.class ) );
      if (!colormap) return None;
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 0b60129793a..348c2b14e03 100644
+index 74c46daed4c..253735ad6d1 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -570,6 +570,7 @@ static unsigned long get_mwm_decorations( struct x11drv_win_data *data, DWORD st
@@ -497,7 +495,7 @@ index 0b60129793a..348c2b14e03 100644
  
      return (CWSaveUnder | CWColormap | CWBorderPixel | CWBackPixel |
              CWEventMask | CWBitGravity | CWBackingStore);
-@@ -600,6 +602,9 @@ static void sync_window_input_shape( struct x11drv_win_data *data )
+@@ -598,6 +600,9 @@ static void sync_window_input_shape( struct x11drv_win_data *data )
  {
  #ifdef HAVE_LIBXSHAPE
      DWORD ex_style = NtUserGetWindowLongW( data->hwnd, GWL_EXSTYLE );
@@ -507,16 +505,16 @@ index 0b60129793a..348c2b14e03 100644
      char const *sgi;
  
      if (!data->whole_window) return;
-@@ -616,7 +621,7 @@ static void sync_window_input_shape( struct x11drv_win_data *data )
+@@ -614,7 +619,7 @@ static void sync_window_input_shape( struct x11drv_win_data *data )
       */
      if ((sgi = getenv( "SteamGameId" )) && !strcmp( sgi, "3678970" )) return;
  
--    if ((ex_style & (WS_EX_LAYERED | WS_EX_TRANSPARENT)) == (WS_EX_LAYERED | WS_EX_TRANSPARENT))
-+    if ((ex_style & (WS_EX_LAYERED | WS_EX_TRANSPARENT)) == (WS_EX_LAYERED | WS_EX_TRANSPARENT) && !overlay)
+-    if (ex_style & WS_EX_TRANSPARENT)
++    if ((ex_style & WS_EX_TRANSPARENT) && !overlay)
      {
          /* For transparent windows, set an empty input shape to allow mouse pass-through */
          static XRectangle empty_rect;
-@@ -2836,6 +2841,17 @@ static void create_whole_window( struct x11drv_win_data *data )
+@@ -2864,6 +2869,17 @@ static void create_whole_window( struct x11drv_win_data *data )
      }
      data->shaped = (win_rgn != 0);
  
@@ -534,7 +532,7 @@ index 0b60129793a..348c2b14e03 100644
      if (data->vis.visualid != default_visual.visualid)
          data->whole_colormap = XCreateColormap( data->display, root_window, data->vis.visual, AllocNone );
  
-@@ -3021,7 +3037,12 @@ void X11DRV_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style )
+@@ -3049,7 +3065,12 @@ void X11DRV_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style )
          if (changed & WS_EX_LAYERED) /* changing WS_EX_LAYERED resets attributes */
          {
              data->layered = FALSE;
@@ -547,9 +545,9 @@ index 0b60129793a..348c2b14e03 100644
 +                set_window_visual( data, &default_visual, FALSE );
              sync_window_opacity( data->display, data->whole_window, 0, 0 );
          }
-         if (changed & (WS_EX_LAYERED | WS_EX_TRANSPARENT)) sync_window_style( data );
+         if (changed & WS_EX_TRANSPARENT) sync_window_style( data );
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index b51362ba2e3..72ef1cd9383 100644
+index c0980d026a1..0635d4b564d 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
 @@ -367,6 +367,9 @@ struct x11drv_escape_get_drawable
@@ -559,9 +557,9 @@ index b51362ba2e3..72ef1cd9383 100644
 +extern BOOL layered_overlay_shape_enabled(void);
 +extern BOOL layered_overlay_alpha_enabled(void);
 +extern BOOL layered_overlay_input_shape_enabled(void);
+ extern void restore_window_input_shape( HWND hwnd );
  extern void set_dc_drawable( HDC hdc, Drawable drawable, const RECT *rect, int mode, const XVisualInfo *vis );
  extern Drawable get_dc_drawable( HDC hdc, RECT *rect );
- extern XVisualInfo get_other_process_visual( HWND hwnd );
 -- 
 2.56.0
 

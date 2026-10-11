@@ -1,4 +1,4 @@
-From be5f95324b0671e3586fb0f7c9946432a60b30f9 Mon Sep 17 00:00:00 2001
+From cf46b2f4b44021e7eb033b6d5c498c273638ba52 Mon Sep 17 00:00:00 2001
 From: GloriousEggroll <gloriouseggroll@gmail.com>
 Date: Sat, 16 May 2020 20:05:38 -0600
 Subject: [PATCH 35/42] Revert "dwrite: Release file streams when building

@@ -1,4 +1,4 @@
-From d89199d37b42c285ba76272252925f4b7cf7599f Mon Sep 17 00:00:00 2001
+From 0b671abe7e582a6d487beba338fb71c515f0b99c Mon Sep 17 00:00:00 2001
 From: Haeris31 <279492726+Haeris31@users.noreply.github.com>
 Date: Fri, 11 Sep 2026 00:13:32 +0200
 Subject: [PATCH 33/42] ntdll: Read QueryPerformanceCounter from the TSC in

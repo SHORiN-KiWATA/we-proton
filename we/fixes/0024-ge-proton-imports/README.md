@@ -34,7 +34,7 @@
 | wine 0039 | `wine-hotfixes/pending/unity_crash_hotfix.patch` | wined3d 路径下 dxgi 的一处 Unity 崩溃 |
 | wine 0040 | `game-patches/return-to-krondor-text-bitmap-readback.patch` | Return to Krondor 的文字位图读回。**手工合并**：它改的条件在上游多了“显示设备”和 8 位色的判断，保留这两个判断再加上它的例外 |
 | wine 0041 | `game-patches/black-desert-keep-fullscreen-on-focus-loss.patch` | 黑色沙漠失去焦点时保持全屏（`WINE_BLACK_DESERT_KEEP_FULLSCREEN=0` 关闭）。**手工合并**：辅助函数原来跟在一个我们没有的函数后面，按 fuzz 会被插进 `NtUserReleaseCapture` 里，改放在 `set_active_window()` 前面 |
-| wine 0042 | `game-patches/layered-overlay-wine.patch` | 默认关闭；`WINE_LAYERED_OVERLAY_SHAPE=1`/`WINE_LAYERED_OVERLAY_ALPHA=1` 给桌面覆盖类游戏的分层窗口做形状或真透明。**手工合并**：它改的输入区域条件用 0023 的（分层 + 透明），声明挪到 `needs_offscreen_rendering()` 的声明旁边 |
+| wine 0042 | `game-patches/layered-overlay-wine.patch` | 默认关闭；`WINE_LAYERED_OVERLAY_SHAPE=1`/`WINE_LAYERED_OVERLAY_ALPHA=1` 给桌面覆盖类游戏的分层窗口做形状或真透明。**手工合并**：它的声明挪到 `needs_offscreen_rendering()` 的声明旁边 |
 | dxvk 0002 | `dxvk/layered-overlay-dxvk.patch` | 0042 的 DXVK 一半 |
 | dxvk 0003 | `dxvk/dxvk-preserve-swapchain-on-acquire-backpressure.patch` | 获取交换链图像受阻时保留交换链 |
 | dxvk 0004–0006 | `dxvk/dxgi-defer-initial-fullscreen-for-probe-swapchains.patch`、`dxgi-follow-d3d12-fullscreen-client-resizes.patch`、`dxgi-keep-fullscreen-on-focus-loss.patch` | 《最终幻想14》（`ffxiv_dx11.exe`）多屏时焦点移到另一块屏幕，从独占全屏缩回 1280×720；三个有上下文依赖，按 GE 的顺序打 |

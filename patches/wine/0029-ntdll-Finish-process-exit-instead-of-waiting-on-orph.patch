@@ -1,4 +1,4 @@
-From d1a02961854852ad859fd1561c5499dc27a4bae1 Mon Sep 17 00:00:00 2001
+From 1dbac8ef5f48d04865a3b7f9b1e1b8f4babbdeb0 Mon Sep 17 00:00:00 2001
 From: GloriousEggroll <gloriouseggroll@gmail.com>
 Date: Sun, 6 Sep 2026 16:00:00 -0600
 Subject: [PATCH 29/42] ntdll: Finish process exit instead of waiting on

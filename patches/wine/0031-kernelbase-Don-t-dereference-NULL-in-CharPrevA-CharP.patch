@@ -1,4 +1,4 @@
-From 4c945dc11f5f61e48b6fe975ccc6eafca5280792 Mon Sep 17 00:00:00 2001
+From b61ac136fe3adc8c5fc16ed41ae6d8a74770c78d Mon Sep 17 00:00:00 2001
 From: James M <f0rm4tm3@gmail.com>
 Date: Sat, 27 Jun 2026 23:37:33 -0700
 Subject: [PATCH 31/42] kernelbase: Don't dereference NULL in

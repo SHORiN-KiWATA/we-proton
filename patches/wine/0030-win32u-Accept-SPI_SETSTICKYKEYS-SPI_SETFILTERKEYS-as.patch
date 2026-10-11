@@ -1,4 +1,4 @@
-From 4824565960b2246b95c93981eb49fe063fcb2e97 Mon Sep 17 00:00:00 2001
+From 518f96f1174df6c8c3672e90e05ed0d28ae7cda7 Mon Sep 17 00:00:00 2001
 From: oldschoola <f0rm4tm3@gmail.com>
 Date: Sat, 27 Jun 2026 22:17:19 -0700
 Subject: [PATCH 30/42] win32u: Accept SPI_SETSTICKYKEYS/SPI_SETFILTERKEYS as

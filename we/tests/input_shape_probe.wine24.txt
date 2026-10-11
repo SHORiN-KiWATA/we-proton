@@ -1,10 +1,7 @@
-== input_shape_probe.exe  (r24, Xvfb, steamrt4)
-X input shape rectangles: 0
+== input_shape_probe.sh (r24, headless gamescope, steamrt4)
+XWAYLAND: True
+after WS_EX_TRANSPARENT: input rectangles 0
+after it got the focus again: input rectangles 0
 before: exstyle 0x100 WindowFromPoint(centre)==window 1
 after:  exstyle 0x120 WindowFromPoint(centre)==window 1
-exit 0
-== input_shape_probe.exe layered (r24, Xvfb, steamrt4)
-X input shape rectangles: 0
-before: exstyle 0x100 WindowFromPoint(centre)==window 1
-after:  exstyle 0x80120 WindowFromPoint(centre)==window 0
 exit 0

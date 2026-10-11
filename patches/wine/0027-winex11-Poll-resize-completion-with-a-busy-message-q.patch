@@ -1,4 +1,4 @@
-From 01e560e3c62b06862e11a378a37e798404031ac5 Mon Sep 17 00:00:00 2001
+From c4fede4b77d1cf3db8fda27b3d10653c6cff3637 Mon Sep 17 00:00:00 2001
 From: GloriousEggroll <gloriouseggroll@gmail.com>
 Date: Mon, 7 Sep 2026 09:00:00 -0600
 Subject: [PATCH 27/42] winex11: Poll resize completion with a busy message
