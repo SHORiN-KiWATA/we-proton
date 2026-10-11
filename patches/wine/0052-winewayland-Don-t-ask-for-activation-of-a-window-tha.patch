@@ -1,0 +1,43 @@
+From 9ce8a10a1acb9a0b89f2311643215107d919b14f Mon Sep 17 00:00:00 2001
+From: SHORiN-KIWATA <shorin@users.noreply.github.com>
+Date: Mon, 12 Oct 2026 05:00:25 +0900
+Subject: [PATCH] winewayland: Don't ask for activation of a window that has
+ the keyboard focus.
+
+A window gets activated when the compositor gives it the keyboard focus,
+and the driver then asked the compositor to activate it with an
+xdg_activation token. The window already has the focus, so the request
+isn't needed, and compositors act on it: one that moves the focus between
+windows of an overview leaves the overview as soon as the focus reaches a
+Wine window.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/winewayland.drv/window.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index 71ca6cea869..f61353140d9 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -1632,11 +1632,20 @@ void WAYLAND_FlashWindowEx(FLASHWINFO *info)
+ void WAYLAND_ActivateWindow(HWND hwnd, HWND previous)
+ {
+     struct wayland_win_data *data;
++    HWND focused;
+ 
+     TRACE("hwnd=%p previous=%p\n", hwnd, previous);
+ 
+     if (hwnd == previous) return;
+ 
++    /* A window that already has the keyboard focus is usually being activated
++     * because the compositor gave it the focus. Asking for activation again
++     * isn't needed, and compositors act on it, e.g. by leaving an overview. */
++    pthread_mutex_lock(&process_wayland.keyboard.mutex);
++    focused = process_wayland.keyboard.focused_hwnd;
++    pthread_mutex_unlock(&process_wayland.keyboard.mutex);
++    if (focused == hwnd) return;
++
+     if (!(data = wayland_win_data_get(hwnd))) return;
+     if (data->wayland_surface) wayland_surface_activate(data->wayland_surface);
+     wayland_win_data_release(data);

@@ -17,6 +17,7 @@ WE-Proton 是基于 GE-Proton 和 DW-Proton 的个人 Proton：以 GE-Proton（`
 | wine 0008 | 通过进程外 COM 服务器拿结果的程序（接口按类型库封送、参数没写 `[in]`/`[out]`）拿不回任何结果，表现为初始化失败、登录或认证报错 |
 | wine 0009 | 用到 min16float 等最低精度类型、并按着色器反射结果拼输入布局的 D3D11/D3D12 程序，创建渲染管线失败，常见表现是加载场景时闪退 |
 | wine 0010 | 添加 HTTP 请求头时字符串以空行开头的程序（WinHTTP），请求头加不上、请求发不出去，常见表现是登录或认证后报错、崩溃 |
+| wine 0011 | 在 waybar 等只支持 StatusNotifierItem 的面板上看不到程序的托盘图标，隐藏到托盘的程序叫不回来 |
 | wine 0013 | 用私有命名空间做单实例检测的程序（客户端、加速器等）在 Wine 里无法启动 |
 | wine 0014 | 关掉了 IMM、靠 TSF 收输入法文字的程序（例如一些内置 Chromium 的客户端），能看到输入法的候选框，选字后却不上屏 |
 | wine 0015 | 需要给网卡配 IP、加路由的程序（VPN、加速器、TUN 类工具）配置失败，表现为连接或加速不上 |
@@ -28,11 +29,15 @@ WE-Proton 是基于 GE-Proton 和 DW-Proton 的个人 Proton：以 GE-Proton（`
 | wine 0022 | 同上，注册表里记的运行库版本停在建前缀时的旧值，旧前缀换新版后仍然提示 |
 | wine 0023 | Wayland 桌面下，有的程序（如部分 Electron 启动器）窗口切几次焦点就点不动（程序把窗口设成鼠标穿透后，等不到鼠标回来的消息） |
 | wine 0048 | 网易 UU 加速器的路由模式报 50004：内置 wintun 报的网卡描述是 Linux 接口名，程序按 Windows 的描述找不到自己建的虚拟网卡 |
+| wine 0049 | 托盘图标透明的地方显示成黑色（GE-Proton 自带的托盘实现转图标时没处理好掩码）；托盘交回给 0011 的实现 |
+| wine 0050 | 用 Wine 的 Wayland 驱动时，按合成器的全屏快捷键，窗口全屏一下就立刻恢复，或者一切换焦点就退出全屏（游戏的窗口模式也一样） |
+| wine 0052 | 用 Wine 的 Wayland 驱动时，在 niri 分支的网格概览里把焦点移到 Wine 窗口，网格就直接关掉 |
+| protonfixes 0051 | 前缀里已有程序在运行时，启动器用 `proton run` 再启动的游戏拿不到 protonfixes 的修正（例如绕开游戏自带的启动器），窗口可能出不来；启动器设 `PROTONFIXES_RUN_VERB=1` 后照常执行 |
 | vkd3d-proton 0001 | 部分 D3D12 着色器被翻译成非法的 SPIR-V，AMD 显卡（Mesa RADV）上直接崩溃 |
 
-编号沿用原来的。0001、0011、0012、0018 和 0024–0042 是这一版不再需要的（0043–0047 没有用到）：托盘图标（原 0011）改用 GE-Proton 自带的 StatusNotifierItem 实现，0012 修的 bug GE-Proton 也修了。原来从 GE-Proton 搬来的 0024–0042 等，现在由 GE-Proton 本身带着。
+编号沿用原来的。0001、0012、0018 和 0024–0042 是这一版不再需要的（0043–0047 没有用到）：0012 修的 bug GE-Proton 也修了。原来从 GE-Proton 搬来的 0024–0042 等，现在由 GE-Proton 本身带着。
 
-托盘图标：在 waybar 等只支持 StatusNotifierItem 的面板上，程序的托盘图标由 GE-Proton 的实现显示。
+托盘图标仍由 WE-Proton 的实现（0011）显示，GE-Proton 自带的那套由 0049 关掉。
 
 ## 安装
 

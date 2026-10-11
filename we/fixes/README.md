@@ -16,7 +16,7 @@
 | wine 0008 | 类型库封送把没有方向的参数只当输入，进程外 COM 服务器通过这类参数返回的结果全部丢失 | `0008-typelib-param-direction/` |
 | wine 0009 | d3dcompiler 的反射读不出最低精度签名（ISG1/OSG1/PSG1），按反射结果拼输入布局的程序得到空布局，创建管线失败 | `0009-d3dcompiler-min-precision-signatures/` |
 | wine 0010 | WinHttpAddRequestHeaders 遇到开头的空行就返回 ERROR_WINHTTP_INVALID_HEADER，自定义请求头加不上，请求发不出去 | `0010-winhttp-leading-empty-lines/` |
-| wine 0011（这一版没有：改用 GE-Proton 自带的 StatusNotifierItem 实现） | 通知区图标只能嵌进 XEmbed 系统托盘，在只支持 StatusNotifierItem 的面板（waybar 等 Wayland 面板）上看不到，隐藏到托盘的程序叫不回来 | `0011-explorer-status-notifier-items/` |
+| wine 0011 | 通知区图标只能嵌进 XEmbed 系统托盘，在只支持 StatusNotifierItem 的面板（waybar 等 Wayland 面板）上看不到，隐藏到托盘的程序叫不回来 | `0011-explorer-status-notifier-items/` |
 | wine 0012（这一版没有：GE-Proton 的 `qcap-dshow-fixes` 修了同一个 bug） | WoW64 下视频采集返回给 32 位程序的媒体类型带着未初始化的 `pUnk`，枚举摄像头格式的程序（如 Chromium/CEF）释放时崩溃 | `0012-qcap-wow64-media-type-punk/` |
 | wine 0013 | 用私有命名空间（`CreatePrivateNamespace`/`OpenPrivateNamespace`、边界描述符）做单实例检测的客户端在 Wine 里一启动就崩 | `0013-private-namespaces/` |
 | wine 0014 | 线程调用 `ImmDisableIME` 后，宿主输入法提交的文字被丢掉，靠 TSF 收输入法文字的程序能看到候选框，但打不了中文 | `0014-ime-disabled-thread-text/` |
@@ -31,6 +31,10 @@
 | wine 0023 | 《诡秘之主》的启动器（Electron）切几次焦点就点不动：鼠标落在透明背景上时程序把窗口设成鼠标穿透，靠低级鼠标钩子看鼠标何时回来，而 XWayland 下 X 收不到穿透窗口上的指针；普通窗口穿透时仍然接收鼠标 | `0023-winex11-input-shape/` |
 | wine 0024–0042、vkd3d-proton 0002、dxvk 0002–0007（这一版没有：GE-Proton 直接带着原版） | 从 GE-Proton 导入的通用修复和按游戏的兼容处理（没有逐个审代码） | `0024-ge-proton-imports/` |
 | wine 0048 | 内置 wintun 报的网卡描述是 Linux 接口名，不是 Windows 的 `<tunnel type> Tunnel`：按描述找自己建的虚拟网卡的程序找不到网卡，网易 UU 的路由模式报 50004 | `0048-wintun-adapter-description/` |
+| wine 0049 | GE-Proton 在 win32u 里的托盘实现先于 explorer 接手图标，转图标时只要颜色平面有 alpha 就不看 AND 掩码，WeGame 的托盘图标透明处变成黑色；让 win32u 不接手，交给 0011 | `0049-win32u-tray-to-explorer/` |
+| wine 0050 | Wayland 驱动按窗口样式推算全屏，带标题栏或可拖动边框的窗口永远不算全屏，合成器发起的全屏（快捷键）被立刻撤销；交帧的线程用 configure 之前的状态也会撤销。WeGame 窗口、《封印者》的窗口模式按全屏快捷键马上恢复原样 | `0050-winewayland-compositor-fullscreen/` |
+| wine 0052 | Wayland 驱动在窗口拿到键盘焦点后还向合成器申请激活，niri 分支的网格概览收到申请就关掉：焦点一移到 Wine 窗口网格就没了 | `0052-winewayland-no-activation-on-focus/` |
+| protonfixes 0051 | 前缀里已有程序在运行时，再用 `proton run` 加入的游戏拿不到 protonfixes 的修正：《战锤40K：暗潮》的修正是绕开启动器，没绕开时启动器把游戏隐藏启动，窗口出不来；设 `PROTONFIXES_RUN_VERB=1` 时 `run` 也执行修正 | `0051-protonfixes-run-verb/` |
 | vkd3d-proton 0001 | dxil-spirv 生成非法的结构化控制流，RADV 拒绝后崩溃 | `vkd3d-0001-dxil-spirv-loop-breaks/` |
 
 ## 已知、没修的问题

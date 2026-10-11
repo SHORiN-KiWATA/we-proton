@@ -7,7 +7,7 @@
 - `patches/dwproton/`：DW-Proton（`dwproton-11.0-14`）的 Wine 提交里 GE-Proton 没有的那些，冲突解决过。怎么挑的、丢了哪些、冲突怎么解的，见 [`ge-dw-merge.md`](ge-dw-merge.md)
 - `patches/wine/`：WE-Proton 自己的 Wine 补丁，编号沿用原来的（中间的空号是这一版不再需要的，见下表）
 - vkd3d-proton 的修复是 `patches/vkd3d-proton/we-*.patch`（路径相对 vkd3d-proton 根目录），排在 GE-Proton 的补丁后面
-- DW-Proton 的 protonfixes 游戏修复是 `patches/protonfixes/0003`–`0005`，dxvk 的 HDR 检测是 `patches/dxvk/dw-hdr-detection-via-displayconfig.patch`
+- DW-Proton 的 protonfixes 游戏修复是 `patches/protonfixes/0003`–`0005`（WE-Proton 自己的 protonfixes 补丁是 `0051`），dxvk 的 HDR 检测是 `patches/dxvk/dw-hdr-detection-via-displayconfig.patch`
 
 ## 补丁
 
@@ -23,7 +23,7 @@
 | `wine/0008-rpcrt4-Marshal-type-library-parameters-without-a-dir` | 类型库封送把没有 `[in]`/`[out]` 的指针参数按 `[in, out]` 处理，和 Windows 一致 |
 | `wine/0009-d3dcompiler-Handle-the-ISG1-OSG1-and-PSG1-signature-` | d3dcompiler 的反射和 `D3DGetBlobPart` 能读最低精度签名段（ISG1/OSG1/PSG1），和 Windows 一致 |
 | `wine/0010-winhttp-Skip-empty-lines-in-front-of-the-first-reque` | WinHttpAddRequestHeaders 跳过开头的空行（`\r\n` 等），和 Windows 一致 |
-| `wine/0011-explorer-Show-systray-icons-as-StatusNotifierItems` | （这一版没有：托盘改用 GE-Proton 自带的 StatusNotifierItem 实现）会话里有 StatusNotifierWatcher 时，通知区图标用 StatusNotifierItem（D-Bus）显示，面板上的点击转成和嵌入式图标相同的回调，气泡变成桌面通知 |
+| `wine/0011-explorer-Show-systray-icons-as-StatusNotifierItems` | 会话里有 StatusNotifierWatcher 时，通知区图标用 StatusNotifierItem（D-Bus）显示，面板上的点击转成和嵌入式图标相同的回调，气泡变成桌面通知 |
 | `wine/0012-qcap-Clear-pUnk-in-media-types-returned-to-32-bit-ca` | （这一版没有：GE-Proton 的 `qcap-dshow-fixes` 修了同一个 bug）WoW64 下视频采集返回给 32 位程序的媒体类型把 `pUnk` 设成 NULL，和 64 位一致 |
 | `wine/0013-kernelbase-Implement-private-namespaces` | 实现私有命名空间：边界描述符、`Create/Open/ClosePrivateNamespace`，以及 `<别名>\<名字>` 对象名的解析；用它们做单实例检测的程序不再一启动就崩 |
 | `wine/0014-win32u-Deliver-input-method-text-to-threads-with-the` | 线程被 `ImmDisableIME` 关掉 IME 后，宿主输入法提交的文字以 `WM_IME_CHAR` 送到焦点窗口，不再丢掉 |
@@ -56,13 +56,17 @@
 | `wine/0041-win32u-Keep-Black-Desert-fullscreen-across-applicati` | （这一版没有：GE-Proton 直接带着原版）（GE，按游戏）黑色沙漠失去焦点时保持全屏 |
 | `wine/0042-winex11-Shaped-and-real-alpha-transparency-for-layer` | （这一版没有：GE-Proton 直接带着原版）（GE，默认关闭）桌面覆盖类游戏的分层窗口做形状或真透明 |
 | `wine/0048-wintun-Report-the-adapter-description-Windows-prog` | 内置 wintun 把 Windows 风格的网卡描述（`<tunnel type> Tunnel`）写进接口 alias，nsiproxy 报给 `GetAdaptersInfo`/`GetAdaptersAddresses`；按描述找自己建的虚拟网卡的程序（网易 UU 的路由模式，报 50004）不再找不到网卡 |
+| `wine/0049-win32u-Leave-notification-icons-to-explorer` | GE-Proton 在 win32u 里另有一套 StatusNotifierItem 托盘实现，会先于 explorer 接手通知区图标；它转图标时只要颜色平面有 alpha 就不看 AND 掩码，靠掩码挖空形状的图标（WeGame 的托盘图标）透明处变成不透明的黑色。让 win32u 不接手，图标交给 0011 的 explorer 实现 |
+| `wine/0050-winewayland-Keep-a-fullscreen-state-the-compositor-a` | Wayland 驱动：合成器自己发起的全屏（全屏快捷键）不再被立刻撤销。驱动原来按窗口样式推算全屏，带标题栏或可拖动边框的窗口永远不算全屏，于是马上发 `unset_fullscreen`；交帧的线程拿着 configure 之前的窗口状态更新时也会发。这种全屏只由合成器结束，结束时没给尺寸就恢复进入前的尺寸 |
+| `wine/0052-winewayland-Don-t-ask-for-activation-of-a-window-tha` | Wayland 驱动：窗口因为合成器给了键盘焦点而被激活时，不再用 xdg_activation 向合成器再申请一次激活（niri 分支的网格概览收到申请就关掉） |
+| `protonfixes/0051-protonfixes-Also-run-fixes-for-run-when-PROTONFIXES_` | 设了 `PROTONFIXES_RUN_VERB=1` 时，用 `proton run` 启动的程序也执行 protonfixes（`waitforexitandrun` 要先等 wineserver 退出，往运行中的会话里加程序只能用 `run`）；`PROTONFIXES_DISABLE` 仍然优先 |
 | `vkd3d-proton/we-0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
 | `vkd3d-proton/0002-vkd3d-bound-present-waits-during-swapchain-drain` | （这一版没有：GE-Proton 直接带着原版）（GE）销毁交换链时等待呈现有上限，不再卡死 |
 | `dxvk/0002`–`0007` | （这一版没有：GE-Proton 直接带着原版）（GE）分层覆盖窗口的 DXVK 一半、获取图像受阻时保留交换链、《最终幻想14》多屏失焦不缩窗（三个）、黑色沙漠的 DXVK 一半 |
 
 每个补丁的现象、根因、Windows 实测、验证和排查过程见 `we/fixes/`。
 
-0003、0016、0023 在换到 GE-Proton 底座时改过：0003 改到 GE-Proton 新的 SIGSYS 处理函数里；0016 修了一处 `-Werror` 下报错的格式串；0023 和 GE-Proton 覆盖层窗口的条件合并。
+0003、0016、0023 在换到 GE-Proton 底座时改过（0049、0050、0052 是换底座之后新加的）：0003 改到 GE-Proton 新的 SIGSYS 处理函数里；0016 修了一处 `-Werror` 下报错的格式串；0023 和 GE-Proton 覆盖层窗口的条件合并。
 
 ## 测试
 

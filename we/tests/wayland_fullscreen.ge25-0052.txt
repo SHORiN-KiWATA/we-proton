@@ -1,0 +1,9 @@
+notepad:            1368x1026
+niri fullscreen:    2561x1440
+niri ends it:       1368x1026
+probe (every 0.5 s, fullscreen itself at 2 s, back at 5 s):    800x600 800x600 800x600 2561x1440 2561x1440 2561x1440 2561x1440 2561x1440 2561x1440 800x600 800x600 800x600 800x600
+d3d9 window:        2563x1390 floating
+niri fullscreen:    2561x1389
+  2 s later:        2561x1389
+niri ends it:       2563x1390 floating
+grid overview:      screenshots in $WAYLAND_FULLSCREEN_SHOTS

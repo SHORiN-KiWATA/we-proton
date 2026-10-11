@@ -98,10 +98,13 @@ Valve 在 09-23 用的 dxvk、vkd3d-proton、vkd3d、FEX、dxvk-nvapi 比两边�
 
 ## WE-Proton 自己的补丁
 
-- 去掉：0001 和撤回它的 0018；0011（托盘改用 GE-Proton 自带的 StatusNotifierItem 实现）；0012（GE-Proton 的 `qcap-dshow-fixes` 修了同一个 bug）；0024–0042、dxvk 0002–0007、vkd3d-proton 0002（都是从 GE-Proton 搬的，GE-Proton 直接带着原版）
+- 去掉：0001 和撤回它的 0018；0012（GE-Proton 的 `qcap-dshow-fixes` 修了同一个 bug）；0024–0042、dxvk 0002–0007、vkd3d-proton 0002（都是从 GE-Proton 搬的，GE-Proton 直接带着原版）
 - 改过：0003（GE-Proton 换了一套系统调用拦截，新的 SIGSYS 处理函数里有同样的问题，改在那里）、0016（格式串在 `-Werror` 下报错）、0023（和 GE-Proton 覆盖层窗口的条件合并）
 - 编号沿用原来的，`patches/wine/` 里的空号就是去掉的
 - 合并之后 WE-Proton 又加了 0048（wintun 报 Windows 风格的网卡描述，网易 UU 的路由模式要用），直接接在 WE 层后面
+- 托盘：一开始打算用 GE-Proton 在 win32u 里的 StatusNotifierItem 实现、去掉 0011。实机上 WeGame 的托盘图标透明处成了黑色（它转图标时只要颜色平面有 alpha 就不看 AND 掩码），于是 0011 留着，0049 让 win32u 不接手托盘
+- 0050、0052（实机测试时发现）：Wayland 驱动撤销合成器发起的全屏、窗口拿到焦点后还申请激活（niri 分支的网格概览因此关掉），见 `fixes/0050-winewayland-compositor-fullscreen/`、`fixes/0052-winewayland-no-activation-on-focus/`
+- 0051：protonfixes 在 `run` 时也执行修正（`PROTONFIXES_RUN_VERB=1`），在 DW-Proton 底座的 WE 仓库里写的，搬过来
 
 ## 换底座带来的行为变化
 
@@ -109,7 +112,6 @@ Valve 在 09-23 用的 dxvk、vkd3d-proton、vkd3d、FEX、dxvk-nvapi 比两边�
 
 - 以前 WE-Proton 导入 GE-Proton 的补丁时特意没合的几个，现在随 GE-Proton 一起生效：「WM_ACTIVATEAPP 的 lparam 不为零」的通用版（原来只对一个游戏生效，现在对所有程序生效，包括 WeGame）；和反作弊有关的几个 GE-Proton 补丁（环境变量开关，或只对特定游戏生效）
 - DW-Proton 的 dxvk HDR 检测：宿主机开了 HDR 时，dxvk 自动报告 HDR10，不用再设 `DXVK_HDR=1`（`DXVK_NO_HDR=1` 可以关掉）
-- 托盘图标由 GE-Proton 的 StatusNotifierItem 实现显示（代替 WE 0011）
 - 视频走 GE-Proton 的 winedmo + FFmpeg
 - staging 的 `ntdll-WRITECOPY/0010`（GE-Proton 带着）在 kernelbase 的 `VirtualProtect` 里把返回的旧属性 `PAGE_WRITECOPY` 一律改报成 `PAGE_READWRITE`。WE 0005 管的「写过的写时复制页报告成可读写」照样成立；没写过的页，Windows 报 `PAGE_WRITECOPY`（0x08），这一版报 `PAGE_READWRITE`（0x04），见 `tests/writecopy_probe.ge25.txt`。没有去掉这个 staging 补丁
 - 鸣潮那个跨进程画 ARGB 窗口的提交顺带改了 xrender：从没有 alpha 的源画到 32 位目标时，不再把 alpha 清零（所有程序都受影响）。DW-Proton 本来就这样，相对旧版 WE-Proton 不算变化，但和 GE-Proton 原来的行为不同
