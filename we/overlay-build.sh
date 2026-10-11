@@ -2,7 +2,9 @@
 # Build WE-Proton quickly: take the official dwproton release this branch is
 # based on, rebuild only the wine binaries touched by patches/wine/*.patch (and
 # vkd3d-proton's d3d12*.dll if patches/vkd3d-proton has patches, DXVK's DLLs if
-# patches/dxvk has more than the base release applies), and drop them in. The full container build (make redist) gives the same result from
+# patches/dxvk has more than the base release applies), and drop them in;
+# protonfixes patches added since the base release are applied to the runner's
+# copy. The full container build (make redist) gives the same result from
 # scratch but takes hours.
 #
 # Wine is built in the same Steam Runtime SDK image and with the same flags as
@@ -330,6 +332,17 @@ EOF
     done
 fi
 
+# --- protonfixes, only the patches added since the base release -------------
+# The base release ships protonfixes with patches/protonfixes as of $BASE
+# applied. It is Python, so the patches added since are applied to the runner's
+# copy and nothing is built. A changed patch of the base release cannot be
+# redone that way; that takes the full build.
+[ -z "$(git -C "$ROOT" diff --name-only --diff-filter=a "$BASE" -- patches/protonfixes)" ] \
+    || { echo "patches/protonfixes: a patch of $BASE was changed or removed; use the full build" >&2; exit 1; }
+PROTONFIXES_PATCHES=$( { git -C "$ROOT" diff --name-only --diff-filter=A "$BASE" -- patches/protonfixes
+    git -C "$ROOT" ls-files --others --exclude-standard -- patches/protonfixes; } \
+    | grep '\.patch$' | sort -u | sed "s#^#$ROOT/#")
+
 # --- assemble the runner ------------------------------------------------------
 log "assembling $NAME"
 rm -rf "$DIST" "$OBJ/unpack"
@@ -367,6 +380,10 @@ if [ -n "$BUILD_DXVK" ]; then
         done
     done
 fi
+for p in $PROTONFIXES_PATCHES; do
+    patch -d "$DIST/protonfixes" -Np1 -s -i "$p"
+    echo "  patches/protonfixes/$(basename "$p") -> protonfixes/"
+done
 sed -i "s/\"$BASE-x86_64\"/\"$NAME\"/; s/\"display_name\" \"[^\"]*\"/\"display_name\" \"WE-Proton ${BASE#dwproton-}-$RELEASE\"/" \
     "$DIST/compatibilitytool.vdf"
 sed -i "s/ $BASE\$/ $NAME/" "$DIST/version"
@@ -380,6 +397,7 @@ sed -i "s/ $BASE\$/ $NAME/" "$DIST/version"
     for p in "$ROOT"/patches/wine/*.patch; do echo "patch: wine/$(basename "$p")"; done
     for p in $VKD3D_PATCHES; do echo "patch: vkd3d-proton/$(basename "$p")"; done
     [ -z "$BUILD_DXVK" ] || for p in $DXVK_PATCHES; do echo "patch: dxvk/$(basename "$p")"; done
+    for p in $PROTONFIXES_PATCHES; do echo "patch: protonfixes/$(basename "$p")"; done
 } > "$DIST/we-proton-build-info"
 # Wine and vkd3d-proton are LGPL: ship the changes with the binaries, plus how to use them
 mkdir -p "$DIST/we-proton-patches/wine"
@@ -391,6 +409,10 @@ fi
 if [ -n "$BUILD_DXVK" ]; then
     mkdir -p "$DIST/we-proton-patches/dxvk"
     cp $DXVK_PATCHES "$DIST/we-proton-patches/dxvk/"
+fi
+if [ -n "$PROTONFIXES_PATCHES" ]; then
+    mkdir -p "$DIST/we-proton-patches/protonfixes"
+    cp $PROTONFIXES_PATCHES "$DIST/we-proton-patches/protonfixes/"
 fi
 sed -e "s/@NAME@/$NAME/g" -e "s/@BASE@/$BASE/g" -e "s/@WINE@/$(git -C "$ROOT/wine" rev-parse HEAD)/g" \
     -e "s/@VKD3D@/$(git -C "$ROOT/vkd3d-proton" rev-parse HEAD 2>/dev/null)/g" \
