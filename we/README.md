@@ -34,7 +34,7 @@
 | `wine/0020-win32u-Implement-NtUserGetWindowBand` | 实现 `NtUserGetWindowBand`（以及 user32 的 `GetWindowBand`）：程序查询窗口所在的 z 序层级时不再被当成未实现函数中止；Wine 只有桌面层级，有效窗口都返回它 |
 | `wine/0021-msvcp140-msvcp140_2-vcruntime140_1-Report-a-version-` | 内置 VC++ 运行库（`msvcp140`、`msvcp140_2`、`vcruntime140_1`）的版本号报 14.99.65535，比任何已发布的运行库都高：按最低版本检查运行库的程序不再判它缺失 |
 | `wine/0022-wineboot-Keep-the-Visual-C-runtime-version-in-the-re` | wineboot 每次启动时，把 `VC\Runtimes\<arch>` 注册表键里比 `msvcp140.dll` 旧的版本提到它的版本：旧前缀（`wine.inf` 不覆盖已有值）和被写低的键也能跟上 |
-| `wine/0023-winex11-Let-click-through-windows-take-input-again-w` | XWayland 下，因 `WS_EX_TRANSPARENT` 清空了输入区域的窗口拿到焦点时恢复输入：X 收不到穿透窗口上的指针，靠轮询 `GetCursorPos()` 决定何时恢复输入的程序永远等不到鼠标回来 |
+| `wine/0023-winex11-Keep-pointer-input-for-click-through-regular` | XWayland 下，带 `WS_EX_TRANSPARENT` 的普通窗口（托管、非置顶）不清空输入区域、不去掉指针事件：X 收不到穿透窗口上的指针，靠低级鼠标钩子或 `GetCursorPos()` 看光标、决定何时恢复输入的程序永远等不到鼠标回来。置顶和非托管窗口照旧穿透 |
 | `wine/0024-ntdll-Reuse-the-effective-range-after-clearing-nativ` | （GE）清掉 native view 后重试分配用有效的地址范围，不再必然失败 |
 | `wine/0025-msxml3-Add-GB2312-support-for-builtin-character-conv` | （staging）内置 msxml3 认 GB2312 编码 |
 | `wine/0026-ntdll-Reserve-some-space-for-top-down-allocation-in-` | （GE，上游 f4c5b041）大地址感知的 32 位程序在 WoW64 下保留顶部地址空间 |
@@ -80,7 +80,7 @@
 - `ime_edit_probe`（0014）：用输入法往输入框里打字时，窗口收到哪些 IME 消息和字符消息、最后得到什么文字；参数 `disable` 先调 `ImmDisableIME(0)`。用 `ime_type.sh` 跑（`WINEPREFIX=<新前缀> ime_type.sh ime_edit_probe ctrl+space TYPE:nihao space -- <runner>/files/bin/wine ime_edit_probe.exe 20 disable`），它起私有的 Xvfb、会话总线和 fcitx5（XIM 前端 + rime），用 xdotool 打拼音，不碰桌面的输入法。需要 fcitx5、fcitx5-rime、xdotool
 - `inbv_probe`（0019）：从 `ntoskrnl.exe` 取 `InbvAcquireDisplayOwnership`、`InbvResetDisplay` 并调用；是 stub 时进程被 abort，实现了就打印 `called ok`
 - `window_band_probe`（0020，另有 32 位的 `window_band_probe32.exe`）：对各种窗口调用 `GetWindowBand`/`NtUserGetWindowBand`，打印返回值、层级和错误码；参数 `nullptr`、`nullhwnd` 测输出指针为空。是 stub 时进程被 abort
-- `input_shape_probe`（0023）：窗口一秒后加上 `WS_EX_TRANSPARENT`（参数 `layered` 再加 `WS_EX_LAYERED`），打印 wineserver 的 `WindowFromPoint` 是否还命中它；`input_shape_probe.sh` 在无头 gamescope（XWayland）里跑它，读出 X 输入区域的矩形数（0 = 点击穿透），再把焦点移走又还给它，读第二次
+- `input_shape_probe`（0023）：模仿 Electron 的 `setIgnoreMouseEvents(true, { forward: true })`，窗口一秒后加上 `WS_EX_LAYERED | WS_EX_TRANSPARENT`，低级鼠标钩子看到光标到了窗口上就去掉这两个样式，最后打印钩子看到的移动和窗口是否恢复；参数 `topmost` 让窗口置顶，像覆盖层。`input_shape_probe.sh [--topmost]` 在无头 gamescope（XWayland）里跑它，读出穿透时 X 输入区域的矩形数（0 = 点击穿透）和是否选了指针移动事件，再用 XTest 把指针从窗口外移进来。XTest 下 X 服务器总知道指针在哪，复现不出 niri 下的卡死，只能看 X 这一侧的状态
 - `vcrt_version_probe`（0021、0022）：打印 `VC\Runtimes\<arch>` 在两个注册表视图里的值和 system32、syswow64 里运行库 DLL 的文件版本，再按“注册表和 `msvcp140_2.dll`、`vcruntime140_1.dll` 的文件版本都不低于最低版本”检查（默认 14.44.35211，参数可改）。`wine24-redist` 是装了官方 14.44.35211 运行库之后的输出
 - `dxil-spirv/run.sh`（vkd3d-proton 0001）：用 dxil-spirv 的 `structurize-test` 跑 `*.st` 控制流图，检查生成的 SPIR-V 能通过校验。源码取 `build/overlay/src-vkd3d-proton`（先跑 `overlay-build.sh`）；`--unpatched` 用未打补丁的子模块，应该失败
 

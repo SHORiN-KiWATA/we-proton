@@ -1,4 +1,4 @@
-From 8a1a6ce64e2295e427a7fe983d0c461149560e14 Mon Sep 17 00:00:00 2001
+From 839b99fe585a4d3ce7d218e3893cc7cfcbc71920 Mon Sep 17 00:00:00 2001
 From: GloriousEggroll <gloriouseggroll@gmail.com>
 Date: Wed, 19 Aug 2026 00:00:00 -0600
 Subject: [PATCH 24/42] ntdll: Reuse the effective range after clearing native

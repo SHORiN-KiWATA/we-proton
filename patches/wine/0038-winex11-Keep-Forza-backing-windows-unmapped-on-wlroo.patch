@@ -1,4 +1,4 @@
-From 15507f934ce4a3d5b57450f9b76b0325b77666ed Mon Sep 17 00:00:00 2001
+From c0a35822a8cea3a8ae416f06fe333b4282029c33 Mon Sep 17 00:00:00 2001
 From: GloriousEggroll <gloriouseggroll@gmail.com>
 Date: Tue, 15 Sep 2026 02:00:00 -0600
 Subject: [PATCH 38/42] winex11: Keep Forza backing windows unmapped on
@@ -33,10 +33,10 @@ Imported from GE-Proton11-7 patches/wine-hotfixes/pending/winex11-keep-forza-bac
  1 file changed, 17 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 583959ee04f..74c46daed4c 100644
+index 3ddd6c91d7e..e3e1db3b29d 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -1833,6 +1833,16 @@ static void window_set_wm_state( struct x11drv_win_data *data, UINT new_state, B
+@@ -1826,6 +1826,16 @@ static void window_set_wm_state( struct x11drv_win_data *data, UINT new_state, B
      UINT old_state = data->pending_state.wm_state;
      HWND foreground = NtUserGetForegroundWindow();
  
@@ -53,7 +53,7 @@ index 583959ee04f..74c46daed4c 100644
      data->desired_state.wm_state = new_state;
      data->desired_state.activate = activate;
      if (data->state_locks) return; /* win32 state is being updated, delay the change */
-@@ -3778,11 +3788,16 @@ void X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, HWND owner_hint, UIN
+@@ -3773,11 +3783,16 @@ void X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, HWND owner_hint, UIN
  
      if (use_force_below_hack())
      {

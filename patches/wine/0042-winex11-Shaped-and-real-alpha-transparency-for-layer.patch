@@ -1,4 +1,4 @@
-From 2cfb1fda06ed2765ff25d7ffcee79774f32b47a6 Mon Sep 17 00:00:00 2001
+From a9361169c70b03fd59eff35de6a208a0d2b58442 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Sun, 11 Oct 2026 21:33:02 +0900
 Subject: [PATCH 42/42] winex11: Shaped and real-alpha transparency for layered
@@ -12,9 +12,9 @@ Imported from GE-Proton11-7 patches/game-patches/layered-overlay-wine.patch;
 its declarations moved to where needs_offscreen_rendering() is declared here.
 ---
  dlls/winex11.drv/init.c   | 386 +++++++++++++++++++++++++++++++++++++-
- dlls/winex11.drv/window.c |  31 ++-
+ dlls/winex11.drv/window.c |  29 ++-
  dlls/winex11.drv/x11drv.h |   3 +
- 3 files changed, 411 insertions(+), 9 deletions(-)
+ 3 files changed, 410 insertions(+), 8 deletions(-)
 
 diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
 index 0b4e65ad5b8..81f3a0bc130 100644
@@ -470,10 +470,10 @@ index 0b4e65ad5b8..81f3a0bc130 100644
      else colormap = XCreateColormap( gdi_display, get_dummy_parent(), visual.visual, visual_class_alloc( visual.class ) );
      if (!colormap) return None;
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 74c46daed4c..253735ad6d1 100644
+index e3e1db3b29d..2e0f516e1c9 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -570,6 +570,7 @@ static unsigned long get_mwm_decorations( struct x11drv_win_data *data, DWORD st
+@@ -593,6 +593,7 @@ static BOOL keep_pointer_input( struct x11drv_win_data *data, DWORD ex_style )
  static int get_window_attributes( struct x11drv_win_data *data, XSetWindowAttributes *attr )
  {
      DWORD ex_style = NtUserGetWindowLongW( data->hwnd, GWL_EXSTYLE );
@@ -481,21 +481,19 @@ index 74c46daed4c..253735ad6d1 100644
  
      attr->colormap          = data->whole_colormap ? data->whole_colormap : default_colormap;
      attr->save_under        = ((NtUserGetClassLongW( data->hwnd, GCL_STYLE ) & CS_SAVEBITS) != 0);
-@@ -579,9 +580,10 @@ static int get_window_attributes( struct x11drv_win_data *data, XSetWindowAttrib
+@@ -602,8 +603,9 @@ static int get_window_attributes( struct x11drv_win_data *data, XSetWindowAttrib
      attr->background_pixel  = 0;
      attr->event_mask        = (ExposureMask | KeyPressMask | KeyReleaseMask |
                                 FocusChangeMask | KeymapStateMask | StructureNotifyMask | PropertyChangeMask);
 -    /* for transparent windows, exclude mouse events to allow mouse pass-through */
--    if (!(ex_style & WS_EX_TRANSPARENT)) attr->event_mask |= (PointerMotionMask | ButtonPressMask |
--                                                              ButtonReleaseMask | EnterWindowMask);
+-    if (!(ex_style & WS_EX_TRANSPARENT) || keep_pointer_input( data, ex_style ))
 +    /* for transparent windows, exclude mouse events to allow mouse pass-through
 +       (overlay-shape mode keeps input so the shaped overlay stays interactive) */
-+    if (!(ex_style & WS_EX_TRANSPARENT) || overlay) attr->event_mask |= (PointerMotionMask | ButtonPressMask |
-+                                                                       ButtonReleaseMask | EnterWindowMask);
++    if (!(ex_style & WS_EX_TRANSPARENT) || overlay || keep_pointer_input( data, ex_style ))
+         attr->event_mask |= (PointerMotionMask | ButtonPressMask | ButtonReleaseMask | EnterWindowMask);
  
      return (CWSaveUnder | CWColormap | CWBorderPixel | CWBackPixel |
-             CWEventMask | CWBitGravity | CWBackingStore);
-@@ -598,6 +600,9 @@ static void sync_window_input_shape( struct x11drv_win_data *data )
+@@ -621,6 +623,9 @@ static void sync_window_input_shape( struct x11drv_win_data *data )
  {
  #ifdef HAVE_LIBXSHAPE
      DWORD ex_style = NtUserGetWindowLongW( data->hwnd, GWL_EXSTYLE );
@@ -505,16 +503,16 @@ index 74c46daed4c..253735ad6d1 100644
      char const *sgi;
  
      if (!data->whole_window) return;
-@@ -614,7 +619,7 @@ static void sync_window_input_shape( struct x11drv_win_data *data )
+@@ -637,7 +642,7 @@ static void sync_window_input_shape( struct x11drv_win_data *data )
       */
      if ((sgi = getenv( "SteamGameId" )) && !strcmp( sgi, "3678970" )) return;
  
--    if (ex_style & WS_EX_TRANSPARENT)
-+    if ((ex_style & WS_EX_TRANSPARENT) && !overlay)
+-    if ((ex_style & WS_EX_TRANSPARENT) && !keep_pointer_input( data, ex_style ))
++    if ((ex_style & WS_EX_TRANSPARENT) && !overlay && !keep_pointer_input( data, ex_style ))
      {
          /* For transparent windows, set an empty input shape to allow mouse pass-through */
          static XRectangle empty_rect;
-@@ -2864,6 +2869,17 @@ static void create_whole_window( struct x11drv_win_data *data )
+@@ -2859,6 +2864,17 @@ static void create_whole_window( struct x11drv_win_data *data )
      }
      data->shaped = (win_rgn != 0);
  
@@ -532,7 +530,7 @@ index 74c46daed4c..253735ad6d1 100644
      if (data->vis.visualid != default_visual.visualid)
          data->whole_colormap = XCreateColormap( data->display, root_window, data->vis.visual, AllocNone );
  
-@@ -3049,7 +3065,12 @@ void X11DRV_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style )
+@@ -3044,7 +3060,12 @@ void X11DRV_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style )
          if (changed & WS_EX_LAYERED) /* changing WS_EX_LAYERED resets attributes */
          {
              data->layered = FALSE;
@@ -547,7 +545,7 @@ index 74c46daed4c..253735ad6d1 100644
          }
          if (changed & WS_EX_TRANSPARENT) sync_window_style( data );
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index c0980d026a1..0635d4b564d 100644
+index b51362ba2e3..72ef1cd9383 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
 @@ -367,6 +367,9 @@ struct x11drv_escape_get_drawable
@@ -557,9 +555,9 @@ index c0980d026a1..0635d4b564d 100644
 +extern BOOL layered_overlay_shape_enabled(void);
 +extern BOOL layered_overlay_alpha_enabled(void);
 +extern BOOL layered_overlay_input_shape_enabled(void);
- extern void restore_window_input_shape( HWND hwnd );
  extern void set_dc_drawable( HDC hdc, Drawable drawable, const RECT *rect, int mode, const XVisualInfo *vis );
  extern Drawable get_dc_drawable( HDC hdc, RECT *rect );
+ extern XVisualInfo get_other_process_visual( HWND hwnd );
 -- 
 2.56.0
 

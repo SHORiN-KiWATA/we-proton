@@ -1,4 +1,4 @@
-From d6d298924ce7181706ae9449e2d9e246ffbac114 Mon Sep 17 00:00:00 2001
+From 073fa90bff4ae0c40ac3d18883d914586449dac3 Mon Sep 17 00:00:00 2001
 From: GloriousEggroll <gloriouseggroll@gmail.com>
 Date: Sun, 11 Oct 2026 20:28:17 +0900
 Subject: [PATCH 34/42] ntdll: Allow AI LIMIT to reuse DXBC compute shaders in

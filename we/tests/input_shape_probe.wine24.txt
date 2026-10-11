@@ -1,7 +1,15 @@
 == input_shape_probe.sh (r24, headless gamescope, steamrt4)
 XWAYLAND: True
-after WS_EX_TRANSPARENT: input rectangles 0
-after it got the focus again: input rectangles 0
-before: exstyle 0x100 WindowFromPoint(centre)==window 1
-after:  exstyle 0x120 WindowFromPoint(centre)==window 1
-exit 0
+click-through: input rectangles 0, pointer motion selected False
+after the pointer came back: input rectangles 1, pointer motion selected True
+transparent: exstyle 0x80120
+hook saw 5 moves, 1 over the window, last (124,104); GetCursorPos (250,200)
+result: exstyle 0x100 -> takes input again
+
+== input_shape_probe.sh --topmost (r24, headless gamescope, steamrt4)
+XWAYLAND: True
+click-through: input rectangles 0, pointer motion selected False
+after the pointer came back: input rectangles 1, pointer motion selected True
+transparent: exstyle 0x80128
+hook saw 5 moves, 1 over the window, last (124,104); GetCursorPos (250,200)
+result: exstyle 0x108 -> takes input again
