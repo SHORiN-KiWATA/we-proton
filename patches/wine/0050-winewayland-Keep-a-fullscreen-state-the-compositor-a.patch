@@ -1,0 +1,117 @@
+From a31471ef2fb05e2333e10bb77b01a6af057d4b90 Mon Sep 17 00:00:00 2001
+From: SHORiN-KIWATA <shorin@users.noreply.github.com>
+Date: Mon, 12 Oct 2026 03:35:26 +0900
+Subject: [PATCH] winewayland: Keep a fullscreen state the compositor applies
+ on its own.
+
+When the compositor makes a window fullscreen by itself, for example from a
+keybinding, the driver took it back on the next window update: it derives
+the fullscreen state from the window position and style, a window with a
+caption or a resizable frame never counts as fullscreen, so it sent
+unset_fullscreen right away.
+
+Remember a fullscreen state that arrives in a configure without having been
+requested and keep it until the compositor sends a configure without it;
+then size the window to that configure instead of keeping the fullscreen
+size. Fullscreen states the window asks for itself work as before.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/winewayland.drv/wayland_surface.c |  1 +
+ dlls/winewayland.drv/waylanddrv.h      |  2 ++
+ dlls/winewayland.drv/window.c          | 29 ++++++++++++++++++++++++--
+ 3 files changed, 30 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index 751c607c155..2e46063f806 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -2165,6 +2165,7 @@ void wayland_surface_clear_role(struct wayland_surface *surface)
+         }
+ 
+         surface->requested_output = NULL;
++        surface->compositor_fullscreen = FALSE;
+         break;
+ 
+     case WAYLAND_SURFACE_ROLE_LAYER:
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+index aace6fd9db0..7499a32edc9 100644
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -507,6 +507,8 @@ struct wayland_surface
+             struct xdg_toplevel_icon_v1 *xdg_toplevel_icon;
+             struct zxdg_toplevel_decoration_v1 *zxdg_toplevel_decoration_v1;
+             const struct wl_output *requested_output;
++            /* fullscreen state the compositor applied on its own */
++            BOOL compositor_fullscreen;
+         };
+         struct
+         {
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index 839103600ff..47c878de744 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -250,6 +250,12 @@ static void wayland_win_data_get_config(struct wayland_win_data *data,
+     {
+         window_state |= pending_state;
+     }
++    else if (data->wayland_surface &&
++             data->wayland_surface->role == WAYLAND_SURFACE_ROLE_TOPLEVEL &&
++             data->wayland_surface->compositor_fullscreen)
++    {
++        window_state |= WAYLAND_SURFACE_CONFIG_STATE_FULLSCREEN;
++    }
+     /* The fullscreen state is implied by the window position and style. */
+     else if (fullscreen)
+     {
+@@ -550,7 +556,9 @@ static void wayland_surface_update_state_toplevel(struct wayland_surface *surfac
+         {
+             xdg_toplevel_set_maximized(surface->xdg_toplevel);
+         }
+-        if (surface->window.state & WAYLAND_SURFACE_CONFIG_STATE_FULLSCREEN)
++        /* A fullscreen state the compositor applied on its own needs no request. */
++        if ((surface->window.state & WAYLAND_SURFACE_CONFIG_STATE_FULLSCREEN) &&
++            !surface->compositor_fullscreen)
+         {
+             struct wayland_output *output;
+             struct wl_output *wl_output = NULL;
+@@ -1066,6 +1074,7 @@ static void wayland_configure_window(HWND hwnd)
+     DWORD style;
+     BOOL needs_enter_size_move = FALSE;
+     BOOL needs_exit_size_move = FALSE;
++    BOOL leaving_compositor_fullscreen = FALSE;
+     struct wayland_win_data *data;
+     RECT rect;
+ 
+@@ -1094,6 +1103,21 @@ static void wayland_configure_window(HWND hwnd)
+     memset(&surface->requested, 0, sizeof(surface->requested));
+ 
+     state = surface->processing.state;
++
++    /* A fullscreen state the compositor applies on its own (for example from a
++     * keybinding) isn't implied by the window position and style. Remember it,
++     * so that the next window update doesn't take it back, until the compositor
++     * sends a configure without it. */
++    if (surface->role == WAYLAND_SURFACE_ROLE_TOPLEVEL)
++    {
++        if (!(state & WAYLAND_SURFACE_CONFIG_STATE_FULLSCREEN))
++        {
++            leaving_compositor_fullscreen = surface->compositor_fullscreen;
++            surface->compositor_fullscreen = FALSE;
++        }
++        else if (!(surface->window.state & WAYLAND_SURFACE_CONFIG_STATE_FULLSCREEN))
++            surface->compositor_fullscreen = TRUE;
++    }
+     /* Ignore size hints if we don't have a state that requires strict
+      * size adherence, in order to avoid spurious resizes.
+      * The tiled and maximized states have a strict size adherance, so
+@@ -1138,7 +1162,8 @@ static void wayland_configure_window(HWND hwnd)
+      * the compositor is requesting, don't force a resize, since some applications
+      * are very insistent on a particular fullscreen size (which may not match
+      * the monitor size). */
+-    if ((surface->window.state & WAYLAND_SURFACE_CONFIG_STATE_FULLSCREEN) &&
++    if (!leaving_compositor_fullscreen &&
++        (surface->window.state & WAYLAND_SURFACE_CONFIG_STATE_FULLSCREEN) &&
+         wayland_surface_config_is_compatible(&surface->processing, surface->window.rect,
+                                              surface->window.state))
+     {
