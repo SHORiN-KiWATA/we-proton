@@ -6,3 +6,6 @@
 
 /.vagrant/
 /vagrant_share/
+
+# WE-Proton build output (we/build.sh)
+/build/
