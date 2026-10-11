@@ -70,6 +70,11 @@ if [ "$PREP" = 1 ]; then
     fi
 fi
 
+# Always start from an empty build/obj. Makefile.in cannot build autotools packages
+# whose configure is generated in the synced source copy (xz) a second time: the
+# next sync sees the generated files, syncs again and deletes them, while the
+# configure stamp stays. ccache keeps the rebuild reasonably fast.
+rm -rf "$OBJ"
 # configure.sh writes the build name into the Makefile, so reconfigure when it changes
 mkdir -p "$OBJ"
 if [ ! -f "$OBJ/Makefile" ] || ! grep -qx "BUILD_NAME := $NAME" "$OBJ/Makefile"; then

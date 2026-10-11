@@ -121,7 +121,9 @@ we/build.sh --name we-proton-<版本> [--install] [--jobs N] [--skip-prep]
 5. 生成三个发布文件：`<名字>.tar.xz`（runner）、`<名字>.sha512sum`、`<名字>-source.tar.xz`（打好补丁的 Wine、vkd3d-proton、dxvk 源码和 7-Zip 源码，满足 LGPL 提供源码的要求）。`files/utils/7zz` 的许可证复制成 `LICENSE.7zip`、`COPYING.7zip`
 6. `--install` 时复制到 `~/.local/share/proton/runners/WE-Proton Latest`
 
-`--skip-prep` 跳过第 1、2 步，用在补丁已经打好、只想重新编译的时候。
+每次都清空 `build/obj` 从头编：`Makefile.in` 对 xz 这种在源码副本里生成 configure 的组件做不了第二次构建（下次同步时发现源码副本多了生成的文件，重新同步、把它们删掉，configure 的完成标记却还在，接着编就找不到 `build-aux/missing`）。有 ccache，从头编一次大约一个多小时。想试增量，可以自己在 `build/obj` 里跑 `make redist`，碰到上面的错误再清空。
+
+`--skip-prep` 跳过第 1、2 步，用在补丁已经打好、不想重新打一遍的时候。
 
 只改了 Wine 补丁、想快点验证时，可以先单独编 Wine：在 SDK 镜像里对打好补丁的 `wine/` 跑 `dlls/winevulkan/make_vulkan -x vk.xml -X video.xml`、`tools/make_specfiles`，再用 `Makefile.in` 里 `WINE_AUTOCONF_ARGS` 的参数（`--enable-werror` 等）配置编译。这一步只查编译错误，不出 runner。
 
