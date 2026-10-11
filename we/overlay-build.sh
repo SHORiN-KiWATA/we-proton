@@ -61,7 +61,12 @@ declare -A TARGETS=(
     [dlls/iphlpapi]="dlls/iphlpapi/x86_64-windows/iphlpapi.dll:x86_64-windows/iphlpapi.dll dlls/iphlpapi/i386-windows/iphlpapi.dll:i386-windows/iphlpapi.dll"
     [dlls/nsi]="dlls/nsi/x86_64-windows/nsi.dll:x86_64-windows/nsi.dll dlls/nsi/i386-windows/nsi.dll:i386-windows/nsi.dll"
     [dlls/nsiproxy.sys]="dlls/nsiproxy.sys/x86_64-windows/nsiproxy.sys:x86_64-windows/nsiproxy.sys dlls/nsiproxy.sys/nsiproxy.so:x86_64-unix/nsiproxy.so"
+    [dlls/vcruntime140_1]="dlls/vcruntime140_1/x86_64-windows/vcruntime140_1.dll:x86_64-windows/vcruntime140_1.dll"
+    [programs/wineboot]="programs/wineboot/x86_64-windows/wineboot.exe:x86_64-windows/wineboot.exe"
 )
+for m in msvcp140 msvcp140_2; do
+    TARGETS[dlls/$m]="dlls/$m/x86_64-windows/$m.dll:x86_64-windows/$m.dll dlls/$m/i386-windows/$m.dll:i386-windows/$m.dll"
+done
 # d3dcompiler_43's sources are built into d3d10 and every other d3dcompiler_*.
 for m in d3d10 d3dcompiler_{33..43} d3dcompiler_46 d3dcompiler_47; do
     for arch in x86_64 i386; do

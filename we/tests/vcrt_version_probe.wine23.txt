@@ -1,0 +1,11 @@
+minimum 14.44.35211
+reg x64   64-bit view: Installed=1 Major=14 Minor=42 Bld=34433 Rbld=0 Version=14.42.34433.0
+reg x64   32-bit view: Installed=1 Major=14 Minor=42 Bld=34433 Rbld=0 Version=14.42.34433.0
+reg x86   64-bit view: missing
+reg x86   32-bit view: Installed=1 Major=14 Minor=42 Bld=34433 Rbld=0 Version=14.42.34433.0
+file C:\windows\system32\msvcp140_2.dll: 14.42.34433.0, LoadLibrary ok
+file C:\windows\system32\vcruntime140_1.dll: 14.42.34433.0, LoadLibrary ok
+file C:\windows\system32\msvcp140.dll: 14.42.34433.0
+file C:\windows\system32\vcruntime140.dll: no version resource
+file C:\windows\syswow64\msvcp140.dll: 14.42.34433.0
+check: registry too old, files too old -> runtime reported missing

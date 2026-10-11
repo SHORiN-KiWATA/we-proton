@@ -24,6 +24,8 @@
 | wine 0018 | 撤回 0001：带上 0001 时有程序报运行环境异常，官方包不报 | `0001-ntoskrnl-driver-functions/` |
 | wine 0019 | 撤回 0001 后《王者万象棋》闪退：驱动调用的 `InbvAcquireDisplayOwnership`/`InbvResetDisplay` 在 Wine 里是会 abort 的 stub，只把这两个空操作加回来 | `0019-ntoskrnl-inbv-display-functions/` |
 | wine 0020 | 《暗区突围：无限》进游戏两分多钟后闪退：查询窗口层级的 `NtUserGetWindowBand` 在 Wine 里是一调用就中止进程的 stub | `0020-win32u-window-band/` |
+| wine 0021 | 《诡秘之主》启动时提示缺少 Microsoft Visual C++ 2015-2022 Redistributable (x64)：引导程序要求注册表和 DLL 的版本都 ≥ 14.44.35211，Wine 内置的是 14.42.34433；把内置 DLL 的版本号改成 14.99.65535 | `0021-vcruntime-version/` |
+| wine 0022 | 同上，注册表那一项：`wine.inf` 不覆盖已有值，旧前缀的运行库版本停在建前缀时的值；wineboot 每次启动把它提到 `msvcp140.dll` 的版本 | `0021-vcruntime-version/` |
 | vkd3d-proton 0001 | dxil-spirv 生成非法的结构化控制流，RADV 拒绝后崩溃 | `vkd3d-0001-dxil-spirv-loop-breaks/` |
 
 ## 已知、没修的问题

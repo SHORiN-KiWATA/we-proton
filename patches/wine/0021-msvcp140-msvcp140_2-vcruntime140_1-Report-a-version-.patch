@@ -1,0 +1,64 @@
+From b7a4a945faec012c8df0693588f6e4b34a8e7824 Mon Sep 17 00:00:00 2001
+From: SHORiN-KIWATA <shorin@users.noreply.github.com>
+Date: Sun, 11 Oct 2026 19:19:52 +0900
+Subject: [PATCH 21/22] msvcp140, msvcp140_2, vcruntime140_1: Report a version
+ higher than any released runtime.
+
+Programs that need the Visual C++ runtime compare the file version of
+these DLLs in the system directory against the minimum version they were
+built with. 14.42.34433 is already lower than what current toolchains
+require (14.44.35211), so such programs report the runtime as missing
+and refuse to start. Wine loads its builtin copies unless they are
+overridden, so the number only matters to those checks: report 14.99.65535,
+which no released runtime reaches, instead of following every new
+toolchain.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/msvcp140/version.rc       | 3 ++-
+ dlls/msvcp140_2/version.rc     | 3 ++-
+ dlls/vcruntime140_1/version.rc | 3 ++-
+ 3 files changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/msvcp140/version.rc b/dlls/msvcp140/version.rc
+index d574d4b9c65..72133a948fe 100644
+--- a/dlls/msvcp140/version.rc
++++ b/dlls/msvcp140/version.rc
+@@ -18,6 +18,7 @@
+ 
+ #define WINE_FILEDESCRIPTION_STR "Wine runtime library"
+ #define WINE_FILENAME_STR "msvcp140.dll"
+-#define WINE_FILEVERSION 14,42,34433,0
++/* higher than any released runtime, programs compare it to the minimum they need */
++#define WINE_FILEVERSION 14,99,65535,0
+ 
+ #include "wine/wine_common_ver.rc"
+diff --git a/dlls/msvcp140_2/version.rc b/dlls/msvcp140_2/version.rc
+index 1732f53f322..18abbd5a345 100644
+--- a/dlls/msvcp140_2/version.rc
++++ b/dlls/msvcp140_2/version.rc
+@@ -18,6 +18,7 @@
+ 
+ #define WINE_FILEDESCRIPTION_STR "Wine runtime library"
+ #define WINE_FILENAME_STR "msvcp140_2.dll"
+-#define WINE_FILEVERSION 14,42,34433,0
++/* higher than any released runtime, programs compare it to the minimum they need */
++#define WINE_FILEVERSION 14,99,65535,0
+ 
+ #include "wine/wine_common_ver.rc"
+diff --git a/dlls/vcruntime140_1/version.rc b/dlls/vcruntime140_1/version.rc
+index dd39e049e43..4239aa37fad 100644
+--- a/dlls/vcruntime140_1/version.rc
++++ b/dlls/vcruntime140_1/version.rc
+@@ -18,6 +18,7 @@
+ 
+ #define WINE_FILEDESCRIPTION_STR "Wine runtime library"
+ #define WINE_FILENAME_STR "vcruntime140_1.dll"
+-#define WINE_FILEVERSION 14,42,34433,0
++/* higher than any released runtime, programs compare it to the minimum they need */
++#define WINE_FILEVERSION 14,99,65535,0
+ 
+ #include "wine/wine_common_ver.rc"
+-- 
+2.56.0
+

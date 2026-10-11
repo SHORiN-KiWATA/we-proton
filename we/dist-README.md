@@ -6,8 +6,8 @@ WE-Proton 是 DW-Proton 的一个个人修改版，补了几个 Wine 和 vkd3d-p
 
 - `bin/wineserver`
 - `lib/wine/x86_64-unix/` 下的 `ntdll.so`、`win32u.so`、`qcap.so`、`nsiproxy.so`，以及新增的 `explorer.so`、`wintun.so`
-- `lib/wine/x86_64-windows/` 下的 `ntoskrnl.exe`、`nsiproxy.sys`、`wow64win.dll`
-- `lib/wine/{x86_64,i386}-windows/` 下的 `ntdll.dll`、`kernelbase.dll`、`kernel32.dll`、`user32.dll`、`win32u.dll`、`rpcrt4.dll`、`winhttp.dll`、`iphlpapi.dll`、`nsi.dll`、`explorer.exe`、`d3d10.dll`、`d3dcompiler_33`～`43`、`46`、`47`，以及新增的 `wintun.dll`
+- `lib/wine/x86_64-windows/` 下的 `ntoskrnl.exe`、`nsiproxy.sys`、`wow64win.dll`、`vcruntime140_1.dll`、`wineboot.exe`
+- `lib/wine/{x86_64,i386}-windows/` 下的 `ntdll.dll`、`kernelbase.dll`、`kernel32.dll`、`user32.dll`、`win32u.dll`、`rpcrt4.dll`、`winhttp.dll`、`iphlpapi.dll`、`nsi.dll`、`explorer.exe`、`d3d10.dll`、`d3dcompiler_33`～`43`、`46`、`47`、`msvcp140.dll`、`msvcp140_2.dll`，以及新增的 `wintun.dll`
 - vkd3d-proton（D3D12）：`lib/wine/vkd3d-proton/{x86_64,i386}-windows/` 下的 `d3d12.dll`、`d3d12core.dll`
 
 Unix 侧只换了 64 位的库（`x86_64-unix`）。32 位程序要在 WoW64 模式下运行（`PROTON_USE_WOW64=1`，wegame-launcher 默认开启）才用得上 `*.so` 里的修复；不开 WoW64 时，它们用的是官方发布包里没改过的 `i386-unix` 库。
@@ -36,6 +36,8 @@ Unix 侧只换了 64 位的库（`x86_64-unix`）。32 位程序要在 WoW64 模
 | wine 0018 | 撤回 wine 0001：带上它时有程序报运行环境异常 |
 | wine 0019 | 撤回 wine 0001 后《王者万象棋》闪退（驱动调用 `Inbv*` 被中止）；只把这两个空操作加回来 |
 | wine 0020 | 《暗区突围：无限》进游戏后闪退（查询窗口层级的 `NtUserGetWindowBand` 没有实现，进程被中止） |
+| wine 0021 | 《诡秘之主》等较新的 UE5 游戏启动时提示缺少 Microsoft Visual C++ 2015-2022 Redistributable，点确定就退出（内置运行库的版本号低于游戏要求的最低版本） |
+| wine 0022 | 同上，注册表里记的运行库版本停在建前缀时的旧值，旧前缀换新版后仍然提示 |
 | vkd3d-proton 0001 | 部分 D3D12 着色器被翻译成非法的 SPIR-V，AMD 显卡（Mesa RADV）上直接崩溃 |
 
 补丁源码在 `we-proton-patches/` 的 `wine/` 和 `vkd3d-proton/` 下。

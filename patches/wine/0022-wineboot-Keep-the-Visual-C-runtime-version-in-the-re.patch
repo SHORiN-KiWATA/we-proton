@@ -1,0 +1,123 @@
+From 4056e98faa9b8b5aa26996e583b5ebb3d73070b4 Mon Sep 17 00:00:00 2001
+From: SHORiN-KIWATA <shorin@users.noreply.github.com>
+Date: Sun, 11 Oct 2026 19:19:52 +0900
+Subject: [PATCH 22/22] wineboot: Keep the Visual C++ runtime version in the
+ registry up to date.
+
+Programs also check HKLM\Software\Microsoft\VisualStudio\14.0\VC\Runtimes\<arch>
+against a minimum version, and those values come from wine.inf, which
+does not overwrite them in existing prefixes, so they keep the version
+of whatever Wine first created the prefix. Installing a redistributable
+also writes its own version there even when it keeps the newer DLLs that
+are already in the system directory.
+
+On every boot, raise Major, Minor, Bld, Rbld and Version of the keys that
+exist to the file version of msvcp140.dll for that architecture when they
+report something older. Keys reporting a newer version are left alone.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ programs/wineboot/wineboot.c | 80 ++++++++++++++++++++++++++++++++++++
+ 1 file changed, 80 insertions(+)
+
+diff --git a/programs/wineboot/wineboot.c b/programs/wineboot/wineboot.c
+index c3334dd1843..a34c2538bad 100644
+--- a/programs/wineboot/wineboot.c
++++ b/programs/wineboot/wineboot.c
+@@ -1082,6 +1082,85 @@ static void create_known_dlls(void)
+     RegCloseKey( key );
+ }
+ 
++static BOOL get_dll_version( const WCHAR *path, DWORD version[4] )
++{
++    VS_FIXEDFILEINFO *info;
++    DWORD size;
++    void *data;
++    UINT len;
++    BOOL ret;
++
++    if (!(size = GetFileVersionInfoSizeW( path, NULL ))) return FALSE;
++    if (!(data = malloc( size ))) return FALSE;
++    ret = GetFileVersionInfoW( path, 0, size, data ) &&
++          VerQueryValueW( data, L"\\", (void **)&info, &len ) && len >= sizeof(*info);
++    if (ret)
++    {
++        version[0] = HIWORD(info->dwFileVersionMS);
++        version[1] = LOWORD(info->dwFileVersionMS);
++        version[2] = HIWORD(info->dwFileVersionLS);
++        version[3] = LOWORD(info->dwFileVersionLS);
++    }
++    free( data );
++    return ret;
++}
++
++/* Programs check this key against a minimum runtime version. Installing a
++ * Visual C++ redistributable writes its own version here even when the DLLs it
++ * carries are older than the ones in the system directory and are not copied,
++ * so make sure the key never reports an older version than msvcp140.dll. */
++static void update_vcruntime_keys(void)
++{
++    static const WCHAR *names[] = { L"Major", L"Minor", L"Bld", L"Rbld" };
++    WCHAR path[MAX_PATH], subkey[64], version[32];
++    DWORD size, cur[4], dll[4];
++    const WCHAR *arch;
++    HKEY key;
++
++    for (int i = 0; machines[i].Machine; i++)
++    {
++        WORD machine = machines[i].Native ? IMAGE_FILE_MACHINE_TARGET_HOST : machines[i].Machine;
++
++        switch (machines[i].Machine)
++        {
++        case IMAGE_FILE_MACHINE_I386:  arch = L"x86"; break;
++        case IMAGE_FILE_MACHINE_AMD64: arch = L"x64"; break;
++        case IMAGE_FILE_MACHINE_ARM64: arch = L"arm64"; break;
++        default: continue;
++        }
++        if (!GetSystemWow64Directory2W( path, MAX_PATH, machine )) continue;
++        lstrcatW( path, L"\\msvcp140.dll" );
++        if (!get_dll_version( path, dll )) continue;
++
++        swprintf( subkey, ARRAY_SIZE(subkey), L"Software\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\%s", arch );
++        /* wine.inf creates the keys in the 32-bit view as well */
++        for (int view = 0; view < (is_64bit ? 2 : 1); view++)
++        {
++            int cmp = 0;
++
++            if (RegOpenKeyExW( HKEY_LOCAL_MACHINE, subkey, 0, KEY_QUERY_VALUE | KEY_SET_VALUE |
++                               (is_64bit ? (view ? KEY_WOW64_32KEY : KEY_WOW64_64KEY) : 0), &key ))
++                continue;
++            for (int j = 0; j < 4 && !cmp; j++)
++            {
++                size = sizeof(cur[j]);
++                if (RegQueryValueExW( key, names[j], NULL, NULL, (BYTE *)&cur[j], &size )) cur[j] = 0;
++                if (cur[j] != dll[j]) cmp = cur[j] < dll[j] ? -1 : 1;
++            }
++            if (cmp < 0)
++            {
++                swprintf( version, ARRAY_SIZE(version), L"%lu.%lu.%lu.%lu", dll[0], dll[1], dll[2], dll[3] );
++                TRACE( "%s: raising to %s\n", debugstr_w(subkey), debugstr_w(version) );
++                for (int j = 0; j < 4; j++)
++                    RegSetValueExW( key, names[j], 0, REG_DWORD, (BYTE *)&dll[j], sizeof(dll[j]) );
++                RegSetValueExW( key, L"Version", 0, REG_SZ, (BYTE *)version,
++                                (lstrlenW( version ) + 1) * sizeof(WCHAR) );
++            }
++            RegCloseKey( key );
++        }
++    }
++}
++
+ /* Some broken applications expect the ProxyEnable registry value to exist.
+  * This value is automatically created by wininet when initializing.
+  * This value is not initialized for new users on Windows, but it is created
+@@ -1991,6 +2070,7 @@ int __cdecl main( int argc, char *argv[] )
+     create_digitalproductid();
+     create_volatile_environment_registry_key();
+     create_known_dlls();
++    update_vcruntime_keys();
+     initialize_internet();
+ 
+     ProcessRunKeys( HKEY_LOCAL_MACHINE, L"RunOnce", TRUE, TRUE );
+-- 
+2.56.0
+
