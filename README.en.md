@@ -58,7 +58,7 @@ The full build (`make redist`, compiling every component from scratch in a conta
 
 ## Repository layout
 
-- `patches/wine/`, `patches/vkd3d-proton/`: the patches. The `wine/` and `vkd3d-proton/` submodules stay at the upstream commits and the build applies the patches
+- `patches/wine/`, `patches/vkd3d-proton/`, `patches/protonfixes/`: the patches. The `wine/`, `vkd3d-proton/` and `protonfixes/` submodules stay at the upstream commits and the build applies the patches
 - `we/fixes/`: one report per patch (symptoms, root cause, fix, verification)
 - `we/tests/`: test programs and their output before and after each fix
 - `we/diag/`: diagnostic patches and scripts, not part of the release build

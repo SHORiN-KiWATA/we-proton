@@ -60,7 +60,7 @@ we/overlay-build.sh --release <N> --install   # 同时安装到「~/.local/share
 
 ## 仓库结构
 
-- `patches/wine/`、`patches/vkd3d-proton/`：补丁。`wine/`、`vkd3d-proton/` 子模块停在上游 commit，构建时自动打上补丁
+- `patches/wine/`、`patches/vkd3d-proton/`、`patches/protonfixes/`：补丁。`wine/`、`vkd3d-proton/`、`protonfixes/` 子模块停在上游 commit，构建时自动打上补丁
 - `we/fixes/`：每个补丁一份报告（现象、根因、修复、验证）
 - `we/tests/`：测试程序和修复前后的输出
 - `we/diag/`：诊断补丁和脚本，不进正式构建
