@@ -2524,13 +2524,11 @@ class Session:
         if "noopwrx11" in self.compat_config and "wayland" not in self.compat_config:
             self.env["WINE_DISABLE_VULKAN_OPWR"] = "1"
 
+        # WE-Proton: xalia only when asked for (PROTON_USE_XALIA=1, or "xalia"
+        # in PROTON_COMPAT_CONFIG). Its accessibility queries hang the UI
+        # thread of Chromium based clients such as WeGame.
         if "PROTON_USE_XALIA" not in self.env:
-            if "noxalia" in self.compat_config:
-                self.env["PROTON_USE_XALIA"] = "0"
-            else:
-                self.env["PROTON_USE_XALIA"] = "1"
-                if "xalia" not in self.compat_config:
-                    self.env["XALIA_SUPPORTED_ONLY"] = "1"
+            self.env["PROTON_USE_XALIA"] = "1" if "xalia" in self.compat_config else "0"
 
         if "nohardwarescheduling" in self.compat_config and "WINE_DISABLE_HARDWARE_SCHEDULING" not in self.env:
             self.env["WINE_DISABLE_HARDWARE_SCHEDULING"] = "1"

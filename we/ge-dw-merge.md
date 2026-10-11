@@ -79,6 +79,7 @@ GE-Proton 去掉了 GStreamer 后端，视频全走 winedmo（FFmpeg 8.1），WM
 - DW-Proton 的 dxvk HDR 检测：`patches/dxvk/dw-hdr-detection-via-displayconfig.patch`，排在 GE-Proton 的 dxvk 补丁前面；Wine 那一侧（`NtUserDisplayConfigGetDeviceInfo`）已经有了
 - 7zip：hololive Dreams 的 protonfix 要用 `files/utils/7zz` 从 Windows 镜像里解出 `version.dll`，GE-Proton 不编它。照 DW-Proton 的 `steamrtdeps/build-sevenzip.mk` 加了 `7zip` 子模块（DW-Proton 用的同一个提交）和 `Makefile.in` 里的构建规则
 - 没带过来：DW-Proton 给 protonfixes 的 umu 数据库加 NIKKE 条目的补丁（它的 protonfixes 版本里已经有了，只影响日志里显示的标题）。另外 dwfixes（`patches/protonfixes/0005`）会给终末地等程序设 `UMU_ID`，从 Steam 启动时会走 GE-Proton 的 `umu_without_steam` 分支，这是 DW-Proton 原来的设计
+- xalia（手柄操作界面的辅助程序）默认关掉：GE-Proton 的 proton 脚本对所有程序都启动它（`PROTON_USE_XALIA=1` 加 `XALIA_SUPPORTED_ONLY=1`），WeGame 的 Chromium 界面线程回答它的无障碍查询时卡死，窗口点不动（2026-10-12，X11 下；Wayland 下 GE-Proton 本来就关掉它）。DW-Proton 没开它。要用的话设 `PROTON_USE_XALIA=1`，或在 `PROTON_COMPAT_CONFIG` 里加 `xalia`
 - 不要：DW-Proton 的额外组件（dxvk-sarek、低延迟版 dxvk/vkd3d、自编 GStreamer 等）、proton 脚本里 DW-Proton 独有的选项（`PROTON_DXVK_SAREK` 等，大多数选项 GE-Proton 有同名的）、8 个 Valve 回移
 
 ### 子模块

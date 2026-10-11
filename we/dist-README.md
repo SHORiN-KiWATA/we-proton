@@ -39,6 +39,8 @@ WE-Proton 是基于 GE-Proton 和 DW-Proton 的个人 Proton：以 GE-Proton（`
 
 托盘图标仍由 WE-Proton 的实现（0011）显示，GE-Proton 自带的那套由 0049 关掉。
 
+GE-Proton 对所有程序都开着的 xalia（用手柄操作程序界面的辅助程序）在 WE-Proton 里默认关闭：它的无障碍查询会让 WeGame 的界面卡死。要用的话设 `PROTON_USE_XALIA=1`。
+
 ## 安装
 
 解压到启动器的 Proton 目录，例如：
