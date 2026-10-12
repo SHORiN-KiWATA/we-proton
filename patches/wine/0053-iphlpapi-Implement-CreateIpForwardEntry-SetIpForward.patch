@@ -1,0 +1,210 @@
+From c96e38db4cf0c618f1b4fa167241fa2175f85f7d Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Mon, 12 Oct 2026 06:11:00 +0900
+Subject: [PATCH] iphlpapi: Implement CreateIpForwardEntry, SetIpForwardEntry
+ and DeleteIpForwardEntry.
+
+They were stubs that returned success without changing anything. Convert
+the MIB_IPFORWARDROW to a MIB_IPFORWARD_ROW2 and go through the newer
+functions, the way Windows takes them: the metric comes with the
+interface's metric added, the protocol must be MIB_IPPROTO_NETMGMT when
+creating or setting a route, and a next hop of 0 or of the interface's
+own address means the destination is on the link when creating and any
+next hop when setting or deleting. GetIpForwardTable adds the interface's
+metric as well.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/iphlpapi/iphlpapi_main.c | 142 +++++++++++++++++++++++++++++-----
+ 1 file changed, 121 insertions(+), 21 deletions(-)
+
+diff --git a/dlls/iphlpapi/iphlpapi_main.c b/dlls/iphlpapi/iphlpapi_main.c
+index 13682134a3d..dbac6e76518 100644
+--- a/dlls/iphlpapi/iphlpapi_main.c
++++ b/dlls/iphlpapi/iphlpapi_main.c
+@@ -152,6 +152,108 @@ DWORD WINAPI CancelMibChangeNotify2(HANDLE handle)
+ }
+ 
+ 
++static const char *debugstr_ipv4( DWORD addr )
++{
++    const BYTE *b = (const BYTE *)&addr;
++    return wine_dbg_sprintf( "%u.%u.%u.%u", b[0], b[1], b[2], b[3] );
++}
++
++/* The old route functions give and take a route's metric with its interface's metric added. */
++static ULONG ipv4_interface_metric( const NET_LUID *luid )
++{
++    struct nsi_ip_interface_key key;
++    struct nsi_ip_interface_rw rw;
++    struct nsi_ip_interface_dynamic dyn;
++
++    key.luid = *luid;
++    if (NsiGetAllParameters( 1, &NPI_MS_IPV4_MODULEID, NSI_IP_INTERFACE_TABLE, &key, sizeof(key),
++                             &rw, sizeof(rw), &dyn, sizeof(dyn), NULL, 0 ))
++        return 0;
++    return rw.metric;
++}
++
++static BOOL is_interface_ipv4_address( const NET_LUID *luid, DWORD addr )
++{
++    struct nsi_ipv4_unicast_key *keys;
++    DWORD count, i;
++    BOOL ret = FALSE;
++
++    if (NsiAllocateAndGetTable( 1, &NPI_MS_IPV4_MODULEID, NSI_IP_UNICAST_TABLE, (void **)&keys, sizeof(*keys),
++                                NULL, 0, NULL, 0, NULL, 0, &count, 0 ))
++        return FALSE;
++    for (i = 0; i < count && !ret; i++)
++        ret = keys[i].luid.Value == luid->Value && keys[i].addr.s_addr == addr;
++    NsiFreeTable( keys, NULL, NULL, NULL );
++    return ret;
++}
++
++/* The next hop of the first route to the row's destination through its interface. */
++static void find_ipv4_route_next_hop( MIB_IPFORWARD_ROW2 *row )
++{
++    MIB_IPFORWARD_TABLE2 *table;
++    const MIB_IPFORWARD_ROW2 *entry;
++    DWORD i;
++
++    if (GetIpForwardTable2( AF_INET, &table )) return;
++    for (i = 0; i < table->NumEntries; i++)
++    {
++        entry = table->Table + i;
++        if (entry->InterfaceLuid.Value != row->InterfaceLuid.Value) continue;
++        if (entry->DestinationPrefix.PrefixLength != row->DestinationPrefix.PrefixLength) continue;
++        if (entry->DestinationPrefix.Prefix.Ipv4.sin_addr.s_addr != row->DestinationPrefix.Prefix.Ipv4.sin_addr.s_addr)
++            continue;
++        row->NextHop.Ipv4.sin_addr = entry->NextHop.Ipv4.sin_addr;
++        break;
++    }
++    FreeMibTable( table );
++}
++
++/* The route a MIB_IPFORWARDROW describes, as the MIB_IPFORWARD_ROW2 the newer functions take.
++ * The type, policy, age, next hop AS and the metrics after the first are not used. A next hop
++ * of 0 or of the interface's own address means the destination is on the link when a route is
++ * created; looking one up, it stands for any next hop. Deleting doesn't check the protocol or
++ * the metric. */
++static DWORD forward_row2_from_row( const MIB_IPFORWARDROW *route, MIB_IPFORWARD_ROW2 *row, DWORD action )
++{
++    ULONG mask, len = 0, if_metric;
++    NET_LUID luid;
++    BOOL any_next_hop;
++
++    if (!route) return ERROR_INVALID_PARAMETER;
++    TRACE( "dest %s mask %s next hop %s if %lu type %lu proto %lu metric %lu\n", debugstr_ipv4( route->dwForwardDest ),
++           debugstr_ipv4( route->dwForwardMask ), debugstr_ipv4( route->dwForwardNextHop ), route->dwForwardIfIndex,
++           route->dwForwardType, route->dwForwardProto, route->dwForwardMetric1 );
++
++    mask = ntohl( route->dwForwardMask );
++    while (len < 32 && (mask & (0x80000000u >> len))) len++;
++    if (len < 32 && (mask << len)) return ERROR_INVALID_PARAMETER;
++    if (ConvertInterfaceIndexToLuid( route->dwForwardIfIndex, &luid )) return ERROR_FILE_NOT_FOUND;
++
++    InitializeIpForwardEntry( row );
++    row->InterfaceLuid = luid;
++    row->InterfaceIndex = route->dwForwardIfIndex;
++    row->DestinationPrefix.Prefix.si_family = AF_INET;
++    row->DestinationPrefix.Prefix.Ipv4.sin_addr.s_addr = route->dwForwardDest;
++    row->DestinationPrefix.PrefixLength = len;
++    row->NextHop.si_family = AF_INET;
++    any_next_hop = !route->dwForwardNextHop || is_interface_ipv4_address( &luid, route->dwForwardNextHop );
++    if (!any_next_hop) row->NextHop.Ipv4.sin_addr.s_addr = route->dwForwardNextHop;
++    if (action == NSI_SET_DELETE)
++    {
++        if (any_next_hop) find_ipv4_route_next_hop( row );
++        return ERROR_SUCCESS;
++    }
++
++    if (route->dwForwardProto != MIB_IPPROTO_NETMGMT) return ERROR_INVALID_PARAMETER;
++    if_metric = ipv4_interface_metric( &luid );
++    if (route->dwForwardMetric1 < if_metric) return ERROR_BAD_ARGUMENTS;
++    if (route->dwForwardMetric1 - if_metric > 0x7fffffff) return ERROR_INVALID_PARAMETER;
++    row->Metric = route->dwForwardMetric1 - if_metric;
++    row->Protocol = MIB_IPPROTO_NETMGMT;
++    if (action == NSI_SET_DEFAULT && any_next_hop) find_ipv4_route_next_hop( row );
++    return ERROR_SUCCESS;
++}
++
+ /******************************************************************
+  *    CreateIpForwardEntry (IPHLPAPI.@)
+  *
+@@ -163,15 +265,15 @@ DWORD WINAPI CancelMibChangeNotify2(HANDLE handle)
+  * RETURNS
+  *  Success: NO_ERROR
+  *  Failure: error code from winerror.h
+- *
+- * FIXME
+- *  Stub, always returns NO_ERROR.
+  */
+ DWORD WINAPI CreateIpForwardEntry(PMIB_IPFORWARDROW pRoute)
+ {
+-  FIXME("(pRoute %p): stub\n", pRoute);
+-  /* could use SIOCADDRT, not sure I want to */
+-  return 0;
++    MIB_IPFORWARD_ROW2 row;
++    DWORD err;
++
++    TRACE( "%p.\n", pRoute );
++    if ((err = forward_row2_from_row( pRoute, &row, NSI_SET_CREATE_ONLY ))) return err;
++    return CreateIpForwardEntry2( &row );
+ }
+ 
+ 
+@@ -392,15 +494,15 @@ DWORD WINAPI DeleteIPAddress(ULONG NTEContext)
+  * RETURNS
+  *  Success: NO_ERROR
+  *  Failure: error code from winerror.h
+- *
+- * FIXME
+- *  Stub, returns NO_ERROR.
+  */
+ DWORD WINAPI DeleteIpForwardEntry(PMIB_IPFORWARDROW pRoute)
+ {
+-  FIXME("(pRoute %p): stub\n", pRoute);
+-  /* could use SIOCDELRT, not sure I want to */
+-  return 0;
++    MIB_IPFORWARD_ROW2 row;
++    DWORD err;
++
++    TRACE( "%p.\n", pRoute );
++    if ((err = forward_row2_from_row( pRoute, &row, NSI_SET_DELETE ))) return err;
++    return DeleteIpForwardEntry2( &row );
+ }
+ 
+ 
+@@ -2160,7 +2262,7 @@ DWORD WINAPI GetIpForwardTable( MIB_IPFORWARDTABLE *table, ULONG *size, BOOL sor
+         row->dwForwardProto = rw[i].protocol;
+         row->dwForwardAge = dyn[i].age;
+         row->dwForwardNextHopAS = 0;
+-        row->dwForwardMetric1 = rw[i].metric; /* FIXME: add interface metric */
++        row->dwForwardMetric1 = rw[i].metric + ipv4_interface_metric( &keys[i].luid );
+         row->dwForwardMetric2 = 0;
+         row->dwForwardMetric3 = 0;
+         row->dwForwardMetric4 = 0;
+@@ -4132,17 +4234,15 @@ DWORD WINAPI SetIfEntry(PMIB_IFROW pIfRow)
+  * RETURNS
+  *  Success: NO_ERROR
+  *  Failure: error code from winerror.h
+- *
+- * FIXME
+- *  Stub, returns NO_ERROR.
+  */
+ DWORD WINAPI SetIpForwardEntry(PMIB_IPFORWARDROW pRoute)
+ {
+-  FIXME("(pRoute %p): stub\n", pRoute);
+-  /* this is to add a route entry, how's it distinguishable from
+-     CreateIpForwardEntry?
+-     could use SIOCADDRT, not sure I want to */
+-  return 0;
++    MIB_IPFORWARD_ROW2 row;
++    DWORD err;
++
++    TRACE( "%p.\n", pRoute );
++    if ((err = forward_row2_from_row( pRoute, &row, NSI_SET_DEFAULT ))) return err;
++    return SetIpForwardEntry2( &row );
+ }
+ 
+ 

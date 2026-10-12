@@ -1,0 +1,169 @@
+interface: metric M=0 gateway=set address=set
+default route: type=4 proto=3 metric1=M+100
+CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=5 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+5
+CreateIpForwardEntry again ret=5010
+CreateIpForwardEntry again, metric M+9 ret=5010
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=5 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+5
+SetIpForwardEntry metric M+11 ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=11 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+11
+SetIpForwardEntry metric M+2, type 3, proto 0 ret=87
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=11 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+11
+SetIpForwardEntry not existing ret=1168
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=11 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+11
+DeleteIpForwardEntry other metric ret=0
+  (no route)
+DeleteIpForwardEntry next hop 0 ret=0
+  (no route)
+DeleteIpForwardEntry type 0, proto 0 ret=1168
+  (no route)
+DeleteIpForwardEntry ret=0
+DeleteIpForwardEntry again ret=1168
+  (no route)
+DeleteIpForwardEntry gw route with next hop on the link ret=1168
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=5 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+5
+DeleteIpForwardEntry gw route with next hop self ret=0
+  (no route)
+DeleteIpForwardEntry on-link route with next hop gw ret=1168
+  table2: 198.51.100.0/24 nexthop=0 if=this metric=5 proto=2 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=self if=this type=3 proto=2 metric1=M+5
+CreateIpForwardEntry same destination, next hop on the link ret=5010
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=5 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+5
+DeleteIpForwardEntry next hop 0 with two routes ret=0
+  (no route)
+DeleteIpForwardEntry proto 0 ret=0
+  (no route)
+DeleteIpForwardEntry interface 0 ret=2
+DeleteIpForwardEntry host bits ret=87
+DeleteIpForwardEntry mask 255.0.255.0 ret=87
+DeleteIpForwardEntry metric 0 ret=0
+  (no route)
+DeleteIpForwardEntry interface -1, everything else 0 ret=2
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=5 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+5
+SetIpForwardEntry proto 0 ret=87
+SetIpForwardEntry type 3, metric M+6 ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=6 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+6
+SetIpForwardEntry metric 0 ret=0
+SetIpForwardEntry next hop 0, metric M+7 ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=7 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+7
+SetIpForwardEntry next hop on the link, metric M+8 ret=1168
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=7 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+7
+metric 0: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=0 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+0
+metric 1: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=1 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+1
+metric M-1: CreateIpForwardEntry ret=87
+  (no route)
+metric M: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=0 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+0
+metric M+1: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=1 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+1
+metric 9999: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=9999 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+9999
+metric M+65535: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=65535 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+65535
+metric M+65536: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=65536 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+65536
+metric M+0x7fffffff: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=2147483647 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+2147483647
+metric M+0x80000000: CreateIpForwardEntry ret=87
+  (no route)
+metric 0xfffffffe: CreateIpForwardEntry ret=87
+  (no route)
+metric 0xffffffff: CreateIpForwardEntry ret=87
+  (no route)
+proto 0: CreateIpForwardEntry ret=87
+  (no route)
+proto 2 (local): CreateIpForwardEntry ret=87
+  (no route)
+proto 10002 (static): CreateIpForwardEntry ret=87
+  (no route)
+proto 10001 (autostatic): CreateIpForwardEntry ret=87
+  (no route)
+proto 99: CreateIpForwardEntry ret=87
+  (no route)
+type 0: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=5 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+5
+type 2 (invalid): CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=5 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+5
+type 3 (direct), next hop gw: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=5 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+5
+type 9: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=5 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+5
+next hop self, type 4: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=0 if=this metric=5 proto=2 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=self if=this type=3 proto=2 metric1=M+5
+next hop self, type 3: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=0 if=this metric=5 proto=2 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=self if=this type=3 proto=2 metric1=M+5
+next hop 0, type 4: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=0 if=this metric=5 proto=2 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=self if=this type=3 proto=2 metric1=M+5
+next hop 0, type 3: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=0 if=this metric=5 proto=2 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=self if=this type=3 proto=2 metric1=M+5
+next hop off-link 203.0.113.1: CreateIpForwardEntry ret=1231
+  (no route)
+next hop inside the destination: CreateIpForwardEntry ret=1231
+  (no route)
+next hop another address on the link: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=link if=this metric=5 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=link if=this type=4 proto=3 metric1=M+5
+mask 255.0.255.0: CreateIpForwardEntry ret=87
+  (no route)
+destination with host bits: CreateIpForwardEntry ret=87
+  (no route)
+host route /32: CreateIpForwardEntry ret=0
+  table2: 198.51.100.7/32 nexthop=gw if=this metric=5 proto=3 origin=0
+  table1: 198.51.100.7 mask=255.255.255.255 nexthop=gw if=this type=4 proto=3 metric1=M+5
+prefix /26: CreateIpForwardEntry ret=0
+  table2: 198.51.100.64/26 nexthop=gw if=this metric=5 proto=3 origin=0
+  table1: 198.51.100.64 mask=255.255.255.192 nexthop=gw if=this type=4 proto=3 metric1=M+5
+interface 0: CreateIpForwardEntry ret=2
+  (no route)
+interface not existing: CreateIpForwardEntry ret=2
+  (no route)
+policy, age, AS and metric2-5 set: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=5 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+5
+metric2-5 0xffffffff: CreateIpForwardEntry ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=5 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+5
+SetIpInterfaceEntry metric M+10 ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=5 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+15
+relative to the new interface metric:
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=5 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+5
+SetIpForwardEntry metric (M+10)+3 ret=0
+  table2: 198.51.100.0/24 nexthop=gw if=this metric=3 proto=3 origin=0
+  table1: 198.51.100.0 mask=255.255.255.0 nexthop=gw if=this type=4 proto=3 metric1=M+3
+SetIpForwardEntry metric (M+10)-1 ret=160
+SetIpInterfaceEntry restore ret=0
+CreateIpForwardEntry NULL ret=87
+SetIpForwardEntry NULL ret=87
+DeleteIpForwardEntry NULL ret=87
+  (no route)

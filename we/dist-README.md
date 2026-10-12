@@ -32,6 +32,7 @@ WE-Proton 是基于 GE-Proton 和 DW-Proton 的个人 Proton：以 GE-Proton（`
 | wine 0049 | 托盘图标透明的地方显示成黑色（GE-Proton 自带的托盘实现转图标时没处理好掩码）；托盘交回给 0011 的实现 |
 | wine 0050 | 用 Wine 的 Wayland 驱动时，按合成器的全屏快捷键，窗口全屏一下就立刻恢复，或者一切换焦点就退出全屏（游戏的窗口模式也一样） |
 | wine 0052 | 用 Wine 的 Wayland 驱动时，在 niri 分支的网格概览里把焦点移到 Wine 窗口，网格就直接关掉 |
+| wine 0053 | 网易 UU 加速器等用旧接口加路由的程序，路由模式显示在加速，实际没有加速（路由没有真正加上） |
 | protonfixes 0051 | 前缀里已有程序在运行时，启动器用 `proton run` 再启动的游戏拿不到 protonfixes 的修正（例如绕开游戏自带的启动器），窗口可能出不来；启动器设 `PROTONFIXES_RUN_VERB=1` 后照常执行 |
 | vkd3d-proton 0001 | 部分 D3D12 着色器被翻译成非法的 SPIR-V，AMD 显卡（Mesa RADV）上直接崩溃 |
 

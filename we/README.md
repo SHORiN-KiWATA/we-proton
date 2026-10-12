@@ -59,6 +59,7 @@
 | `wine/0049-win32u-Leave-notification-icons-to-explorer` | GE-Proton 在 win32u 里另有一套 StatusNotifierItem 托盘实现，会先于 explorer 接手通知区图标；它转图标时只要颜色平面有 alpha 就不看 AND 掩码，靠掩码挖空形状的图标（WeGame 的托盘图标）透明处变成不透明的黑色。让 win32u 不接手，图标交给 0011 的 explorer 实现 |
 | `wine/0050-winewayland-Keep-a-fullscreen-state-the-compositor-a` | Wayland 驱动：合成器自己发起的全屏（全屏快捷键）不再被立刻撤销。驱动原来按窗口样式推算全屏，带标题栏或可拖动边框的窗口永远不算全屏，于是马上发 `unset_fullscreen`；交帧的线程拿着 configure 之前的窗口状态更新时也会发。这种全屏只由合成器结束，结束时没给尺寸就恢复进入前的尺寸 |
 | `wine/0052-winewayland-Don-t-ask-for-activation-of-a-window-tha` | Wayland 驱动：窗口因为合成器给了键盘焦点而被激活时，不再用 xdg_activation 向合成器再申请一次激活（niri 分支的网格概览收到申请就关掉） |
+| `wine/0053-iphlpapi-Implement-CreateIpForwardEntry-SetIpForward` | 实现旧的路由函数 `CreateIpForwardEntry`/`SetIpForwardEntry`/`DeleteIpForwardEntry`（原来是什么都不做、返回成功的 stub，网易 UU 的路由模式靠它们加路由）：换成 `MIB_IPFORWARD_ROW2` 交给 0015 的新函数，metric（减去接口 metric）、协议、下一跳按 Windows 实测处理；`GetIpForwardTable` 读回的 metric 加上接口 metric |
 | `protonfixes/0051-protonfixes-Also-run-fixes-for-run-when-PROTONFIXES_` | 设了 `PROTONFIXES_RUN_VERB=1` 时，用 `proton run` 启动的程序也执行 protonfixes（`waitforexitandrun` 要先等 wineserver 退出，往运行中的会话里加程序只能用 `run`）；`PROTONFIXES_DISABLE` 仍然优先 |
 | `vkd3d-proton/we-0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
 | `vkd3d-proton/0002-vkd3d-bound-present-waits-during-swapchain-drain` | （这一版没有：GE-Proton 直接带着原版）（GE）销毁交换链时等待呈现有上限，不再卡死 |
@@ -66,7 +67,7 @@
 
 每个补丁的现象、根因、Windows 实测、验证和排查过程见 `we/fixes/`。
 
-0003、0016、0023 在换到 GE-Proton 底座时改过（0049、0050、0052 是换底座之后新加的）：0003 改到 GE-Proton 新的 SIGSYS 处理函数里；0016 修了一处 `-Werror` 下报错的格式串；0023 和 GE-Proton 覆盖层窗口的条件合并。
+0003、0016、0023 在换到 GE-Proton 底座时改过（0049、0050、0052、0053 是换底座之后新加的）：0003 改到 GE-Proton 新的 SIGSYS 处理函数里；0016 修了一处 `-Werror` 下报错的格式串；0023 和 GE-Proton 覆盖层窗口的条件合并。
 
 ## 测试
 
@@ -90,6 +91,7 @@
 - `window_band_probe`（0020，另有 32 位的 `window_band_probe32.exe`）：对各种窗口调用 `GetWindowBand`/`NtUserGetWindowBand`，打印返回值、层级和错误码；参数 `nullptr`、`nullhwnd` 测输出指针为空。是 stub 时进程被 abort
 - `input_shape_probe`（0023）：模仿 Electron 的 `setIgnoreMouseEvents(true, { forward: true })`，窗口一秒后加上 `WS_EX_LAYERED | WS_EX_TRANSPARENT`，低级鼠标钩子看到光标到了窗口上就去掉这两个样式，最后打印钩子看到的移动和窗口是否恢复；参数 `topmost` 让窗口置顶，像覆盖层。`input_shape_probe.sh [--topmost]` 在无头 gamescope（XWayland）里跑它，读出穿透时 X 输入区域的矩形数（0 = 点击穿透）和是否选了指针移动事件，再用 XTest 把指针从窗口外移进来。XTest 下 X 服务器总知道指针在哪，复现不出 niri 下的卡死，只能看 X 这一侧的状态
 - `vcrt_version_probe`（0021、0022）：打印 `VC\Runtimes\<arch>` 在两个注册表视图里的值和 system32、syswow64 里运行库 DLL 的文件版本，再按“注册表和 `msvcp140_2.dll`、`vcruntime140_1.dll` 的文件版本都不低于最低版本”检查（默认 14.44.35211，参数可改）。`wine24-redist` 是装了官方 14.44.35211 运行库之后的输出
+- `iphlp_forward1_probe`（0053）：旧的路由函数 `CreateIpForwardEntry`/`SetIpForwardEntry`/`DeleteIpForwardEntry` 的返回码，以及 `MIB_IPFORWARDROW` 的 metric、下一跳、type、协议怎样变成实际的路由、经 `GetIpForwardTable`/`GetIpForwardTable2` 怎样读回。用 TEST-NET-2 `198.51.100.0/24`，加在通往 8.8.8.8 的网卡上，跑完删掉；地址和 metric 写成相对这块网卡的值，不同机器的输出能逐行比较。要管理员权限；在 Wine 上会真的改路由，只在网络命名空间里跑（例如 shorin-proton-wrapper 开了独立网络的前缀，`shorin-proton-wrapper -p 前缀 --runner <runner>/proton iphlp_forward1_probe.exe Z:\输出.txt`）；参数是输出文件
 - `dxil-spirv/run.sh`（vkd3d-proton 0001）：用 dxil-spirv 的 `structurize-test` 跑 `*.st` 控制流图，检查生成的 SPIR-V 能通过校验。源码取打过补丁的 `vkd3d-proton/`（先跑 `we/build.sh` 或 protonprep）；`--unpatched` 用未打补丁的子模块，应该失败
 
 `regress.sh <runner> <输出目录>` 一次跑完上面大部分探测（在 Steam Linux Runtime 4.0 里，和 wegame-launcher 相同的方式）；`regress.sh --compare <旧> <新>` 屏蔽掉句柄和地址后比较。每次发布的结果存在 `regress-<名字>/`，下次和它比。
