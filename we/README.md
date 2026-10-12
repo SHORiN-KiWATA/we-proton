@@ -61,6 +61,7 @@
 | `wine/0052-winewayland-Don-t-ask-for-activation-of-a-window-tha` | Wayland 驱动：窗口因为合成器给了键盘焦点而被激活时，不再用 xdg_activation 向合成器再申请一次激活（niri 分支的网格概览收到申请就关掉） |
 | `wine/0053-iphlpapi-Implement-CreateIpForwardEntry-SetIpForward` | 实现旧的路由函数 `CreateIpForwardEntry`/`SetIpForwardEntry`/`DeleteIpForwardEntry`（原来是什么都不做、返回成功的 stub，网易 UU 的路由模式靠它们加路由）：换成 `MIB_IPFORWARD_ROW2` 交给 0015 的新函数，metric（减去接口 metric）、协议、下一跳按 Windows 实测处理；`GetIpForwardTable` 读回的 metric 加上接口 metric |
 | `wine/0054-kernelbase-Don-t-report-unwritten-write-copy-pages-a` | 去掉 staging `ntdll-WRITECOPY/0010` 在 `VirtualProtect` 里把旧属性 `PAGE_WRITECOPY` 一律改成 `PAGE_READWRITE` 的做法（0005 已经在 ntdll 里报对，0010 把没写过的页改错）；只在 0005 跟踪不了的镜像视图（内核不支持 userfaultfd 异步写保护）上保留这个猜测。依赖 0005 |
+| `wine/0055-rtworkq-Don-t-hold-the-queue-list-lock-while-shuttin` | `shutdown_system_queues()` 等系统队列的回调时不再拿 `queues_section`：回调里释放读取器的最后一个引用要拿这把锁去解锁读取器的队列，原来互相等死。另用 `startup_section` 保证初始化和关闭不同时进行，关闭开始后不再懒创建系统队列 |
 | `protonfixes/0051-protonfixes-Also-run-fixes-for-run-when-PROTONFIXES_` | 设了 `PROTONFIXES_RUN_VERB=1` 时，用 `proton run` 启动的程序也执行 protonfixes（`waitforexitandrun` 要先等 wineserver 退出，往运行中的会话里加程序只能用 `run`）；`PROTONFIXES_DISABLE` 仍然优先 |
 | `vkd3d-proton/we-0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
 | `vkd3d-proton/0002-vkd3d-bound-present-waits-during-swapchain-drain` | （这一版没有：GE-Proton 直接带着原版）（GE）销毁交换链时等待呈现有上限，不再卡死 |
@@ -70,7 +71,7 @@
 
 GE-Proton 主线在 GE-Proton11-7 之后的一部分修复提前搬了过来，放在 GE 自己的补丁目录里，见 `we/ge-backports.md`；0011 为此改了一处上下文。
 
-0003、0016、0023 在换到 GE-Proton 底座时改过（0049、0050、0052、0053、0054 是换底座之后新加的）：0003 改到 GE-Proton 新的 SIGSYS 处理函数里；0016 修了一处 `-Werror` 下报错的格式串；0023 和 GE-Proton 覆盖层窗口的条件合并。
+0003、0016、0023 在换到 GE-Proton 底座时改过（0049、0050、0052–0055 是换底座之后新加的）：0003 改到 GE-Proton 新的 SIGSYS 处理函数里；0016 修了一处 `-Werror` 下报错的格式串；0023 和 GE-Proton 覆盖层窗口的条件合并。
 
 ## 测试
 
@@ -95,6 +96,7 @@ GE-Proton 主线在 GE-Proton11-7 之后的一部分修复提前搬了过来，�
 - `input_shape_probe`（0023）：模仿 Electron 的 `setIgnoreMouseEvents(true, { forward: true })`，窗口一秒后加上 `WS_EX_LAYERED | WS_EX_TRANSPARENT`，低级鼠标钩子看到光标到了窗口上就去掉这两个样式，最后打印钩子看到的移动和窗口是否恢复；参数 `topmost` 让窗口置顶，像覆盖层。`input_shape_probe.sh [--topmost]` 在无头 gamescope（XWayland）里跑它，读出穿透时 X 输入区域的矩形数（0 = 点击穿透）和是否选了指针移动事件，再用 XTest 把指针从窗口外移进来。XTest 下 X 服务器总知道指针在哪，复现不出 niri 下的卡死，只能看 X 这一侧的状态
 - `vcrt_version_probe`（0021、0022）：打印 `VC\Runtimes\<arch>` 在两个注册表视图里的值和 system32、syswow64 里运行库 DLL 的文件版本，再按“注册表和 `msvcp140_2.dll`、`vcruntime140_1.dll` 的文件版本都不低于最低版本”检查（默认 14.44.35211，参数可改）。`wine24-redist` 是装了官方 14.44.35211 运行库之后的输出
 - `iphlp_forward1_probe`（0053）：旧的路由函数 `CreateIpForwardEntry`/`SetIpForwardEntry`/`DeleteIpForwardEntry` 的返回码，以及 `MIB_IPFORWARDROW` 的 metric、下一跳、type、协议怎样变成实际的路由、经 `GetIpForwardTable`/`GetIpForwardTable2` 怎样读回。用 TEST-NET-2 `198.51.100.0/24`，加在通往 8.8.8.8 的网卡上，跑完删掉；地址和 metric 写成相对这块网卡的值，不同机器的输出能逐行比较。要管理员权限；在 Wine 上会真的改路由，只在网络命名空间里跑（例如 shorin-proton-wrapper 开了独立网络的前缀，`shorin-proton-wrapper -p 前缀 --runner <runner>/proton iphlp_forward1_probe.exe Z:\输出.txt`）；参数是输出文件
+- `mf_shutdown_probe`（0055，另有 32 位的 `mf_shutdown_probe32.exe`）：系统工作队列的回调里调 `MFUnlockWorkQueue`，主线程同时调 `MFShutdown`；参数 `--queue standard|mt` 选标准队列或多线程队列。卡死时看门狗 10 秒后以退出码 3 结束，正常打印 `RESULT ok`
 - `minimize_restore_probe` + `wayland_minimize.sh`（提前移植的 GE em-fixups 0067，见 `we/ge-backports.md`）：游戏式窗口在消息循环里带垂直同步交 D3D11 帧，3 秒时自己最小化，`wayland_minimize.sh <runner> [normal|popup]` 在第 6 秒左右用 niri 分支的 `unminimize-window` 恢复它；看门狗线程每半秒打印帧数，恢复后帧数停住就是卡死在 Present 里。用 Wine 的 Wayland 驱动和 runner 的 DXVK，要在 niri（嵌套的也行）里跑
 - `wayland_fullscreen.sh`（0050、0052）：Wayland 驱动下 niri 的全屏快捷键、窗口自己全屏、D3D9 窗口模式全屏、网格概览，见 0050 报告
 - `dxil-spirv/run.sh`（vkd3d-proton 0001）：用 dxil-spirv 的 `structurize-test` 跑 `*.st` 控制流图，检查生成的 SPIR-V 能通过校验。源码取打过补丁的 `vkd3d-proton/`（先跑 `we/build.sh` 或 protonprep）；`--unpatched` 用未打补丁的子模块，应该失败

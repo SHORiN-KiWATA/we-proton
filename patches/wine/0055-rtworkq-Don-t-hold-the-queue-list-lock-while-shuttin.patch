@@ -1,0 +1,129 @@
+From 947f30e57e69c220b1a7a020fede7ad73028fa12 Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Mon, 12 Oct 2026 17:25:34 +0900
+Subject: [PATCH] rtworkq: Don't hold the queue list lock while shutting
+ down system queues.
+
+shutdown_system_queues() held queues_section while shutting the system
+queues down, and shutting a pool queue down waits for the callbacks still
+running on it. A callback that needs queues_section at that point, for
+instance one releasing the last reference to an object that owns a user
+queue and calls RtwqUnlockWorkQueue() when destroyed, blocks forever and
+RtwqShutdown() never returns.
+
+This happens with the source reader: once it has been released, its
+remaining internal references are dropped by the event callbacks still
+in flight on the multithreaded system queue, and the last one unlocks
+the reader's work queue. Calling MFShutdown() right after releasing the
+reader then deadlocks most of the time.
+
+Don't hold queues_section while waiting. Use a separate lock, which work
+queue callbacks never take, to keep serializing system queue startup and
+shutdown, and refuse lazy creation of system queues once shutdown has
+begun.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/rtworkq/queue.c | 33 ++++++++++++++++++++++++++++++++-
+ 1 file changed, 32 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/rtworkq/queue.c b/dlls/rtworkq/queue.c
+index cc9dcbd..f2a219f 100644
+--- a/dlls/rtworkq/queue.c
++++ b/dlls/rtworkq/queue.c
+@@ -66,6 +66,17 @@ static CRITICAL_SECTION_DEBUG queues_critsect_debug =
+ };
+ static CRITICAL_SECTION queues_section = { &queues_critsect_debug, -1, 0, 0, 0, 0 };
+ 
++/* Serializes system queues initialization and shutdown. Unlike queues_section, it is never taken by
++   work queue callbacks, so it can be held while waiting for them. */
++static CRITICAL_SECTION startup_section;
++static CRITICAL_SECTION_DEBUG startup_critsect_debug =
++{
++    0, 0, &startup_section,
++    { &startup_critsect_debug.ProcessLocksList, &startup_critsect_debug.ProcessLocksList },
++      0, 0, { (DWORD_PTR)(__FILE__ ": startup_section") }
++};
++static CRITICAL_SECTION startup_section = { &startup_critsect_debug, -1, 0, 0, 0, 0 };
++
+ static CRITICAL_SECTION async_result_cache_section;
+ static CRITICAL_SECTION_DEBUG async_result_cache_critsect_debug =
+ {
+@@ -311,6 +322,8 @@ static const IRtwqAsyncCallbackVtbl queue_serial_callback_vtbl =
+ };
+ 
+ static struct queue system_queues[SYS_QUEUE_COUNT];
++/* Set once the system queues start shutting down, protected by queues_section. */
++static BOOL system_queues_shutdown;
+ 
+ static struct queue *get_system_queue(DWORD queue_id)
+ {
+@@ -665,6 +678,12 @@ static HRESULT grab_queue(DWORD queue_id, struct queue **ret)
+         struct queue_desc desc;
+ 
+         EnterCriticalSection(&queues_section);
++        /* System queues are shut down without holding queues_section, don't create new ones meanwhile. */
++        if (system_queues_shutdown)
++        {
++            LeaveCriticalSection(&queues_section);
++            return RTWQ_E_SHUTDOWN;
++        }
+         switch (queue_id)
+         {
+             case RTWQ_CALLBACK_QUEUE_IO:
+@@ -1275,23 +1294,27 @@ static void init_system_queues(void)
+ 
+     /* Always initialize standard queue, keep the rest lazy. */
+ 
++    EnterCriticalSection(&startup_section);
+     EnterCriticalSection(&queues_section);
+ 
+     if (system_queues[SYS_QUEUE_STANDARD].pool)
+     {
+         LeaveCriticalSection(&queues_section);
++        LeaveCriticalSection(&startup_section);
+         return;
+     }
+ 
+     if (FAILED(hr = CoIncrementMTAUsage(&mta_cookie)))
+         WARN("Failed to initialize MTA, hr %#lx.\n", hr);
+ 
++    system_queues_shutdown = FALSE;
+     desc.queue_type = RTWQ_STANDARD_WORKQUEUE;
+     desc.ops = &pool_queue_ops;
+     desc.target_queue = 0;
+     init_work_queue(&desc, &system_queues[SYS_QUEUE_STANDARD]);
+ 
+     LeaveCriticalSection(&queues_section);
++    LeaveCriticalSection(&startup_section);
+ }
+ 
+ HRESULT WINAPI RtwqStartup(void)
+@@ -1310,7 +1333,15 @@ static void shutdown_system_queues(void)
+     unsigned int i;
+     HRESULT hr;
+ 
++    /* Shutting a queue down waits for the callbacks still running on it. Those may need queues_section,
++       for example to unlock a user queue when they release the last reference to the object owning it,
++       so don't hold it while waiting. startup_section keeps RtwqStartup() from seeing partially shut
++       down queues. */
++    EnterCriticalSection(&startup_section);
++
+     EnterCriticalSection(&queues_section);
++    system_queues_shutdown = TRUE;
++    LeaveCriticalSection(&queues_section);
+ 
+     for (i = 0; i < ARRAY_SIZE(system_queues); ++i)
+     {
+@@ -1320,7 +1351,7 @@ static void shutdown_system_queues(void)
+     if (FAILED(hr = CoDecrementMTAUsage(mta_cookie)))
+         WARN("Failed to uninitialize MTA, hr %#lx.\n", hr);
+ 
+-    LeaveCriticalSection(&queues_section);
++    LeaveCriticalSection(&startup_section);
+ }
+ 
+ HRESULT WINAPI RtwqShutdown(void)
+-- 
+2.56.0
+
