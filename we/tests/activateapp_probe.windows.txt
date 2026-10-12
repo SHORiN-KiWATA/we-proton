@@ -1,0 +1,171 @@
+activateapp_probe, wine no, 64-bit
+P pid 1100: P.main 0x444, P.worker 0x5d4; desktop window thread 0x474 (pid 1072 ?)
+lParam of WM_ACTIVATEAPP is printed as tid=owner; lParam of WM_ACTIVATE/WM_NCACTIVATE as window
+foreground at start: 0000000000050066 (thread 0x375c=other thread, pid 4932 another-program.exe)
+
+     0.5 [P] === 1. first window of the process: A (P.main) ShowWindow(SW_SHOW)
+    21.0 [P]   A WM_ACTIVATEAPP  wParam=1 lParam=0x375c=other thread, pid 4932 another-program.exe
+    27.5 [P]   A WM_NCACTIVATE   wParam=1 lParam=NULL
+    27.6 [P]   A WM_ACTIVATE     wParam=WA_ACTIVE lParam=NULL
+   564.6 [P]   state: fg=A(P.main) | P.main active=A(P.main) focus=A(P.main) | P.worker active=NULL focus=NULL
+
+   564.7 [P] === 2. first window of the worker thread: B (P.worker) ShowWindow(SW_SHOW)
+   567.1 [P]   (worker: ShowWindow(B, SW_SHOW))
+   569.2 [P]   B WM_ACTIVATEAPP  wParam=1 lParam=0 (no thread)
+   570.2 [P]   B WM_NCACTIVATE   wParam=0 lParam=NULL
+   570.2 [P]   B WM_ACTIVATE     wParam=WA_ACTIVE lParam=NULL
+  1076.6 [P]   state: fg=A(P.main) | P.main active=A(P.main) focus=A(P.main) | P.worker active=B(P.worker) focus=B(P.worker)
+
+  1076.6 [P] === 3. same process, other thread: main SetForegroundWindow(A)
+  1076.6 [P]   (main: SetForegroundWindow(A) -> 1)
+  1576.9 [P]   state: fg=A(P.main) | P.main active=A(P.main) focus=A(P.main) | P.worker active=B(P.worker) focus=B(P.worker)
+
+  1576.9 [P] === 4. same process, other thread: worker SetForegroundWindow(B)
+  1581.9 [P]   A WM_NCACTIVATE   wParam=0 lParam=NULL
+  1581.9 [P]   B WM_NCACTIVATE   wParam=1 lParam=B(P.worker)
+  1582.0 [P]   A WM_ACTIVATE     wParam=WA_INACTIVE lParam=NULL
+  1582.2 [P]   A WM_ACTIVATEAPP  wParam=0 lParam=0x5d4=P.worker
+  1582.5 [P]   (worker: SetForegroundWindow(B) -> 1)
+  2104.8 [P]   state: fg=B(P.worker) | P.main active=NULL focus=NULL | P.worker active=B(P.worker) focus=B(P.worker)
+
+  2104.9 [P] === 5. main SetForegroundWindow(A)
+  2106.5 [P]   B WM_NCACTIVATE   wParam=0 lParam=NULL
+  2106.6 [P]   B WM_ACTIVATE     wParam=WA_INACTIVE lParam=NULL
+  2106.9 [P]   B WM_ACTIVATEAPP  wParam=0 lParam=0x444=P.main
+  2108.0 [P]   A WM_ACTIVATEAPP  wParam=1 lParam=0x5d4=P.worker
+  2108.3 [P]   A WM_NCACTIVATE   wParam=1 lParam=NULL
+  2108.3 [P]   A WM_ACTIVATE     wParam=WA_ACTIVE lParam=NULL
+  2110.7 [P]   (main: SetForegroundWindow(A) -> 1)
+  2632.3 [P]   state: fg=A(P.main) | P.main active=A(P.main) focus=A(P.main) | P.worker active=NULL focus=NULL
+
+  2632.4 [P] === 6. other process starts, its first window C ShowWindow(SW_SHOW) (fg was A)
+  2642.1 [C]   (child: pid 15636, C.main 0x3d54, fg at start A(P.main))
+  2655.3 [C]   (child: ShowWindow(C, SW_SHOW))
+  2658.6 [C]   C WM_ACTIVATEAPP  wParam=1 lParam=0x444=P.main
+  2658.8 [P]   A WM_NCACTIVATE   wParam=0 lParam=NULL
+  2659.0 [P]   A WM_ACTIVATE     wParam=WA_INACTIVE lParam=NULL
+  2659.5 [P]   A WM_ACTIVATEAPP  wParam=0 lParam=0x3d54=C.main
+  2661.5 [C]   C WM_NCACTIVATE   wParam=1 lParam=NULL
+  2661.7 [C]   C WM_ACTIVATE     wParam=WA_ACTIVE lParam=NULL
+  3195.2 [P]   state: fg=C(C.main) | P.main active=NULL focus=NULL | P.worker active=NULL focus=NULL | C.main active=C(C.main) focus=C(C.main)
+
+  3195.2 [P] === 7. other process: child SetForegroundWindow(A) (C -> A)
+  3196.3 [C]   C WM_NCACTIVATE   wParam=0 lParam=NULL
+  3196.4 [C]   C WM_ACTIVATE     wParam=WA_INACTIVE lParam=NULL
+  3196.5 [C]   C WM_ACTIVATEAPP  wParam=0 lParam=0x444=P.main
+  3197.0 [C]   (child: SetForegroundWindow(A) -> 1)
+  3199.7 [P]   A WM_ACTIVATEAPP  wParam=1 lParam=0x3d54=C.main
+  3200.7 [P]   A WM_NCACTIVATE   wParam=1 lParam=NULL
+  3201.1 [P]   A WM_ACTIVATE     wParam=WA_ACTIVE lParam=NULL
+  3724.6 [P]   state: fg=A(P.main) | P.main active=A(P.main) focus=A(P.main) | P.worker active=NULL focus=NULL | C.main active=NULL focus=NULL
+
+  3724.6 [P] === 8. other process: main SetForegroundWindow(C) (A -> C)
+  3726.1 [P]   A WM_NCACTIVATE   wParam=0 lParam=NULL
+  3726.1 [P]   A WM_ACTIVATE     wParam=WA_INACTIVE lParam=NULL
+  3726.4 [P]   A WM_ACTIVATEAPP  wParam=0 lParam=0x3d54=C.main
+  3726.7 [P]   (main: SetForegroundWindow(C) -> 1)
+  3728.7 [C]   C WM_ACTIVATEAPP  wParam=1 lParam=0x444=P.main
+  3729.4 [C]   C WM_NCACTIVATE   wParam=1 lParam=NULL
+  3729.5 [C]   C WM_ACTIVATE     wParam=WA_ACTIVE lParam=NULL
+  4224.3 [P]   state: fg=C(C.main) | P.main active=NULL focus=NULL | P.worker active=NULL focus=NULL | C.main active=C(C.main) focus=C(C.main)
+
+  4224.3 [P] === 9. other process, other thread: child SetForegroundWindow(B) (C -> B)
+  4225.8 [C]   C WM_NCACTIVATE   wParam=0 lParam=NULL
+  4225.9 [C]   C WM_ACTIVATE     wParam=WA_INACTIVE lParam=NULL
+  4226.0 [C]   C WM_ACTIVATEAPP  wParam=0 lParam=0x5d4=P.worker
+  4226.4 [C]   (child: SetForegroundWindow(B) -> 1)
+  4228.2 [P]   B WM_ACTIVATEAPP  wParam=1 lParam=0x3d54=C.main
+  4228.8 [P]   B WM_NCACTIVATE   wParam=1 lParam=NULL
+  4228.9 [P]   B WM_ACTIVATE     wParam=WA_ACTIVE lParam=NULL
+  4737.2 [P]   state: fg=B(P.worker) | P.main active=NULL focus=NULL | P.worker active=B(P.worker) focus=B(P.worker) | C.main active=NULL focus=NULL
+
+  4737.3 [P] === 10. main SetForegroundWindow(A) (B -> A), then main SetForegroundWindow(GetDesktopWindow()) (switch away)
+  4741.1 [P]   B WM_NCACTIVATE   wParam=0 lParam=NULL
+  4741.3 [P]   B WM_ACTIVATE     wParam=WA_INACTIVE lParam=NULL
+  4741.6 [P]   B WM_ACTIVATEAPP  wParam=0 lParam=0x444=P.main
+  4742.1 [P]   A WM_ACTIVATEAPP  wParam=1 lParam=0x5d4=P.worker
+  4742.4 [P]   A WM_NCACTIVATE   wParam=1 lParam=NULL
+  4742.5 [P]   A WM_ACTIVATE     wParam=WA_ACTIVE lParam=NULL
+  4746.4 [P]   (main: SetForegroundWindow(A) -> 1)
+  5071.6 [P]   A WM_NCACTIVATE   wParam=0 lParam=NULL
+  5071.7 [P]   A WM_ACTIVATE     wParam=WA_INACTIVE lParam=NULL
+  5071.9 [P]   A WM_ACTIVATEAPP  wParam=0 lParam=0x49c=unknown thread
+  5072.0 [P]   (main: SetForegroundWindow(desktop) -> 1)
+  5584.7 [P]   state: fg=NULL | P.main active=NULL focus=NULL | P.worker active=NULL focus=NULL | C.main active=NULL focus=NULL
+
+  5584.7 [P] === 11. back from the desktop window: main SetForegroundWindow(A)
+  5587.1 [P]   A WM_ACTIVATEAPP  wParam=1 lParam=0x49c=unknown thread
+  5587.2 [P]   A WM_NCACTIVATE   wParam=1 lParam=NULL
+  5587.2 [P]   A WM_ACTIVATE     wParam=WA_ACTIVE lParam=NULL
+  5588.5 [P]   (main: SetForegroundWindow(A) -> 1)
+  6086.5 [P]   state: fg=A(P.main) | P.main active=A(P.main) focus=A(P.main) | P.worker active=NULL focus=NULL | C.main active=NULL focus=NULL
+
+  6086.6 [P] === 11b. back from the desktop window to the other process: main SetForegroundWindow(desktop), then child SetForegroundWindow(C)
+  6088.4 [P]   A WM_NCACTIVATE   wParam=0 lParam=NULL
+  6088.5 [P]   A WM_ACTIVATE     wParam=WA_INACTIVE lParam=NULL
+  6089.0 [P]   A WM_ACTIVATEAPP  wParam=0 lParam=0x49c=unknown thread
+  6089.2 [P]   (main: SetForegroundWindow(desktop) -> 1)
+  6401.2 [C]   C WM_ACTIVATEAPP  wParam=1 lParam=0x49c=unknown thread
+  6401.3 [C]   C WM_NCACTIVATE   wParam=1 lParam=NULL
+  6401.3 [C]   C WM_ACTIVATE     wParam=WA_ACTIVE lParam=NULL
+  6402.4 [C]   (child: SetForegroundWindow(C) -> 1)
+  6909.7 [P]   state: fg=C(C.main) | P.main active=NULL focus=NULL | P.worker active=NULL focus=NULL | C.main active=C(C.main) focus=C(C.main)
+
+  6909.7 [P] === 11c. child SetForegroundWindow(A) (C -> A)
+  6911.7 [C]   C WM_NCACTIVATE   wParam=0 lParam=NULL
+  6911.7 [C]   C WM_ACTIVATE     wParam=WA_INACTIVE lParam=NULL
+  6912.1 [C]   C WM_ACTIVATEAPP  wParam=0 lParam=0x444=P.main
+  6914.2 [C]   (child: SetForegroundWindow(A) -> 1)
+  6914.2 [P]   A WM_ACTIVATEAPP  wParam=1 lParam=0x3d54=C.main
+  6914.4 [P]   A WM_NCACTIVATE   wParam=1 lParam=NULL
+  6914.5 [P]   A WM_ACTIVATE     wParam=WA_ACTIVE lParam=NULL
+  7427.3 [P]   state: fg=A(P.main) | P.main active=A(P.main) focus=A(P.main) | P.worker active=NULL focus=NULL | C.main active=NULL focus=NULL
+
+  7427.4 [P] === 16. child SetForegroundWindow(C), then child DestroyWindow(C) while foreground
+  7429.5 [P]   A WM_NCACTIVATE   wParam=0 lParam=NULL
+  7431.0 [P]   A WM_ACTIVATE     wParam=WA_INACTIVE lParam=NULL
+  7431.8 [P]   A WM_ACTIVATEAPP  wParam=0 lParam=0x3d54=C.main
+  7432.5 [C]   C WM_ACTIVATEAPP  wParam=1 lParam=0x444=P.main
+  7432.8 [C]   C WM_NCACTIVATE   wParam=1 lParam=NULL
+  7432.8 [C]   C WM_ACTIVATE     wParam=WA_ACTIVE lParam=NULL
+  7437.6 [C]   (child: SetForegroundWindow(C) -> 1)
+  7751.1 [C]   (child: DestroyWindow(C))
+  7753.9 [C]   C WM_NCACTIVATE   wParam=0 lParam=NULL
+  7753.9 [C]   C WM_ACTIVATE     wParam=WA_INACTIVE lParam=NULL
+  7754.0 [C]   C WM_ACTIVATEAPP  wParam=0 lParam=0x444=P.main
+  7756.5 [P]   A WM_ACTIVATEAPP  wParam=1 lParam=0x3d54=C.main
+  7757.3 [P]   A WM_NCACTIVATE   wParam=1 lParam=NULL
+  7757.4 [P]   A WM_ACTIVATE     wParam=WA_ACTIVE lParam=NULL
+  7760.7 [C]   (child: DestroyWindow done, fg now A(P.main))
+  8280.7 [P]   state: fg=A(P.main) | P.main active=A(P.main) focus=A(P.main) | P.worker active=NULL focus=NULL
+
+  8280.8 [P] === 17. main SetForegroundWindow(A) after that
+  8280.8 [P]   (main: SetForegroundWindow(A) -> 1)
+  8786.1 [P]   state: fg=A(P.main) | P.main active=A(P.main) focus=A(P.main) | P.worker active=NULL focus=NULL
+
+  8786.1 [P] === 18. AttachThreadInput(P.worker, P.main): worker SetForegroundWindow(B) (A -> B, shared input)
+  8786.3 [P]   (AttachThreadInput -> 1)
+  8988.6 [P]   A WM_NCACTIVATE   wParam=0 lParam=B(P.worker)
+  8988.6 [P]   A WM_ACTIVATE     wParam=WA_INACTIVE lParam=B(P.worker)
+  8990.1 [P]   A WM_ACTIVATEAPP  wParam=0 lParam=0x5d4=P.worker
+  8990.1 [P]   B WM_ACTIVATEAPP  wParam=1 lParam=0 (no thread)
+  8990.2 [P]   B WM_NCACTIVATE   wParam=1 lParam=A(P.main)
+  8990.2 [P]   B WM_ACTIVATE     wParam=WA_ACTIVE lParam=A(P.main)
+  8995.7 [P]   (worker: SetForegroundWindow(B) -> 1)
+  9493.2 [P]   state: fg=B(P.worker) | P.main active=B(P.worker) focus=B(P.worker) | P.worker active=B(P.worker) focus=B(P.worker)
+
+  9493.3 [P] === 19. shared input: main SetForegroundWindow(A) (B -> A), then detach
+  9495.0 [P]   B WM_NCACTIVATE   wParam=0 lParam=A(P.main)
+  9495.1 [P]   B WM_ACTIVATE     wParam=WA_INACTIVE lParam=A(P.main)
+  9497.1 [P]   B WM_ACTIVATEAPP  wParam=0 lParam=0x444=P.main
+  9497.1 [P]   A WM_ACTIVATEAPP  wParam=1 lParam=0 (no thread)
+  9497.2 [P]   A WM_NCACTIVATE   wParam=1 lParam=B(P.worker)
+  9497.2 [P]   A WM_ACTIVATE     wParam=WA_ACTIVE lParam=B(P.worker)
+  9503.1 [P]   (main: SetForegroundWindow(A) -> 1)
+ 10006.8 [P]   state: fg=A(P.main) | P.main active=A(P.main) focus=A(P.main) | P.worker active=A(P.main) focus=A(P.main)
+ 10007.1 [P]   (detach -> 1)
+ 10013.5 [P]   A WM_NCACTIVATE   wParam=0 lParam=NULL
+ 10013.5 [P]   A WM_ACTIVATE     wParam=WA_INACTIVE lParam=NULL
+ 10013.7 [P]   A WM_ACTIVATEAPP  wParam=0 lParam=0x375c=other thread, pid 4932 another-program.exe
+
+done

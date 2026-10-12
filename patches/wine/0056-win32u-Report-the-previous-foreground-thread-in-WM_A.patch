@@ -1,0 +1,126 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Mon, 12 Oct 2026 19:10:00 +0900
+Subject: [PATCH] win32u: Report the previous foreground thread in
+ WM_ACTIVATEAPP.
+
+On Windows the lParam of WM_ACTIVATEAPP(TRUE) is the thread that owned
+the previous foreground window: the other thread when the foreground
+moves between two threads of a process, the other process' thread, the
+desktop window's thread when coming back from the desktop, and the old
+foreground thread for the first window of a process. Measured on
+Windows 11 26200 in an interactive session; it never is the receiving
+thread itself.
+
+Wine passed the previous active window of the new thread's input, which
+is gone by then whenever the foreground moves between threads, so the
+lParam was 0. A later change made it the receiving thread itself in that
+case, which Windows never does either.
+
+Pass the thread of the previous foreground window down from
+set_foreground_window() through the last parameter of
+set_active_window(), which is unused when activating, and report it
+when the new thread's input had no active window. When the foreground
+was outside of Wine or nothing, report the desktop window's thread, as
+WM_ACTIVATEAPP(FALSE) already does when the foreground leaves Wine.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/win32u/input.c | 47 +++++----
+ 1 file changed, 22 insertions(+), 25 deletions(-)
+
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
+@@ -2139,27 +2139,6 @@
+     return get_present_rect( hwnd, &rect, get_thread_dpi() );
+ }
+ 
+-static DWORD get_activateapp_thread_id( HWND hwnd, HWND previous, DWORD old_thread, DWORD new_thread )
+-{
+-    if (old_thread || !new_thread || previous)
+-        return old_thread;
+-
+-    if (hwnd != NtUserGetForegroundWindow())
+-        return old_thread;
+-
+-    if (NtUserGetAncestor( hwnd, GA_PARENT ) != get_desktop_window())
+-        return old_thread;
+-
+-    /*
+-     * When Wine activates its first foreground top-level window, there may be
+-     * no previous Wine active window even though the host desktop did have a
+-     * foreground application. Windows normally reports the old foreground
+-     * thread here; use a non-zero placeholder so applications do not mistake
+-     * the activation for an inactive/no-focus transition.
+-     */
+-    return new_thread;
+-}
+-
+ /*******************************************************************
+  *		set_active_window
+  */
+@@ -2167,12 +2146,21 @@
+ {
+     HWND previous = get_active_window(), fullscreen_window;
+     BOOL ret;
+-    DWORD old_thread, new_thread;
++    DWORD old_thread, new_thread, old_foreground_thread = 0;
+     CBTACTIVATESTRUCT cbt;
+ 
+     TRACE( "hwnd %p, previous %p, mouse %u, focus %u, new_active_thread_id %04x\n",
+            hwnd, previous, mouse, focus, new_active_thread_id );
+ 
++    /* When activating, the last parameter is the thread of the previous
++     * foreground window (see set_foreground_window), used for WM_ACTIVATEAPP
++     * when that window is not in this thread input. */
++    if (hwnd)
++    {
++        old_foreground_thread = new_active_thread_id;
++        new_active_thread_id = 0;
++    }
++
+     if (previous == hwnd)
+     {
+         if (prev) *prev = hwnd;
+@@ -2239,8 +2227,10 @@
+             }
+             if (new_thread)
+             {
+-                DWORD activate_thread = get_activateapp_thread_id( hwnd, previous, old_thread, new_thread );
++                DWORD activate_thread = old_thread;
+ 
++                if (!activate_thread && old_foreground_thread != new_thread)
++                    activate_thread = old_foreground_thread;
+                 for (phwnd = list; *phwnd; phwnd++)
+                 {
+                     if (get_window_thread( *phwnd, NULL ) == new_thread)
+@@ -2411,6 +2401,13 @@
+ 
+     if (ret && previous != hwnd)
+     {
++        /* Thread reported in WM_ACTIVATEAPP(TRUE). If the foreground was
++         * outside of Wine or nothing, use the desktop window thread, like
++         * WM_ACTIVATEAPP(FALSE) does when the host takes the foreground. */
++        DWORD old_thread_id = previous ? get_window_thread( previous, NULL ) : 0;
++
++        if (!old_thread_id) old_thread_id = get_window_thread( get_desktop_window(), NULL );
++
+         if (send_msg_old)  /* old window belongs to other thread */
+             NtUserMessageCall( previous, WM_WINE_SETACTIVEWINDOW, 0, new_thread_id,
+                                0, NtUserSendNotifyMessage, FALSE );
+@@ -2418,13 +2415,13 @@
+             ret = set_active_window( 0, NULL, mouse, TRUE, new_thread_id );
+ 
+         if (send_msg_new)  /* new window belongs to other thread */
+-            NtUserMessageCall( hwnd, WM_WINE_SETACTIVEWINDOW, (WPARAM)hwnd, 0,
++            NtUserMessageCall( hwnd, WM_WINE_SETACTIVEWINDOW, (WPARAM)hwnd, old_thread_id,
+                                0, NtUserSendNotifyMessage, FALSE );
+         else  /* new window belongs to us */
+         {
+             BOOL already_active = (hwnd == get_active_window());
+ 
+-            ret = set_active_window( hwnd, NULL, mouse, TRUE, 0 );
++            ret = set_active_window( hwnd, NULL, mouse, TRUE, old_thread_id );
+ 
+             if (already_active)
+                 /* set_active_window will do no nothing */

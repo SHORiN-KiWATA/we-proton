@@ -111,7 +111,7 @@ Valve 在 09-23 用的 dxvk、vkd3d-proton、vkd3d、FEX、dxvk-nvapi 比两边�
 
 这些不是合并时的选择，是换成 GE-Proton 底座后随之而来的，要实测：
 
-- 以前 WE-Proton 导入 GE-Proton 的补丁时特意没合的几个，现在随 GE-Proton 一起生效：「WM_ACTIVATEAPP 的 lparam 不为零」的通用版（原来只对一个游戏生效，现在对所有程序生效，包括 WeGame）；和反作弊有关的几个 GE-Proton 补丁（环境变量开关，或只对特定游戏生效）
+- 以前 WE-Proton 导入 GE-Proton 的补丁时特意没合的几个，现在随 GE-Proton 一起生效：「WM_ACTIVATEAPP 的 lparam 不为零」的通用版（原来只对一个游戏生效，现在对所有程序生效，包括 WeGame；后来由 WE 0056 按 Windows 实测改成报上一个前台线程）；和反作弊有关的几个 GE-Proton 补丁（环境变量开关，或只对特定游戏生效）
 - DW-Proton 的 dxvk HDR 检测：宿主机开了 HDR 时，dxvk 自动报告 HDR10，不用再设 `DXVK_HDR=1`（`DXVK_NO_HDR=1` 可以关掉）
 - 视频走 GE-Proton 的 winedmo + FFmpeg
 - staging 的 `ntdll-WRITECOPY/0010`（GE-Proton 带着）在 kernelbase 的 `VirtualProtect` 里把返回的旧属性 `PAGE_WRITECOPY` 一律改报成 `PAGE_READWRITE`。WE 0005 管的「写过的写时复制页报告成可读写」照样成立；没写过的页，Windows 报 `PAGE_WRITECOPY`（0x08），这一版报 `PAGE_READWRITE`（0x04），见 `tests/writecopy_probe.ge25.txt`。没有去掉这个 staging 补丁。后来由 WE 0054 修正（见 `fixes/0054-kernelbase-writecopy-old-protection/`）
