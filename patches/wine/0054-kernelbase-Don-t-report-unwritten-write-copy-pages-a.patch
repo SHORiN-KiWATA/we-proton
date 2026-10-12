@@ -1,0 +1,69 @@
+From 95a32239472db6a17e7a781190ab0d18e24886ca Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Mon, 12 Oct 2026 12:00:00 +0900
+Subject: [PATCH] kernelbase: Don't report unwritten write-copy pages as
+ read-write.
+
+VirtualProtect() replaced an old protection of PAGE_WRITECOPY with
+PAGE_READWRITE unconditionally. Windows reports PAGE_READWRITE only for
+write-copy pages that have been written (privately copied); pages that
+were never written keep reporting PAGE_WRITECOPY, from VirtualQuery()
+as well as the old protection returned by VirtualProtect(),
+VirtualProtectEx() and NtProtectVirtualMemory(), which all agree.
+
+ntdll reports written write-copy pages of image views as read-write by
+itself when the kernel supports asynchronous userfaultfd write
+protection, so on top of that the replacement only turned the correct
+result for unwritten pages into a wrong one. For unwritten pages of
+views mapped with FILE_MAP_COPY it returned a protection that can't be
+set on such a view, so restoring the saved old protection failed where
+it succeeds on Windows. It also made VirtualProtect() disagree with
+VirtualProtectEx() on the current process.
+
+Remove the replacement from kernelbase. Keep it in ntdll, for all
+callers, only for image views whose writes are not tracked (the kernel
+lacks support), where Wine still can't tell written pages apart.
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+---
+ dlls/kernelbase/memory.c  | 4 +---
+ dlls/ntdll/unix/virtual.c | 8 ++++++++
+ 2 files changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/kernelbase/memory.c b/dlls/kernelbase/memory.c
+index 99fc3e2..8c2d354 100644
+--- a/dlls/kernelbase/memory.c
++++ b/dlls/kernelbase/memory.c
+@@ -583,9 +583,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH  VirtualLock( void *addr, SIZE_T size )
+  */
+ BOOL WINAPI DECLSPEC_HOTPATCH VirtualProtect( void *addr, SIZE_T size, DWORD new_prot, DWORD *old_prot )
+ {
+-    BOOL ret = VirtualProtectEx( GetCurrentProcess(), addr, size, new_prot, old_prot );
+-    if (old_prot && *old_prot == PAGE_WRITECOPY) *old_prot = PAGE_READWRITE;
+-    return ret;
++    return VirtualProtectEx( GetCurrentProcess(), addr, size, new_prot, old_prot );
+ }
+ 
+ 
+diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
+index c360a4a..42368b2 100644
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -6047,6 +6047,14 @@ NTSTATUS WINAPI NtProtectVirtualMemory( HANDLE process, PVOID *addr_ptr, SIZE_T
+                     set_page_vprot_bits(base, page_size, VPROT_COPIED, 0);
+                 }
+             }
++
++            /* Without write-copy tracking (see kernel_writecopy_track()) there is no
++             * telling whether an image page has been written. Keep reporting it as
++             * written then: code that makes its own initialized data read-only checks
++             * for PAGE_READWRITE as the old protection. */
++            if (status == STATUS_SUCCESS && old == PAGE_WRITECOPY &&
++                (view->protect & (SEC_IMAGE | VPROT_COPY_TRACKED)) == SEC_IMAGE)
++                old = PAGE_READWRITE;
+         }
+         else status = STATUS_NOT_COMMITTED;
+     }
+-- 
+2.56.0
+
