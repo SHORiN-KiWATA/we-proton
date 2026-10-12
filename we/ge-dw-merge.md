@@ -114,7 +114,7 @@ Valve 在 09-23 用的 dxvk、vkd3d-proton、vkd3d、FEX、dxvk-nvapi 比两边�
 - 以前 WE-Proton 导入 GE-Proton 的补丁时特意没合的几个，现在随 GE-Proton 一起生效：「WM_ACTIVATEAPP 的 lparam 不为零」的通用版（原来只对一个游戏生效，现在对所有程序生效，包括 WeGame）；和反作弊有关的几个 GE-Proton 补丁（环境变量开关，或只对特定游戏生效）
 - DW-Proton 的 dxvk HDR 检测：宿主机开了 HDR 时，dxvk 自动报告 HDR10，不用再设 `DXVK_HDR=1`（`DXVK_NO_HDR=1` 可以关掉）
 - 视频走 GE-Proton 的 winedmo + FFmpeg
-- staging 的 `ntdll-WRITECOPY/0010`（GE-Proton 带着）在 kernelbase 的 `VirtualProtect` 里把返回的旧属性 `PAGE_WRITECOPY` 一律改报成 `PAGE_READWRITE`。WE 0005 管的「写过的写时复制页报告成可读写」照样成立；没写过的页，Windows 报 `PAGE_WRITECOPY`（0x08），这一版报 `PAGE_READWRITE`（0x04），见 `tests/writecopy_probe.ge25.txt`。没有去掉这个 staging 补丁
+- staging 的 `ntdll-WRITECOPY/0010`（GE-Proton 带着）在 kernelbase 的 `VirtualProtect` 里把返回的旧属性 `PAGE_WRITECOPY` 一律改报成 `PAGE_READWRITE`。WE 0005 管的「写过的写时复制页报告成可读写」照样成立；没写过的页，Windows 报 `PAGE_WRITECOPY`（0x08），这一版报 `PAGE_READWRITE`（0x04），见 `tests/writecopy_probe.ge25.txt`。没有去掉这个 staging 补丁。后来由 WE 0054 修正（见 `fixes/0054-kernelbase-writecopy-old-protection/`）
 - 鸣潮那个跨进程画 ARGB 窗口的提交顺带改了 xrender：从没有 alpha 的源画到 32 位目标时，不再把 alpha 清零（所有程序都受影响）。DW-Proton 本来就这样，相对旧版 WE-Proton 不算变化，但和 GE-Proton 原来的行为不同
 - DW-Proton 的「不按分层父窗口裁剪其他进程的子窗口」（server）和 GE-Proton 在 winex11 里裁剪客户区（`mark_direct_draw_child()`）同时作用；《Return to Krondor》的文字位图两边各有一个修复。都没有冲突，但没有实测
 

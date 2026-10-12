@@ -6,12 +6,14 @@
 # Needs docker. The first build takes hours; ccache (~/.ccache) speeds up later ones.
 #
 #   we/build.sh --name we-proton-<version> [--install] [--jobs N] [--skip-prep]
+#   we/build.sh --prep-only
 #
 #   --name NAME   release name: the runner's version file, the Steam display name and
 #                 the archive names
 #   --install     also copy the result to ~/.local/share/proton/runners/WE-Proton Latest
 #   --jobs N      make -j (default: nproc)
 #   --skip-prep   don't update and re-patch the submodules (they are patched already)
+#   --prep-only   only update and re-patch the submodules (used by we/quick-build.sh)
 #
 # Without --skip-prep the submodules are reset to the commits this tree pins and
 # re-patched: uncommitted changes in them are lost.
@@ -24,17 +26,19 @@ NAME=""
 INSTALL=0
 JOBS=$(nproc)
 PREP=1
+PREP_ONLY=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --name) NAME=$2; shift 2 ;;
         --install) INSTALL=1; shift ;;
         --jobs) JOBS=$2; shift 2 ;;
         --skip-prep) PREP=0; shift ;;
-        -h|--help) sed -n '2,21p' "$0"; exit 0 ;;
+        --prep-only) PREP_ONLY=1; shift ;;
+        -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
-[ -n "$NAME" ] || { echo "--name is required, e.g. --name we-proton-ge11-7-25" >&2; exit 2; }
+[ -n "$NAME" ] || [ "$PREP_ONLY" = 1 ] || { echo "--name is required, e.g. --name we-proton-ge11-7-25" >&2; exit 2; }
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=$ROOT/build
@@ -72,6 +76,8 @@ if [ "$PREP" = 1 ]; then
         exit 1
     fi
 fi
+[ "$PREP_ONLY" = 0 ] || { log "submodules patched"; exit 0; }
+[ -n "$NAME" ] || { echo "--name is required" >&2; exit 2; }
 
 # Always start from an empty build/obj. Makefile.in cannot build autotools packages
 # whose configure is generated in the synced source copy (xz) a second time: the

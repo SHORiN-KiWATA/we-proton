@@ -30,6 +30,7 @@ protonprep 在 `make_requests` 之前依次打 `patches/dwproton/` 和 `patches/
 | `we/sync/export-patches.py [--new NNNN]...` | 把 `we-base..we-dw` 写回 `patches/dwproton/`（从 0001 重新编号），把 `we-dw..we-dev` 写回 `patches/wine/`（按标题沿用原来的编号；新补丁用 `--new` 给编号）。生成文件自动排除。只差 From 行的文件保持不动 |
 | `we/sync/dup-titles.py [--remove] <仓库> <范围>` | 列出范围里标题和 GE-Proton 补丁或 wine-staging 补丁相同的提交（GE-Proton 已经带着的）；`--remove` 同时删掉 `patches/dwproton/` 里同标题的补丁文件 |
 | `we/build.sh --name <名字>` | 完整构建，输出到 `build/` |
+| `we/quick-build.sh --base <runner> --name <名字> [--prep] <wine 目录>...` | 在上次完整构建的 `build/obj` 上只重编几个 Wine 模块，出测试版（不能用于发布） |
 | `we/tests/build.sh` | 编测试程序（mingw） |
 | `we/tests/regress.sh <runner> <输出目录>` | 在 Steam Linux Runtime 4.0 里跑回归探测；`--compare <旧目录> <新目录>` 比较 |
 
@@ -97,6 +98,7 @@ git merge <新GE>
 | 子模块 `dxvk`、`vkd3d-proton`、`protonfixes` | 见下面「子模块版本」 |
 | `patches/protonfixes/` 里的文件 | 用 GE-Proton 的；我们的 `0003`–`0005` 要排在 GE-Proton 的补丁后面，GE-Proton 新加了 `0003` 之类同号文件时，把我们的三个顺延改名 |
 | `patches/dxvk/`、`patches/vkd3d-proton/` 里 GE-Proton 的文件 | `git checkout --theirs <文件>` |
+| `patches/wine-hotfixes/` 里 `we/ge-backports.md` 列出的文件（提前从 GE-Proton 主线搬来的） | `git checkout --theirs <文件>`（GE-Proton 之后又改过它们）；合并完照 `we/ge-backports.md` 最后一节收尾 |
 
 **protonprep 里我们的三处改动**（`git checkout --theirs` 之后都会丢，逐条加回）：
 

@@ -33,12 +33,15 @@ WE-Proton 是基于 GE-Proton 和 DW-Proton 的个人 Proton：以 GE-Proton（`
 | wine 0050 | 用 Wine 的 Wayland 驱动时，按合成器的全屏快捷键，窗口全屏一下就立刻恢复，或者一切换焦点就退出全屏（游戏的窗口模式也一样） |
 | wine 0052 | 用 Wine 的 Wayland 驱动时，在 niri 分支的网格概览里把焦点移到 Wine 窗口，网格就直接关掉 |
 | wine 0053 | 网易 UU 加速器等用旧接口加路由的程序，路由模式显示在加速，实际没有加速（路由没有真正加上） |
+| wine 0054 | 内存保护属性的一处细节和 Windows 不一致（没写过的写时复制页报成了可读写） |
 | protonfixes 0051 | 前缀里已有程序在运行时，启动器用 `proton run` 再启动的游戏拿不到 protonfixes 的修正（例如绕开游戏自带的启动器），窗口可能出不来；启动器设 `PROTONFIXES_RUN_VERB=1` 后照常执行 |
 | vkd3d-proton 0001 | 部分 D3D12 着色器被翻译成非法的 SPIR-V，AMD 显卡（Mesa RADV）上直接崩溃 |
 
 编号沿用原来的。0001、0012、0018 和 0024–0042 是这一版不再需要的（0043–0047 没有用到）：0012 修的 bug GE-Proton 也修了。原来从 GE-Proton 搬来的 0024–0042 等，现在由 GE-Proton 本身带着。
 
 托盘图标仍由 WE-Proton 的实现（0011）显示，GE-Proton 自带的那套由 0049 关掉。
+
+另外提前带上了 GE-Proton 主线在 @GE@ 之后加的一批修复：Wine Wayland 驱动（最小化后恢复卡死、托盘菜单、光标、剪贴板崩溃等）、wineserver 和进程退出时的两处崩溃/卡死、32 位程序停止视频时崩溃，以及 FFmpeg 的 AV1 解码。
 
 GE-Proton 对所有程序都开着的 xalia（用手柄操作程序界面的辅助程序）在 WE-Proton 里默认关闭：它的无障碍查询会让 WeGame 的界面卡死。要用的话设 `PROTON_USE_XALIA=1`。
 

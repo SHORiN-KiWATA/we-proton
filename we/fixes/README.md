@@ -35,12 +35,14 @@
 | wine 0050 | Wayland 驱动按窗口样式推算全屏，带标题栏或可拖动边框的窗口永远不算全屏，合成器发起的全屏（快捷键）被立刻撤销；交帧的线程用 configure 之前的状态也会撤销。WeGame 窗口、《封印者》的窗口模式按全屏快捷键马上恢复原样 | `0050-winewayland-compositor-fullscreen/` |
 | wine 0052 | Wayland 驱动在窗口拿到键盘焦点后还向合成器申请激活，niri 分支的网格概览收到申请就关掉：焦点一移到 Wine 窗口网格就没了 | `0052-winewayland-no-activation-on-focus/` |
 | wine 0053 | 网易 UU 加速器的路由模式加速不上：它用旧的 `CreateIpForwardEntry`/`DeleteIpForwardEntry` 加删路由，Wine 里这几个函数什么都不做就返回成功，路由一条也没加上 | `0053-iphlpapi-old-route-functions/` |
+| wine 0054 | 没写过的写时复制页，`VirtualProtect` 报的旧属性是 `PAGE_READWRITE`（Windows 是 `PAGE_WRITECOPY`）：GE-Proton 带的 staging `ntdll-WRITECOPY/0010` 一律改写，把 0005 给出的正确结果改错；改写只留给 0005 跟踪不了的情况 | `0054-kernelbase-writecopy-old-protection/` |
 | protonfixes 0051 | 前缀里已有程序在运行时，再用 `proton run` 加入的游戏拿不到 protonfixes 的修正：《战锤40K：暗潮》的修正是绕开启动器，没绕开时启动器把游戏隐藏启动，窗口出不来；设 `PROTONFIXES_RUN_VERB=1` 时 `run` 也执行修正 | `0051-protonfixes-run-verb/` |
 | vkd3d-proton 0001 | dxil-spirv 生成非法的结构化控制流，RADV 拒绝后崩溃 | `vkd3d-0001-dxil-spirv-loop-breaks/` |
 
 ## 已知、没修的问题
 
-- **没写过的写时复制页，`VirtualProtect` 报告的旧属性和 Windows 不同**（从 `we-proton-ge11-7-*` 起）：GE-Proton 带的 staging `ntdll-WRITECOPY/0010` 把 `PAGE_WRITECOPY` 一律改报成 `PAGE_READWRITE`，Windows 对没写过的页报 `PAGE_WRITECOPY`。0005 修的写过的页不受影响。见 `../tests/writecopy_probe.ge25.txt`
+- **MFShutdown 偶尔卡死**（从 `we-proton-ge11-7-*` 起）：释放 Media Foundation 的 source reader 后马上调 `MFShutdown`，rtworkq 关系统队列时拿着锁等线程池回调结束，还在跑的读取/解码线程又在等这把锁。测试里 12 次卡 7–10 次，释放后等 2 秒再调就不卡；旧的 DW 底座不卡。嫌疑在 GE-Proton 重写的 `mfreadwrite`
+- **Media Foundation 里没有 MPEG-1/2 视频和 MP2 音频的解码器**（DW 底座也一样，Windows 有）：DirectShow 能放
 - **wineserver fsync 断言**（`fsync.c:271`，`fsync_free_shm_idx`）：进程在短时间内反复异常退出时触发，wineserver 退出，前缀里的进程卡住。只在一次崩溃循环里见过
 - **N 卡渲染、核显显示时交帧卡住**（niri 不用 N 卡，屏幕接在核显上）：D3D11 程序在 N 卡上约 2 fps，渲染线程在等交帧。见 `0006-noactivate-activation/`
 - **xwayland-satellite 不执行最小化**：会在失去前台时最小化自己的程序会进入「最小化 → 被恢复」循环
