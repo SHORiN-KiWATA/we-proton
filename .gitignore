@@ -14,3 +14,7 @@
 /steam_helper/*.orig
 /umu_helper/*.orig
 /wineopenxr/*.orig
+# we/tests/regress.sh: only the <probe>.txt files are baselines
+/we/tests/regress-*/stderr.log
+/we/tests/regress-*/prefix/
+/we/tests/regress-*/steam/

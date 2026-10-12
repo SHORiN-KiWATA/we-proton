@@ -2,7 +2,9 @@
 # Run the probe programs in this directory with a runner, the way wegame-launcher
 # does: inside the Steam Linux Runtime 4.0 (umu's copy in
 # ~/.local/share/umu/steamrt4), in WoW64 mode, with a new prefix and a private
-# Xvfb. Writes one <probe>.txt per probe into <output dir>.
+# Xvfb. Writes one <probe>.txt per probe into <output dir>; the prefix lives in
+# a temporary directory under ~/.cache and is removed afterwards (set
+# WE_KEEP_PREFIX=1 to keep it and print where it is).
 #
 #   we/tests/regress.sh <runner dir> <output dir>
 #   we/tests/regress.sh --compare <old output dir> <new output dir>
@@ -49,10 +51,12 @@ for p in "${PROBES[@]}"; do
     [ -f "${p%% *}" ] || { echo "${p%% *} is missing; run we/tests/build.sh" >&2; exit 1; }
 done
 
-rm -rf "$OUT/prefix" "$OUT/steam"
-mkdir -p "$OUT/prefix" "$OUT/steam"
+# not in $OUT: the output dirs are committed as baselines
+mkdir -p "${XDG_CACHE_HOME:-$HOME/.cache}"
+WORK=$(mktemp -d "${XDG_CACHE_HOME:-$HOME/.cache}/we-regress.XXXXXX")
+mkdir -p "$WORK/prefix" "$WORK/steam"
 run() {
-    STEAM_COMPAT_DATA_PATH=$OUT/prefix STEAM_COMPAT_CLIENT_INSTALL_PATH=$OUT/steam \
+    STEAM_COMPAT_DATA_PATH=$WORK/prefix STEAM_COMPAT_CLIENT_INSTALL_PATH=$WORK/steam \
     SteamAppId=0 SteamGameId=0 UMU_ID=wegame-launcher UMU_USE_STEAM=0 PROTON_USE_WOW64=1 \
     DISPLAY=:$DPY timeout 120 "$ENTRY" --verb=waitforexitandrun -- \
         "$RUNNER/proton" waitforexitandrun 'C:\windows\system32\cmd.exe' /c "$1" \
@@ -62,12 +66,16 @@ DPY=120
 while [ -e /tmp/.X11-unix/X$DPY ]; do DPY=$((DPY + 1)); done
 Xvfb :$DPY -screen 0 1280x800x24 -nolisten tcp > /dev/null 2>&1 &
 XVFB=$!
-trap 'kill $XVFB 2> /dev/null' EXIT
+cleanup() {
+    kill $XVFB 2> /dev/null || true
+    if [ "${WE_KEEP_PREFIX:-0}" = 1 ]; then echo "prefix kept in $WORK/prefix"; else rm -rf "$WORK"; fi
+}
+trap cleanup EXIT
 sleep 1
 : > "$OUT/stderr.log"
 
 run "exit 0"    # creates the prefix
-T=$OUT/prefix/pfx/drive_c/we-tests
+T=$WORK/prefix/pfx/drive_c/we-tests
 mkdir -p "$T"
 cp ./*.exe ./*.dxbc "$T/"
 for p in "${PROBES[@]}"; do
