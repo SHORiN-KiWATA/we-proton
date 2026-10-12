@@ -1140,9 +1140,9 @@ index 02fe5078706..63aa495f286 100644
 +        return;
 +    }
 +
-     if (enable_dock && NtUserMessageCall( icon->window, WINE_SYSTRAY_DOCK_REMOVE, 0, 0,
-                                           NULL, NtUserSystemTrayCall, FALSE ))
-     {
+     /* A formerly docked icon can now belong to our fallback tray. In that
+      * case systray_remove_icon must remove it from the displayed icon count. */
+     if (icon->display == ICON_DISPLAY_DOCKED && enable_dock &&
 @@ -688,6 +935,8 @@ static void hide_icon(struct icon *icon)
  /* Modifies an existing icon record */
  static BOOL modify_icon( struct icon *icon, NOTIFYICONDATAW *nid )

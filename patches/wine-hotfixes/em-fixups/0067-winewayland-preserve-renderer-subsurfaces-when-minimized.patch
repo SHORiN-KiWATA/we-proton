@@ -1,0 +1,140 @@
+From: GloriousEggroll <gloriouseggroll@gmail.com>
+Date: Sat, 10 Oct 2026 16:00:00 -0600
+Subject: [PATCH] winewayland: Preserve renderer subsurfaces when minimized.
+
+Guild Wars Reforged cannot restore its fullscreen window after Alt+Tab.
+The reproduced hang has DXVK's submission thread blocked inside Mesa's
+wsi_wl_swapchain_queue_present(), waiting for a Wayland frame callback.
+The window thread stops processing restore messages while waiting for
+rendering. The separate Wine Wayland event dispatcher remains alive.
+
+The minimized-toplevel support keeps the xdg_toplevel mapped, but detaches
+all of its renderer subsurfaces. A native swapchain can then be recreated
+on the role-less wl_surface and enter FIFO presentation. Restoring only
+the carrier cannot deliver callbacks to that detached surface, and the
+application cannot process the restore that would reattach it. The
+present-wait watchdog cannot interrupt an already blocked QueuePresent.
+
+Delegate minimization of the complete surface tree to the compositor.
+Keep visible clients attached and preserve an existing attachment's
+geometry and stacking until Win32 restoration is processed. Retain normal
+detachment for hidden/destroyed windows, role changes, and inactive native
+background presenters; leave managed dmabuf minimization handling alone.
+Use the common release path for the minimized attachment as well, instead
+of returning with the window-data mutex still held.
+
+This fixes the renderer-detachment portion of the minimized-toplevel work
+originally authored by Erhan Bilgili <erhan.bilgili@gmail.com>:
+https://github.com/nanomatters/wine-salkim/commit/7d3c16911a81d263c5f7a4769a8d57d17b3f1151
+Imported by proton-ge-custom commit 45ec34f4 after GE-Proton11-6.
+
+Bug: https://github.com/GloriousEggroll/proton-ge-custom/issues/781
+---
+ dlls/winewayland.drv/wayland_surface.c | 16 +++++++---------
+ dlls/winewayland.drv/window.c          | 33 ++++-----------------------------
+ 2 files changed, 11 insertions(+), 38 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -4854,12 +4854,8 @@ static void wayland_client_surface_detach(struct client_surface *client)
+ 
+ static BOOL is_client_visible(HWND hwnd)
+ {
+-    HWND root = NtUserGetAncestor(hwnd, GA_ROOT);
+     RECT dummy;
+ 
+-    if (NtUserGetWindowLongW(hwnd, GWL_STYLE) & WS_MINIMIZE) return FALSE;
+-    if (root && root != hwnd && (NtUserGetWindowLongW(root, GWL_STYLE) & WS_MINIMIZE))
+-        return FALSE;
+     return NtUserIsWindowVisible(hwnd) || NtUserGetPresentRect(hwnd, &dummy, -1);
+ }
+ 
+@@ -5245,11 +5241,13 @@ void wayland_client_surface_attach(struct wayland_client_surface *client, HWND toplevel)
+         if (toplevel_data) wayland_win_data_release(toplevel_data);
+         return wayland_client_surface_attach(client, NULL);
+     }
+-    if (surface->role == WAYLAND_SURFACE_ROLE_TOPLEVEL && surface->window.minimized)
+-    {
+-        wayland_client_surface_attach(client, NULL);
+-        return;
+-    }
++    /* The compositor minimizes the whole surface tree. Preserve an existing
++     * renderer's role, geometry and stacking so restoring the toplevel can
++     * deliver its pending WSI frame callbacks without waiting for the app's
++     * message thread, which may itself be blocked on presentation. */
++    if (surface->role == WAYLAND_SURFACE_ROLE_TOPLEVEL && surface->window.minimized &&
++        client->toplevel == toplevel && client->toplevel_wl_surface == surface->wl_surface)
++        goto done;
+ 
+     stack_above_parent = wayland_client_surface_should_stack_above_parent(
+             surface, client, hwnd, toplevel, toplevel_data->content_over_producer);
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -304,29 +304,6 @@ static BOOL should_keep_minimized_toplevel_mapped(struct wayland_surface *surface,
+            (surface->current.caps & WAYLAND_SURFACE_WM_CAPS_MINIMIZE);
+ }
+ 
+-static BOOL window_or_root_minimized(HWND hwnd)
+-{
+-    HWND root = NtUserGetAncestor(hwnd, GA_ROOT);
+-
+-    if (NtUserGetWindowLongW(hwnd, GWL_STYLE) & WS_MINIMIZE) return TRUE;
+-    return root && root != hwnd && (NtUserGetWindowLongW(root, GWL_STYLE) & WS_MINIMIZE);
+-}
+-
+-static void detach_client_surfaces_for_toplevel(HWND toplevel)
+-{
+-    struct wayland_win_data *data;
+-
+-    RB_FOR_EACH_ENTRY(data, &win_data_rb, struct wayland_win_data, entry)
+-    {
+-        struct wayland_client_surface *client;
+-
+-        LIST_FOR_EACH_ENTRY(client, &data->client_surfaces,
+-                            struct wayland_client_surface, hwnd_entry)
+-            if (client->toplevel == toplevel)
+-                wayland_client_surface_attach(client, NULL);
+-    }
+-}
+-
+ static BOOL is_menu_popup_candidate_style(DWORD style, DWORD exstyle)
+ {
+     if (!(style & WS_POPUP)) return FALSE;
+@@ -406,8 +383,8 @@ static BOOL wayland_win_data_create_wayland_surface(struct wayland_win_data *data,
+         visible = visible && layer_set;
+ 
+     /* A fullscreen renderer may hide and show the same HWND synchronously while
+-     * focus changes. Preserve its established presentation tree, but continue to
+-     * unmap minimized windows and non-rendering windows such as launchers. */
++     * focus changes. Preserve its established presentation tree. Explicit hides
++     * of minimized windows or non-rendering windows still unmap them. */
+     if ((swp_flags & SWP_HIDEWINDOW) && data->is_fullscreen && !(style & WS_MINIMIZE) &&
+         (client || wayland_surface_has_hwnd_dmabuf_content(surface)))
+         visible = TRUE;
+@@ -486,12 +463,10 @@ static BOOL wayland_win_data_create_wayland_surface(struct wayland_win_data *data,
+         break;
+     }
+ 
+-    if (role != WAYLAND_SURFACE_ROLE_NONE && !window_or_root_minimized(data->hwnd))
++    if (role != WAYLAND_SURFACE_ROLE_NONE)
+         wayland_client_surfaces_attach(data, data->hwnd);
+     else
+         wayland_client_surfaces_attach(data, NULL);
+-    if (surface->role == WAYLAND_SURFACE_ROLE_TOPLEVEL && surface->window.minimized)
+-        detach_client_surfaces_for_toplevel(data->hwnd);
+     wayland_surface_sync_window_regions(surface, window_surface);
+ 
+     /* Size/position changes affect the effective pointer constraint, so update
+@@ -1045,7 +1020,7 @@ void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, HWND owner_hint, UINT swp_flags,
+ 
+     if (!surface)
+     {
+-        if (toplevel && NtUserIsWindowVisible(hwnd) && !window_or_root_minimized(hwnd))
++        if (toplevel && NtUserIsWindowVisible(hwnd))
+             wayland_client_surfaces_attach(data, toplevel);
+         else
+             wayland_client_surfaces_attach(data, NULL);
+-- 
+2.55.0
