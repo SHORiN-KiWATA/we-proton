@@ -38,6 +38,7 @@
 | wine 0054 | 没写过的写时复制页，`VirtualProtect` 报的旧属性是 `PAGE_READWRITE`（Windows 是 `PAGE_WRITECOPY`）：GE-Proton 带的 staging `ntdll-WRITECOPY/0010` 一律改写，把 0005 给出的正确结果改错；改写只留给 0005 跟踪不了的情况 | `0054-kernelbase-writecopy-old-protection/` |
 | wine 0055 | 释放 Media Foundation 的读取器后马上 `MFShutdown` 会卡死：rtworkq 关系统队列时拿着队列表的锁等回调结束，读取器最后一次释放恰好在回调里、也要这把锁（上游的隐患，GE-Proton 的视频补丁把它触发出来）；等回调时不再拿这把锁 | `0055-rtworkq-shutdown-deadlock/` |
 | wine 0056 | 窗口激活时 `WM_ACTIVATEAPP` 的 lParam 不对：跨线程、跨进程激活时原版 Wine 报 0，GE-Proton 的补丁改成收消息的线程自己；Windows 实测报上一个前台窗口的线程 | `0056-win32u-activateapp-lparam/` |
+| wine 0057 | toolhelp 的堆快照没实现（`TH32CS_SNAPHEAPLIST`、`Heap32ListFirst/Next` 都是 stub），加壳客户端启动时用它做环境检查，拿到 `ERROR_CALL_NOT_IMPLEMENTED` 就静默退出 | `0057-kernel32-heap-list-snapshot/` |
 | protonfixes 0051 | 前缀里已有程序在运行时，再用 `proton run` 加入的游戏拿不到 protonfixes 的修正：《战锤40K：暗潮》的修正是绕开启动器，没绕开时启动器把游戏隐藏启动，窗口出不来；设 `PROTONFIXES_RUN_VERB=1` 时 `run` 也执行修正 | `0051-protonfixes-run-verb/` |
 | vkd3d-proton 0001 | dxil-spirv 生成非法的结构化控制流，RADV 拒绝后崩溃 | `vkd3d-0001-dxil-spirv-loop-breaks/` |
 
