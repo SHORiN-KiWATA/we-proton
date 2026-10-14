@@ -1,0 +1,13 @@
+--- a/configure.ac
++++ b/configure.ac
+@@ -584,6 +584,10 @@
+       i386) WINE_TRY_PE_CFLAGS([-fno-omit-frame-pointer])
+             WINE_TRY_PE_CFLAGS([-mstack-alignment=4])
+             WINE_TRY_PE_CFLAGS([-mpreferred-stack-boundary=2])
++            dnl Some executable packers copy the first instructions of imported
++            dnl functions into their own code and can't decode SSE2-only opcodes there
++            WINE_TRY_PE_CFLAGS([-fno-tree-vectorize])
++            WINE_TRY_PE_CFLAGS([-fno-tree-slp-vectorize])
+             WINE_TRY_PE_CFLAGS([-Wl,--disable-stdcall-fixup],
+                                [AS_VAR_APPEND([${wine_arch}_LDFLAGS],[" -Wl,--disable-stdcall-fixup"])]) ;;
+       x86_64) WINE_TRY_PE_CFLAGS([-Wformat-overflow])

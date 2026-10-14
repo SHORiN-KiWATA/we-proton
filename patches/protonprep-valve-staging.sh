@@ -32,6 +32,8 @@ apply_all_in_dir() {
     apply_patch "../patches/dxvk/dxgi-keep-fullscreen-on-focus-loss.patch"
     # Black Desert also needs the matching Wine activation compatibility patch below.
     apply_patch "../patches/dxvk/black-desert-keep-fullscreen-on-focus-loss.patch"
+    # Out-of-range Get/SetSamplerState types abort with libstdc++ assertions on (WE 0058).
+    apply_patch "../patches/dxvk/d3d9-ignore-out-of-range-sampler-state-types.patch"
     popd
 
     pushd vkd3d-proton

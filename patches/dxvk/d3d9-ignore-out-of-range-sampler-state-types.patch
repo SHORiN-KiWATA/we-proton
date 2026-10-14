@@ -1,0 +1,33 @@
+From: Shorin <shorinfu709@gmail.com>
+Subject: [PATCH] d3d9: Ignore out-of-range sampler state types
+
+GetSamplerState and SetSamplerState index the per-sampler state array
+(D3DSAMP_DMAPOFFSET + 1 entries) with the type the application passes.
+A 2018 game reads types 1..14 for samplers 0..3 at startup, one past
+D3DSAMP_DMAPOFFSET. With libstdc++ assertions on (meson b_ndebug=false) the
+std::array access aborts the process; without them it reads or writes the
+next sampler's entry. Return 0 / ignore the call instead.
+
+--- a/src/d3d9/d3d9_device.cpp
++++ b/src/d3d9/d3d9_device.cpp
+@@ -2849,6 +2849,10 @@
+     if (unlikely(InvalidSampler(Sampler)))
+       return D3D_OK;
+ 
++    // Out-of-range types, e.g. loops that run up to D3DSAMP_DMAPOFFSET + 1
++    if (unlikely(uint32_t(Type) >= SamplerStateCount))
++      return D3D_OK;
++
+     Sampler = RemapSamplerState(Sampler);
+ 
+     *pValue = m_state.samplerStates[Sampler][Type];
+@@ -2864,6 +2868,9 @@
+     if (unlikely(InvalidSampler(Sampler)))
+       return D3D_OK;
+ 
++    if (unlikely(uint32_t(Type) >= SamplerStateCount))
++      return D3D_OK;
++
+     uint32_t stateSampler = RemapSamplerState(Sampler);
+ 
+     return SetStateSamplerState(stateSampler, Type, Value);
