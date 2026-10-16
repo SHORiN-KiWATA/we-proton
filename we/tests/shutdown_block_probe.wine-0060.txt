@@ -1,0 +1,34 @@
+exports create 1 query 1 destroy 1
+query   own, before create           ret 0 err 87 len 64 text ""
+destroy own, before create           ret 0 err 87
+create  own                          ret 1 err 3735928559
+query   own                          ret 1 err 3735928559 len 12 text "Please wait"
+query   own, NULL buffer             ret 1 err 3735928559 len 12 text ""
+query   own, size 5                  ret 1 err 3735928559 len 12 text "Plea"
+query   own, size 12 (exact)         ret 1 err 3735928559 len 12 text "Please wait"
+create  own, again                   ret 1 err 3735928559
+query   own, after second create     ret 1 err 3735928559 len 14 text "Second reason"
+create  own, NULL reason             ret 0 err 87
+query   own, after NULL reason       ret 1 err 3735928559 len 14 text "Second reason"
+create  own, empty reason            ret 1 err 3735928559
+query   own, after empty reason      ret 1 err 3735928559 len 1 text ""
+destroy own                          ret 1 err 3735928559
+query   own, after destroy           ret 0 err 87 len 64 text ""
+destroy own, twice                   ret 0 err 87
+create  child                        ret 0 err 87
+query   child                        ret 0 err 87 len 64 text ""
+destroy child                        ret 0 err 87
+create  NULL hwnd                    ret 0 err 1400
+query   NULL hwnd                    ret 0 err 1400 len 64 text ""
+destroy NULL hwnd                    ret 0 err 1400
+create  bad hwnd                     ret 0 err 1400
+query   bad hwnd                     ret 0 err 1400 len 64 text ""
+destroy bad hwnd                     ret 0 err 1400
+create  desktop                      ret 5 err 3735928559
+query   desktop                      ret 0 err 87 len 64 text ""
+destroy desktop                      ret 5 err 3735928559
+create  other thread, main window    ret 1 err 3735928559
+query   other thread, main window    ret 1 err 3735928559 len 12 text "from thread"
+destroy other thread, main window    ret 1 err 3735928559
+create  own, before DestroyWindow    ret 1 err 3735928559
+query   destroyed window             ret 0 err 1400 len 64 text ""

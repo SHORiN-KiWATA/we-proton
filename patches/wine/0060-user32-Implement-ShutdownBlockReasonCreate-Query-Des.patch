@@ -1,0 +1,173 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Sat, 17 Oct 2026 03:15:00 +0900
+Subject: [PATCH] user32: Implement ShutdownBlockReasonCreate/Query/Destroy.
+
+Programs that must not be interrupted, like an updater replacing the
+files of its program, set a shutdown block reason on their window and
+give up when that fails. These were stubs that always failed with
+ERROR_CALL_NOT_IMPLEMENTED.
+
+Keep the reason in a property of the window. Measured on Windows 11
+26200: only top level windows can have one (ERROR_INVALID_PARAMETER for
+child windows, ERROR_INVALID_WINDOW_HANDLE for NULL and invalid ones);
+other threads of the process may set it; a NULL reason, a query or a
+destroy without a reason fail with ERROR_INVALID_PARAMETER; an empty
+reason is fine; the query copies as much as fits, always terminated,
+and returns the length with the terminator; the last error is left
+alone on success; for the desktop window create and destroy return
+ERROR_ACCESS_DENIED as the result. Windows of other processes are
+refused, which wasn't measured.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ dlls/user32/user32.spec |  2 +-
+ dlls/user32/user_main.c | 96 +++++++++++++++++++++++++++++++++++++----
+ include/winuser.h       |  1 +
+ 3 files changed, 90 insertions(+), 9 deletions(-)
+
+diff --git a/dlls/user32/user32.spec b/dlls/user32/user32.spec
+index 056e5be..b638ee1 100644
+--- a/dlls/user32/user32.spec
++++ b/dlls/user32/user32.spec
+@@ -1137,7 +1137,7 @@
+ @ stdcall ShowWindowAsync(long long) NtUserShowWindowAsync
+ @ stdcall ShutdownBlockReasonCreate(long wstr)
+ @ stdcall ShutdownBlockReasonDestroy(long)
+-# @ stub ShutdownBlockReasonQuery
++@ stdcall ShutdownBlockReasonQuery(long ptr ptr)
+ # @ stub SignalRedirectionStartComplete
+ @ stdcall SkipPointerFrameMessages(long)
+ # @ stub SoftModalMessageBox
+diff --git a/dlls/user32/user_main.c b/dlls/user32/user_main.c
+index c7e4ddf..5deb2ec 100644
+--- a/dlls/user32/user_main.c
++++ b/dlls/user32/user_main.c
+@@ -315,24 +315,104 @@ int WINAPI RegisterServicesProcess(DWORD ServicesProcessId)
+     return 0;
+ }
+ 
++static const WCHAR shutdown_block_reasonW[] = L"__wine_shutdown_block_reason";
++
++/* only top level windows of the calling process can have a shutdown block reason */
++static BOOL check_shutdown_block_window( HWND hwnd )
++{
++    DWORD pid;
++
++    if (!hwnd || !GetWindowThreadProcessId( hwnd, &pid ))
++    {
++        SetLastError( ERROR_INVALID_WINDOW_HANDLE );
++        return FALSE;
++    }
++    if (NtUserGetAncestor( hwnd, GA_PARENT ) != GetDesktopWindow())
++    {
++        SetLastError( ERROR_INVALID_PARAMETER );
++        return FALSE;
++    }
++    if (pid != GetCurrentProcessId())
++    {
++        FIXME( "window %p belongs to another process\n", hwnd );
++        SetLastError( ERROR_ACCESS_DENIED );
++        return FALSE;
++    }
++    return TRUE;
++}
++
+ /***********************************************************************
+  *		ShutdownBlockReasonCreate (USER32.@)
+  */
+-BOOL WINAPI ShutdownBlockReasonCreate(HWND hwnd, LPCWSTR reason)
++BOOL WINAPI ShutdownBlockReasonCreate( HWND hwnd, const WCHAR *reason )
+ {
+-    FIXME("(%p, %s): stub\n", hwnd, debugstr_w(reason));
+-    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+-    return FALSE;
++    DWORD err = GetLastError();
++    WCHAR *copy;
++
++    TRACE( "(%p, %s)\n", hwnd, debugstr_w(reason) );
++
++    /* Windows returns ERROR_ACCESS_DENIED as the result for the desktop window */
++    if (hwnd && hwnd == GetDesktopWindow()) return ERROR_ACCESS_DENIED;
++    if (!check_shutdown_block_window( hwnd )) return FALSE;
++    if (!reason)
++    {
++        SetLastError( ERROR_INVALID_PARAMETER );
++        return FALSE;
++    }
++    if (!(copy = HeapAlloc( GetProcessHeap(), 0, (wcslen( reason ) + 1) * sizeof(WCHAR) )))
++    {
++        SetLastError( ERROR_NOT_ENOUGH_MEMORY );
++        return FALSE;
++    }
++    wcscpy( copy, reason );
++    HeapFree( GetProcessHeap(), 0, RemovePropW( hwnd, shutdown_block_reasonW ));
++    if (!SetPropW( hwnd, shutdown_block_reasonW, copy ))
++    {
++        HeapFree( GetProcessHeap(), 0, copy );
++        return FALSE;
++    }
++    SetLastError( err );  /* RemovePropW() may have changed it */
++    return TRUE;
++}
++
++/***********************************************************************
++ *		ShutdownBlockReasonQuery (USER32.@)
++ */
++BOOL WINAPI ShutdownBlockReasonQuery( HWND hwnd, WCHAR *buffer, DWORD *size )
++{
++    const WCHAR *reason;
++
++    TRACE( "(%p, %p, %p)\n", hwnd, buffer, size );
++
++    if (!check_shutdown_block_window( hwnd )) return FALSE;
++    if (!size || !(reason = GetPropW( hwnd, shutdown_block_reasonW )))
++    {
++        SetLastError( ERROR_INVALID_PARAMETER );
++        return FALSE;
++    }
++    if (buffer && *size) lstrcpynW( buffer, reason, *size );
++    *size = wcslen( reason ) + 1;
++    return TRUE;
+ }
+ 
+ /***********************************************************************
+  *		ShutdownBlockReasonDestroy (USER32.@)
+  */
+-BOOL WINAPI ShutdownBlockReasonDestroy(HWND hwnd)
++BOOL WINAPI ShutdownBlockReasonDestroy( HWND hwnd )
+ {
+-    FIXME("(%p): stub\n", hwnd);
+-    SetLastError( ERROR_CALL_NOT_IMPLEMENTED );
+-    return FALSE;
++    WCHAR *reason;
++
++    TRACE( "(%p)\n", hwnd );
++
++    if (hwnd && hwnd == GetDesktopWindow()) return ERROR_ACCESS_DENIED;
++    if (!check_shutdown_block_window( hwnd )) return FALSE;
++    if (!(reason = RemovePropW( hwnd, shutdown_block_reasonW )))
++    {
++        SetLastError( ERROR_INVALID_PARAMETER );
++        return FALSE;
++    }
++    HeapFree( GetProcessHeap(), 0, reason );
++    return TRUE;
+ }
+ 
+ const char *SPY_GetMsgName( UINT msg, HWND hwnd )
+diff --git a/include/winuser.h b/include/winuser.h
+index b74bc3f..d4a7395 100644
+--- a/include/winuser.h
++++ b/include/winuser.h
+@@ -4679,6 +4679,7 @@ WINUSERAPI BOOL        WINAPI ShowWindow(HWND,INT);
+ WINUSERAPI BOOL        WINAPI ShowWindowAsync(HWND,INT);
+ WINUSERAPI BOOL        WINAPI ShutdownBlockReasonCreate(HWND,LPCWSTR);
+ WINUSERAPI BOOL        WINAPI ShutdownBlockReasonDestroy(HWND);
++WINUSERAPI BOOL        WINAPI ShutdownBlockReasonQuery(HWND,LPWSTR,DWORD*);
+ WINUSERAPI BOOL        WINAPI SkipPointerFrameMessages(UINT32);
+ WINUSERAPI BOOL        WINAPI SubtractRect(LPRECT,const RECT*,const RECT*);
+ WINUSERAPI BOOL        WINAPI SwapMouseButton(BOOL);
+-- 
+2.56.0
+

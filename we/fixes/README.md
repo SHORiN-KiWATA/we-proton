@@ -39,6 +39,7 @@
 | wine 0055 | 释放 Media Foundation 的读取器后马上 `MFShutdown` 会卡死：rtworkq 关系统队列时拿着队列表的锁等回调结束，读取器最后一次释放恰好在回调里、也要这把锁（上游的隐患，GE-Proton 的视频补丁把它触发出来）；等回调时不再拿这把锁 | `0055-rtworkq-shutdown-deadlock/` |
 | wine 0056 | 窗口激活时 `WM_ACTIVATEAPP` 的 lParam 不对：跨线程、跨进程激活时原版 Wine 报 0，GE-Proton 的补丁改成收消息的线程自己；Windows 实测报上一个前台窗口的线程 | `0056-win32u-activateapp-lparam/` |
 | wine 0059 | 主屏变化后窗口矩形没跟着虚拟屏原点平移：xwayland-satellite 把有焦点窗口所在的输出设成主输出，niri 下把窗口从右边的屏挪到左边的屏时，窗口被算到虚拟屏外面撤掉，又在原来的屏重新出现（雷神加速器、记事本都一样）；桌面窗口在原点变化时平移所有顶层窗口 | `0059-win32u-primary-monitor-origin/` |
+| wine 0060 | WeGame 下载完更新后每次启动都闪退：更新程序调用 `ShutdownBlockReasonCreate` 失败（Wine 里是空壳）就放弃安装、也不重新启动 WeGame；按 Windows 实测实现这三个函数 | `0060-user32-shutdown-block-reason/` |
 | protonfixes 0051 | 前缀里已有程序在运行时，再用 `proton run` 加入的游戏拿不到 protonfixes 的修正：《战锤40K：暗潮》的修正是绕开启动器，没绕开时启动器把游戏隐藏启动，窗口出不来；设 `PROTONFIXES_RUN_VERB=1` 时 `run` 也执行修正 | `0051-protonfixes-run-verb/` |
 | vkd3d-proton 0001 | dxil-spirv 生成非法的结构化控制流，RADV 拒绝后崩溃 | `vkd3d-0001-dxil-spirv-loop-breaks/` |
 
