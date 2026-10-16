@@ -1,0 +1,90 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Sat, 17 Oct 2026 03:00:00 +0900
+Subject: [PATCH] win32u: Keep top level windows in place when the virtual
+ screen origin moves.
+
+The virtual screen origin is the top left corner of the primary
+monitor. When another monitor becomes the primary one, every place on
+the screen gets new coordinates, but the window rects stayed as they
+were. With the X11 driver the X windows don't move, so the window rects
+no longer matched them: a window on a monitor left of the new primary
+one could end up entirely outside of the new virtual screen, and the
+next window state update unmapped it. The window manager then saw a
+new window when it was mapped again.
+
+XWayland servers that make the output of the focused window the primary
+one trigger this every time a window is moved to a monitor on the left
+of the current primary one.
+
+When the desktop window sees the virtual screen origin move, move the
+top level windows by the same amount before updating their state, so
+that they stay where they are on their monitors. The desktop window
+still covers the previous virtual screen at that point, so its rect
+gives the old origin, also for the first display change after it was
+created.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ dlls/win32u/defwnd.c | 28 +++++++++++++++++++++++++++-
+ 1 file changed, 27 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/win32u/defwnd.c b/dlls/win32u/defwnd.c
+index 65e1bf1..c229267 100644
+--- a/dlls/win32u/defwnd.c
++++ b/dlls/win32u/defwnd.c
+@@ -3121,6 +3121,28 @@ static void update_children_window_state( HWND hwnd )
+     free( children );
+ }
+ 
++/* The virtual screen origin is the primary monitor's top left corner, so when another monitor
++ * becomes the primary one the coordinates of every place on the screen change. Move the top
++ * level windows by the same amount so that they stay where they are on their monitors. */
++static void offset_top_level_windows( HWND hwnd, int dx, int dy )
++{
++    HWND *children;
++    RECT rect;
++    int i;
++
++    if (!(children = list_window_children( hwnd ))) return;
++    for (i = 0; children[i]; i++)
++    {
++        if (get_window_long( children[i], GWL_STYLE ) & WS_MINIMIZE) continue;
++        if (!get_window_rect( children[i], &rect, get_thread_dpi() )) continue;
++        TRACE( "moving %p from %s by %d,%d\n", children[i], wine_dbgstr_rect( &rect ), dx, dy );
++        NtUserSetWindowPos( children[i], 0, rect.left + dx, rect.top + dy, 0, 0,
++                            SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE |
++                            SWP_ASYNCWINDOWPOS );
++    }
++    free( children );
++}
++
+ LRESULT desktop_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam, BOOL ansi )
+ {
+     static const WCHAR wine_display_device_guidW[] =
+@@ -3157,7 +3179,7 @@ LRESULT desktop_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
+     {
+         static RECT virtual_rect = {INT_MIN,INT_MIN,INT_MAX,INT_MAX};
+ 
+-        RECT new_rect = get_virtual_screen_rect( 0, MDT_DEFAULT ), old_rect = virtual_rect;
++        RECT new_rect = get_virtual_screen_rect( 0, MDT_DEFAULT ), old_rect = virtual_rect, desktop_rect;
+         UINT context, flags = 0;
+ 
+         if (EqualRect( &new_rect, &old_rect )) return TRUE;
+@@ -3172,9 +3194,13 @@ LRESULT desktop_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
+             flags |= SWP_NOMOVE;
+ 
+         context = NtUserSetThreadDpiAwarenessContext( NTUSER_DPI_PER_MONITOR_AWARE );
++        /* the desktop window still covers the previous virtual screen */
++        if (!get_window_rect( hwnd, &desktop_rect, get_thread_dpi() )) desktop_rect = new_rect;
+         NtUserSetWindowPos( hwnd, 0, new_rect.left, new_rect.top,
+                             new_rect.right - new_rect.left, new_rect.bottom - new_rect.top,
+                             flags | SWP_NOZORDER | SWP_NOACTIVATE | SWP_DEFERERASE );
++        if (new_rect.left != desktop_rect.left || new_rect.top != desktop_rect.top)
++            offset_top_level_windows( hwnd, new_rect.left - desktop_rect.left, new_rect.top - desktop_rect.top );
+         NtUserSetThreadDpiAwarenessContext( context );
+ 
+         update_children_window_state( hwnd );
+-- 
+2.56.0
+

@@ -63,6 +63,7 @@
 | `wine/0054-kernelbase-Don-t-report-unwritten-write-copy-pages-a` | 去掉 staging `ntdll-WRITECOPY/0010` 在 `VirtualProtect` 里把旧属性 `PAGE_WRITECOPY` 一律改成 `PAGE_READWRITE` 的做法（0005 已经在 ntdll 里报对，0010 把没写过的页改错）；只在 0005 跟踪不了的镜像视图（内核不支持 userfaultfd 异步写保护）上保留这个猜测。依赖 0005 |
 | `wine/0055-rtworkq-Don-t-hold-the-queue-list-lock-while-shuttin` | `shutdown_system_queues()` 等系统队列的回调时不再拿 `queues_section`：回调里释放读取器的最后一个引用要拿这把锁去解锁读取器的队列，原来互相等死。另用 `startup_section` 保证初始化和关闭不同时进行，关闭开始后不再懒创建系统队列 |
 | `wine/0056-win32u-Report-the-previous-foreground-thread-in-WM_A` | `WM_ACTIVATEAPP(TRUE)` 的 lParam 报上一个前台窗口的线程（前台原来不在 Wine 里时报桌面线程），取代 GE-Proton `game-patches/0001` 报收消息线程自己的做法；`set_foreground_window()` 经 `set_active_window()` 的最后一个参数传下来 |
+| `wine/0059-win32u-Keep-top-level-windows-in-place-when-the-virt` | 虚拟屏原点（主显示器左上角）变化时，桌面窗口把所有没最小化的顶层窗口平移同样的量，旧原点取自桌面窗口自己的矩形；原来窗口矩形不动、X 窗口也不动，左边屏上的窗口会被算到虚拟屏外面而撤掉 |
 | `protonfixes/0051-protonfixes-Also-run-fixes-for-run-when-PROTONFIXES_` | 设了 `PROTONFIXES_RUN_VERB=1` 时，用 `proton run` 启动的程序也执行 protonfixes（`waitforexitandrun` 要先等 wineserver 退出，往运行中的会话里加程序只能用 `run`）；`PROTONFIXES_DISABLE` 仍然优先 |
 | `vkd3d-proton/we-0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
 | `vkd3d-proton/0002-vkd3d-bound-present-waits-during-swapchain-drain` | （这一版没有：GE-Proton 直接带着原版）（GE）销毁交换链时等待呈现有上限，不再卡死 |
@@ -72,7 +73,7 @@
 
 GE-Proton 主线在 GE-Proton11-7 之后的一部分修复提前搬了过来，放在 GE 自己的补丁目录里，见 `we/ge-backports.md`；0011 为此改了一处上下文。
 
-0003、0016、0023 在换到 GE-Proton 底座时改过（0049、0050、0052–0056 是换底座之后新加的）：0003 改到 GE-Proton 新的 SIGSYS 处理函数里；0016 修了一处 `-Werror` 下报错的格式串；0023 和 GE-Proton 覆盖层窗口的条件合并。
+0003、0016、0023 在换到 GE-Proton 底座时改过（0049、0050、0052–0056、0059 是换底座之后新加的）：0003 改到 GE-Proton 新的 SIGSYS 处理函数里；0016 修了一处 `-Werror` 下报错的格式串；0023 和 GE-Proton 覆盖层窗口的条件合并。
 
 ## 测试
 

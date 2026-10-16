@@ -36,6 +36,7 @@ WE-Proton 是基于 GE-Proton 和 DW-Proton 的个人 Proton：以 GE-Proton（`
 | wine 0054 | 内存保护属性的一处细节和 Windows 不一致（没写过的写时复制页报成了可读写） |
 | wine 0055 | 用 Media Foundation 放完视频、马上关闭时，程序偶尔卡住不动 |
 | wine 0056 | 窗口激活消息里「上一个前台线程」的值和 Windows 不一致 |
+| wine 0059 | 主显示器变化后窗口坐标没跟着平移：两块屏时把窗口挪到另一块屏，窗口会消失再在原来的屏上出现 |
 | protonfixes 0051 | 前缀里已有程序在运行时，启动器用 `proton run` 再启动的游戏拿不到 protonfixes 的修正（例如绕开游戏自带的启动器），窗口可能出不来；启动器设 `PROTONFIXES_RUN_VERB=1` 后照常执行 |
 | vkd3d-proton 0001 | 部分 D3D12 着色器被翻译成非法的 SPIR-V，AMD 显卡（Mesa RADV）上直接崩溃 |
 
