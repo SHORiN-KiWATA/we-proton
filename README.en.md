@@ -25,20 +25,22 @@ https://github.com/user-attachments/assets/42438b93-5a36-4557-8a0f-4b65b53d5e07
 ## Installation
 
 1. Download `we-proton-<version>.tar.xz` from [Releases](https://github.com/SHORiN-KiWATA/we-proton/releases)
-2. Extract it into your launcher's Proton directory:
-   - wegame-launcher: `~/.local/share/proton/runners/`
-   - Steam: `~/.local/share/Steam/compatibilitytools.d/`
-   - Lutris, Heroic and others: their own Proton / runner directory
+2. Extract it with `tar` into your launcher's Proton directory, e.g. for Steam:
+
+   ```
+   mkdir -p ~/.local/share/Steam/compatibilitytools.d
+   tar -xf we-proton-<version>.tar.xz -C ~/.local/share/Steam/compatibilitytools.d/
+   ```
+
+   Lutris and Heroic also pick up Proton builds from Steam's directory, so the command above works for them as well; you can also point `-C` at their own Proton directory.
+
+   > Do not extract with 7-Zip. Many DLLs in the package are symlinks, and recent 7-Zip versions skip them as "dangerous" and leave empty files behind, which breaks the prefix in confusing ways. If you saw `Dangerous link path was ignored` while extracting, delete the extracted directory, extract again with the command above, and recreate any prefix that was created with it.
+
 3. Select `we-proton-<version>` in the launcher. wegame-launcher uses the newest WE-Proton it finds by default; to pick one by hand, use Settings → Runner in the GUI, or run
 
    ```
    wegame-launcher runner we-proton-<version>
    ```
-
-Notes:
-
-- The prefix version is the same as that of the GE-Proton release it is based on (`GE-Proton11-7`). Coming from an older WE-Proton based on DW-Proton (`we-proton-11.0-14-*`), the prefix is upgraded once. The log then says `Prefix has an invalid version?!`: GE-Proton's script doesn't understand versions starting with `dwproton-`, skips its own upgrade steps and leaves the update to Wine, which is fine
-- 0005 needs userfaultfd asynchronous write-protection, available in Linux 6.7 and later; on older kernels that fix is inactive and everything else works as usual
 
 ## Building from source
 
