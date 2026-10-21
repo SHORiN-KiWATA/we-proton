@@ -1,4 +1,4 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From 298290918f7ab8eee454c7af4c2d7d0cbbace04c Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Mon, 12 Oct 2026 19:10:00 +0900
 Subject: [PATCH] win32u: Report the previous foreground thread in
@@ -26,12 +26,14 @@ WM_ACTIVATEAPP(FALSE) already does when the foreground leaves Wine.
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
 ---
- dlls/win32u/input.c | 47 +++++----
+ dlls/win32u/input.c | 47 +++++++++++++++++++++------------------------
  1 file changed, 22 insertions(+), 25 deletions(-)
 
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+index ce61f9898af..3b08410ec3c 100644
 --- a/dlls/win32u/input.c
 +++ b/dlls/win32u/input.c
-@@ -2139,27 +2139,6 @@
+@@ -2139,27 +2139,6 @@ static BOOL black_desert_keep_fullscreen_on_focus_loss( HWND hwnd )
      return get_present_rect( hwnd, &rect, get_thread_dpi() );
  }
  
@@ -59,7 +61,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  /*******************************************************************
   *		set_active_window
   */
-@@ -2167,12 +2146,21 @@
+@@ -2167,12 +2146,21 @@ BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus, DWORD new
  {
      HWND previous = get_active_window(), fullscreen_window;
      BOOL ret;
@@ -82,7 +84,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
      if (previous == hwnd)
      {
          if (prev) *prev = hwnd;
-@@ -2239,8 +2227,10 @@
+@@ -2239,8 +2227,10 @@ BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus, DWORD new
              }
              if (new_thread)
              {
@@ -94,7 +96,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
                  for (phwnd = list; *phwnd; phwnd++)
                  {
                      if (get_window_thread( *phwnd, NULL ) == new_thread)
-@@ -2411,6 +2401,13 @@
+@@ -2411,6 +2401,13 @@ BOOL set_foreground_window( HWND hwnd, BOOL mouse, BOOL internal )
  
      if (ret && previous != hwnd)
      {
@@ -108,7 +110,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
          if (send_msg_old)  /* old window belongs to other thread */
              NtUserMessageCall( previous, WM_WINE_SETACTIVEWINDOW, 0, new_thread_id,
                                 0, NtUserSendNotifyMessage, FALSE );
-@@ -2418,13 +2415,13 @@
+@@ -2418,13 +2415,13 @@ BOOL set_foreground_window( HWND hwnd, BOOL mouse, BOOL internal )
              ret = set_active_window( 0, NULL, mouse, TRUE, new_thread_id );
  
          if (send_msg_new)  /* new window belongs to other thread */

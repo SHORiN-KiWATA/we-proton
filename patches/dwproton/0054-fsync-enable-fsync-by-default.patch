@@ -1,0 +1,23 @@
+From d67dc0b8aa01fd288d2ee2bf416f630f9be2a894 Mon Sep 17 00:00:00 2001
+From: Stelios Tsampas <loathingkernel@gmail.com>
+Date: Wed, 22 Apr 2026 00:09:59 +0300
+Subject: [PATCH] fsync: enable fsync by default
+
+(cherry picked from commit a504a042cef2b841e2e9ae97a968021db24cfa39)
+---
+ server/fsync.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/server/fsync.c b/server/fsync.c
+index 7d3ec646f9e..bd10ebd0dcb 100644
+--- a/server/fsync.c
++++ b/server/fsync.c
+@@ -58,7 +58,7 @@ int fsync_check_support(void)
+ {
+ #ifdef __linux__
+     syscall( __NR_futex_waitv, 0, 0, 0, 0, 0 );
+-    return getenv( "WINEFSYNC" ) && atoi(getenv( "WINEFSYNC" )) && errno != ENOSYS && errno != EPERM;
++    return !(getenv( "WINEFSYNC" ) && !atoi(getenv( "WINEFSYNC" ))) && errno != ENOSYS && errno != EPERM;
+ #else
+     return 0;
+ #endif

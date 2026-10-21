@@ -3,7 +3,7 @@
 WE-Proton 从 `we-proton-ge11-7-*` 起以 GE-Proton 为底，合入 DW-Proton 的补丁。这里记录合并时的做法、规则和每一处手工处理，跟进上游新版本时照着做。
 
 - GE-Proton：`GE-Proton11-7`（`c191f35d`）
-- DW-Proton：`dwproton-11.0-14`
+- DW-Proton：`dwproton-11.0-14`，之后跟进到 `dwproton-11.0-15`（见文末「跟进 GE-Proton11-11 和 dwproton-11.0-15」）
 - 时间：2026-10-11
 
 ## 两边的结构
@@ -135,3 +135,27 @@ Valve 在 09-23 用的 dxvk、vkd3d-proton、vkd3d、FEX、dxvk-nvapi 比两边�
 - 0048（合并后加的）：`wintun_probe32.exe` 在无特权的用户+网络命名空间里，网卡描述报 `Probe Tunnel`，和 Windows 一致；12 个回归探测和加 0048 之前的构建相同
 - 回归结果存成了基线 `tests/regress-we-proton-ge11-7-25/`，以后用 `tests/regress.sh --compare` 比较
 - 没测：WeGame 和游戏的实机运行、WeGame 自绘托盘菜单的位置、Wayland 驱动下的程序
+
+## 跟进 GE-Proton11-11 和 dwproton-11.0-15（2026-10-22）
+
+**GE-Proton11-7 → 11-11**：按 `upstream-sync.md` A 节合并 tag `GE-Proton11-11`。
+
+- 冲突只有 `README.md`（用我们的）、`patches/protonprep-valve-staging.sh`（GE 新加的几段放在我们的 DW/WE 段前面）和三个子模块。dxvk、vkd3d-proton、protonfixes 都是 GE 的版本更新、包含我们原来用的 DW 版本，全用 GE 的
+- HDR：GE-Proton11-9 起 GE 自己按 DisplayConfig 判断输出口有没有开 HDR（dxvk `dxgi-respect-output-hdr-state`、`dxgi-auto-detect-hdr`，Wine 侧 `em-fixups/0066`、`0069`–`0071`），和 DW 的 `dw-hdr-detection-via-displayconfig.patch` 做同一件事，DW 那个打完以后 GE 的打不上。用 GE 的，删掉 DW 的补丁和 protonprep 里的那一行
+- Valve 的 Wine 从 `46b29104e` 换成 `c53678ab22a`（132 个提交），其中已经包含 DW-Proton 的 45 个补丁（unixlib 按名加载、mf/EVR 时钟事件、rsaenh HMAC、字体链接、一批 ntoskrnl 函数等），另有 5 个和 GE 新加的 `game-patches/ace-*` 同名，都删掉了。`dup-titles.py` 从这次起也和 Valve Wine 的历史比标题
+- 手工处理的 DW 补丁：
+  - `0015` d2d1 画刷不透明度：GE 的 d2d1 图层补丁在同一处加了 `cb->clamp_source`，两边都留
+  - `0016` d2d1 录制命令列表时不引用图层：GE 自己实现了 `PushLayer`（图层可以为空），按上游的做法录制时不传图层，实时绘制的分支保留 GE 的
+  - `ntdll: use llvm compatible asm`：Valve 的 Wine 已经改成等价的 `jmp *%rcx`，跳过
+  - `0081` winex11 跳过覆盖窗口：只是和 GE 的 satellite 最小化补丁上下文相邻，两个函数都留
+  - `0088`/`0089` csrss、lsass：GE 自带 SamSs 服务版的 lsass（终末地 ACE 补丁），DW 11.0-15 也改成了这样。照 DW 11.0-15 的 `csrss: Add stub.` 和 `wineboot: Start the csrss.exe stub, and run lsass.exe in session 0.` 改：DW 只留 csrss 存根，lsass 用 GE 的，加上进 session 0
+- WE 的 `0007`（分层子窗口画进父窗口）和 Valve `9f163a40959`（把 `window_surface_set_layered` 挪到 `apply_window_pos` 前面）冲突：子窗口不给表面设分层，和原来一样
+- vkd3d-proton 的 `we-0001` 在新的 dxil-spirv 上重新移植，见 `fixes/vkd3d-0001-dxil-spirv-loop-breaks/`
+- 从 GE 主线提前搬了 3 个补丁，见 `ge-backports.md`；GE-Proton11-7 之后搬的那批已经随正式版进来
+
+**dwproton-11.0-14 → 11.0-15**：DW-Proton 11.0-15 的顶层改成以 CachyOS 的 Proton 为底，Wine 也换成 Valve `7fc704ef49c` + CachyOS 层（609 个提交）+ DW 层（36 个，其中 29 个是 11.0-14 的重新挑上），和 11.0-14 的历史不连续（`upstream-sync.md` B2 的检查会停）。按标题去掉 11.0-14 已有的，新提交 228 个，逐个的去留记在 `ge-dw-merge-commits.txt` 末尾。合入的：
+
+- Wine：mfplat 接受 `R8_UINT` 纹理（2 个，`0108`、`0109`）；csrss/lsass 的新写法（见上）
+- protonfixes：`0003`（NIKKE）换成 11.0-15 的版本（去掉了手工搬 `update_files` 的那段，Wine 侧的关机阻止原因已经由 WE 的 `0060` 实现）；新加 `0006`（鸣潮 `-krqlv` 参数去重）
+
+没合的大块：CachyOS 的 winepipewire 音频驱动（132 个，GE 没有，和 GE 的手柄振动补丁深改 winepulse 冲突）；winewayland 的 app_id 改成 `steam_proton`（非 Steam 程序会全变成同一个名字）；ShutdownBlockReason 存根（WE 的 `0060` 是按 Windows 实测的完整实现）。

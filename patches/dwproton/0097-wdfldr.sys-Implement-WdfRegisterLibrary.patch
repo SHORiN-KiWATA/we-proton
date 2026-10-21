@@ -1,0 +1,194 @@
+From a1c473e23855c415a8385db33958c11ca1663c7a Mon Sep 17 00:00:00 2001
+From: Ziia Shi <mkrsym1@gmail.com>
+Date: Thu, 6 Aug 2026 16:28:03 +0200
+Subject: [PATCH] wdfldr.sys: Implement WdfRegisterLibrary.
+
+App: Neverness to Everness (4508340).
+---
+ dlls/wdfldr.sys/wdfldr.sys.spec |   2 +-
+ dlls/wdfldr.sys/wdfldr_main.c   | 105 ++++++++++++++++++++++++++++++--
+ 2 files changed, 101 insertions(+), 6 deletions(-)
+
+diff --git a/dlls/wdfldr.sys/wdfldr.sys.spec b/dlls/wdfldr.sys/wdfldr.sys.spec
+index 51c5e2ba7d7..950d80e29d0 100644
+--- a/dlls/wdfldr.sys/wdfldr.sys.spec
++++ b/dlls/wdfldr.sys/wdfldr.sys.spec
+@@ -3,7 +3,7 @@
+ @ stub WdfLdrDiagnosticsValueByNameAsULONG
+ @ stub WdfLdrQueryInterface
+ @ stub WdfRegisterClassLibrary
+-@ stub WdfRegisterLibrary
++@ stdcall WdfRegisterLibrary(ptr ptr ptr)
+ @ stdcall WdfVersionBind(ptr ptr ptr ptr)
+ @ stub WdfVersionBindClass
+ @ stdcall WdfVersionUnbind(ptr ptr ptr)
+diff --git a/dlls/wdfldr.sys/wdfldr_main.c b/dlls/wdfldr.sys/wdfldr_main.c
+index 2ab78030b76..a34ac542154 100644
+--- a/dlls/wdfldr.sys/wdfldr_main.c
++++ b/dlls/wdfldr.sys/wdfldr_main.c
+@@ -53,12 +53,65 @@ typedef struct _WDF_COMPONENT_GLOBALS {
+     ULONG Reserved[16];
+ } WDF_COMPONENT_GLOBALS, *PWDF_COMPONENT_GLOBALS;
+ 
++typedef NTSTATUS WINAPI (*PFNLIBRARYCOMMISSION)(VOID);
++typedef NTSTATUS WINAPI (*PFNLIBRARYDECOMMISSION)(VOID);
++typedef NTSTATUS WINAPI (*PFNLIBRARYREGISTERCLIENT)(WDF_BIND_INFO *info, PWDF_COMPONENT_GLOBALS *globals, void *context);
++typedef NTSTATUS WINAPI (*PFNLIBRARYUNREGISTERCLIENT)(WDF_BIND_INFO *info, WDF_COMPONENT_GLOBALS *globals);
++
++typedef struct _WDF_LIBRARY_INFO {
++    ULONG Size;
++    PFNLIBRARYCOMMISSION LibraryCommission;
++    PFNLIBRARYDECOMMISSION LibraryDecommission;
++    PFNLIBRARYREGISTERCLIENT LibraryRegisterClient;
++    PFNLIBRARYUNREGISTERCLIENT LibraryUnregisterClient;
++    WDF_VERSION Version;
++} WDF_LIBRARY_INFO, *PWDF_LIBRARY_INFO;
++
++struct wdf_library
++{
++    struct list entry;
++    UNICODE_STRING *service_path;
++    WDF_LIBRARY_INFO *info;
++};
++static struct list wdf_libraries = LIST_INIT(wdf_libraries);
++
+ static inline LPCSTR debugstr_us( const UNICODE_STRING *us )
+ {
+     if (!us) return "<null>";
+     return debugstr_wn( us->Buffer, us->Length / sizeof(WCHAR) );
+ }
+ 
++NTSTATUS WINAPI WdfRegisterLibrary(WDF_LIBRARY_INFO *info, UNICODE_STRING *service_path, UNICODE_STRING *device_name)
++{
++    NTSTATUS status;
++    struct wdf_library *library;
++
++    TRACE("%p %s %s\n", info, debugstr_us(service_path), debugstr_us(device_name));
++
++    status = info->LibraryCommission();
++    if (!NT_SUCCESS(status))
++    {
++        ERR("%s LibraryCommission failed %08lx\n", debugstr_us(service_path), status);
++        return status;
++    }
++
++    library = RtlAllocateHeap(GetProcessHeap(), 0, sizeof(struct wdf_library));
++    if (!library)
++        return STATUS_NO_MEMORY;
++
++    /* FIXME maybe it's not nice to expect these to live forever */
++    library->service_path = service_path;
++    library->info = info;
++
++    /* FIXME we assume the world is nice and there will not be duplicates
++     * FIXME we also assume there is no multithreading which is most likely true */
++    list_add_tail(&wdf_libraries, &library->entry);
++
++    TRACE("registered library %p\n", library);
++
++    return status;
++}
++
+ static NTSTATUS read_service_value(UNICODE_STRING *out, HANDLE key)
+ {
+     const UNICODE_STRING service_val_us = RTL_CONSTANT_STRING(L"Service");
+@@ -138,12 +191,28 @@ done:
+     return status;
+ }
+ 
+-static NTSTATUS load_service(UNICODE_STRING *service)
++static struct wdf_library *get_loaded_library(UNICODE_STRING *keypath)
++{
++    struct wdf_library *elem;
++    LIST_FOR_EACH_ENTRY(elem, &wdf_libraries, struct wdf_library, entry)
++    {
++        if (RtlCompareUnicodeString(elem->service_path, keypath, TRUE) == 0)
++        {
++            TRACE("found library for %s\n", debugstr_us(keypath));
++            return elem;
++        }
++    }
++    TRACE("%s likely not yet loaded\n", debugstr_us(keypath));
++    return NULL;
++}
++
++static NTSTATUS load_library_service(UNICODE_STRING *service, struct wdf_library **out_library)
+ {
+     const WCHAR keypath[] = L"\\Registry\\Machine\\System\\CurrentControlSet\\Services\\";
+ 
+     NTSTATUS status;
+     UNICODE_STRING service_keypath;
++    struct wdf_library *library = NULL;
+ 
+     service_keypath.Length = sizeof(keypath) - sizeof(WCHAR);
+     service_keypath.MaximumLength = sizeof(keypath) + service->Length;
+@@ -153,13 +222,29 @@ static NTSTATUS load_service(UNICODE_STRING *service)
+     memcpy(service_keypath.Buffer, keypath, sizeof(keypath));
+     RtlAppendUnicodeToString(&service_keypath, service->Buffer);
+ 
++    /* if we already have it dont try loading again */
++    library = get_loaded_library(&service_keypath);
++    if (library)
++    {
++        status = STATUS_SUCCESS;
++        goto done;
++    }
++
+     status = ZwLoadDriver(&service_keypath);
++    library = get_loaded_library(&service_keypath);
++    if (!library)
++    {
++        ERR("%s did not WdfRegisterLibrary after loading\n", debugstr_us(&service_keypath));
++        status = STATUS_UNSUCCESSFUL;
++    }
+ 
++done:
+     RtlFreeHeap(GetProcessHeap(), 0, service_keypath.Buffer);
++    *out_library = library;
+     return status;
+ }
+ 
+-static NTSTATUS load_kmdf_library(WCHAR *component, WDF_VERSION *version)
++static NTSTATUS load_kmdf_library(WCHAR *component, WDF_VERSION *version, struct wdf_library **out_library)
+ {
+     const WCHAR key_pat[] = L"\\Registry\\Machine\\System\\CurrentControlSet\\Control\\Wdf\\Kmdf\\%s\\Versions";
+ 
+@@ -200,7 +285,7 @@ static NTSTATUS load_kmdf_library(WCHAR *component, WDF_VERSION *version)
+     TRACE("service for %s %lu.%lu.%lu is %s\n",
+           debugstr_w(component), v_data[0], v_data[1], v_data[2], debugstr_us(&service_str));
+ 
+-    status = load_service(&service_str);
++    status = load_library_service(&service_str, out_library);
+     if (!NT_SUCCESS(status))
+     {
+         ERR("loading service failed for %s (%s) status %08lx\n",
+@@ -218,17 +303,27 @@ NTSTATUS WINAPI WdfVersionBind(DRIVER_OBJECT *driver, UNICODE_STRING *reg_path,
+                                 WDF_BIND_INFO *bind_info, PWDF_COMPONENT_GLOBALS *component_globals)
+ {
+     NTSTATUS status;
++    struct wdf_library *library;
++    void *context;
+ 
+     TRACE("%p %s %p %p\n", driver, debugstr_us(reg_path), bind_info, component_globals);
+ 
+-    status = load_kmdf_library(bind_info->Component, &bind_info->Version);
++    status = load_kmdf_library(bind_info->Component, &bind_info->Version, &library);
+     if (!NT_SUCCESS(status))
+     {
+         ERR("failed to load required KMDF component %s\n", debugstr_w(bind_info->Component));
+         return STATUS_DLL_INIT_FAILED; /* FIXME what should be the correct status */
+     }
+ 
+-    return STATUS_SUCCESS;
++    TRACE("found library %p %s\n", library, debugstr_us(library->service_path));
++
++    status = library->info->LibraryRegisterClient(bind_info, component_globals, &context);
++    if (!NT_SUCCESS(status))
++        ERR("%s failed to register client\n", debugstr_w(bind_info->Component));
++    else
++        TRACE("%s bind succeeded\n", debugstr_w(bind_info->Component));
++
++    return status;
+ }
+ 
+ NTSTATUS WINAPI WdfVersionUnbind(UNICODE_STRING *reg_path, WDF_BIND_INFO *bind_info,

@@ -1,0 +1,26 @@
+From 5a0d6eeae2e7b610ed6800dec5983584f6bf738b Mon Sep 17 00:00:00 2001
+From: Zhiyi Zhang <zzhang@codeweavers.com>
+Date: Sun, 1 Feb 2026 10:42:10 +0800
+Subject: [PATCH] d2d1: Return S_OK for d2d_device_context_Flush().
+
+React Native applications depend on this.
+
+Wine-Bug: http://bugs.winehq.org/show_bug.cgi?id=50814
+(cherry picked from commit d593cede80018bdf40c54008c6df9f7b66df739d)
+---
+ dlls/d2d1/device.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/dlls/d2d1/device.c b/dlls/d2d1/device.c
+index 8c3820de1ba..9d923d5e7b3 100644
+--- a/dlls/d2d1/device.c
++++ b/dlls/d2d1/device.c
+@@ -2204,7 +2204,7 @@ static HRESULT STDMETHODCALLTYPE d2d_device_context_Flush(ID2D1DeviceContext6 *i
+     if (context->ops && context->ops->device_context_present)
+         context->ops->device_context_present(context->outer_unknown);
+ 
+-    return E_NOTIMPL;
++    return S_OK;
+ }
+ 
+ static void STDMETHODCALLTYPE d2d_device_context_SaveDrawingState(ID2D1DeviceContext6 *iface,

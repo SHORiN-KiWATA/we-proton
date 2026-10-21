@@ -1,0 +1,53 @@
+From ccd7c6cdf514f9632f63e922a46d5f801f0c7757 Mon Sep 17 00:00:00 2001
+From: NelloKudo <marshnelloosu@gmail.com>
+Date: Thu, 14 May 2026 15:13:39 +0200
+Subject: [PATCH] HACK: win32u: Force opaque webviews for Wuthering Waves.
+
+(cherry picked from commit 573a90c1f0f567c481da6a6b533626eb00fb5c96)
+---
+ dlls/win32u/window.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 3ec316fa046..464da4cb6f2 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -2774,6 +2774,30 @@ BOOL WINAPI NtUserGetLayeredWindowAttributes( HWND hwnd, COLORREF *key, BYTE *al
+     return ret;
+ }
+ 
++static void fixup_chrome_webview_style( HWND hwnd, HWND toplevel, const UNICODE_STRING *class_name )
++{
++    static const WCHAR CefBrowserWindowW[] = u"CefBrowserWindow";
++    static int cached = -1;
++    static int once;
++
++    if (cached == -1)
++    {
++        const char *sgi = getenv( "SteamGameId" );
++        cached = sgi && !strcmp( sgi, "3513350" );
++    }
++
++    if (!cached || !toplevel || toplevel == hwnd || !class_name || IS_INTRESOURCE( class_name->Buffer ))
++        return;
++
++    if (class_name->Length != wcslen( CefBrowserWindowW ) * sizeof(WCHAR)
++        || memcmp( class_name->Buffer, CefBrowserWindowW, class_name->Length ))
++        return;
++
++    if (!once++)
++        FIXME( "HACK: forcing opaque chrome webview layered alpha.\n" );
++    NtUserSetLayeredWindowAttributes( toplevel, RGB(255, 255, 255), 255, LWA_ALPHA );
++}
++
+ /*****************************************************************************
+  *           NtUserSetLayeredWindowAttributes (win32u.@)
+  */
+@@ -6476,6 +6500,7 @@ HWND WINAPI NtUserCreateWindowEx( DWORD ex_style, UNICODE_STRING *class_name,
+     set_thread_dpi_awareness_context( context );
+ 
+     toplevel = NtUserGetAncestor( hwnd, GA_ROOT );
++    fixup_chrome_webview_style( hwnd, toplevel, class_name );
+     if (toplevel && toplevel != hwnd) update_window_state( toplevel );
+ 
+     return hwnd;

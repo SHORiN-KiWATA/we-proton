@@ -1,0 +1,37 @@
+From a5e969d12aac1d9797eac56bb6a52be5f7adfaa9 Mon Sep 17 00:00:00 2001
+From: Elizabeth Figura <zfigura@codeweavers.com>
+Date: Mon, 29 Dec 2025 17:36:30 -0600
+Subject: [PATCH] ddraw: Fix caps tracing in IDirectDraw7::GetCaps().
+
+The output pointers don't necessarily point to a v7 caps structure,
+and we currently may trace invalid members, e.g. ddsCaps.
+
+(cherry picked from commit c54132893fc7e0ce3544ff739b727059f79214fe)
+---
+ dlls/ddraw/ddraw.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/ddraw/ddraw.c b/dlls/ddraw/ddraw.c
+index 8e42e8e0d9f..f39d6857c7c 100644
+--- a/dlls/ddraw/ddraw.c
++++ b/dlls/ddraw/ddraw.c
+@@ -1603,9 +1603,8 @@ static HRESULT WINAPI ddraw7_GetCaps(IDirectDraw7 *iface, DDCAPS *DriverCaps, DD
+         if (TRACE_ON(ddraw))
+         {
+             TRACE("Driver Caps :\n");
+-            DDRAW_dump_DDCAPS(DriverCaps);
++            DDRAW_dump_DDCAPS(&caps);
+         }
+-
+     }
+     if(HELCaps)
+     {
+@@ -1613,7 +1612,7 @@ static HRESULT WINAPI ddraw7_GetCaps(IDirectDraw7 *iface, DDCAPS *DriverCaps, DD
+         if (TRACE_ON(ddraw))
+         {
+             TRACE("HEL Caps :\n");
+-            DDRAW_dump_DDCAPS(HELCaps);
++            DDRAW_dump_DDCAPS(&caps);
+         }
+     }
+ 

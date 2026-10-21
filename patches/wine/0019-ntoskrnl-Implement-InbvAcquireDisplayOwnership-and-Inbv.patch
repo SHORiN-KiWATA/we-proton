@@ -1,4 +1,4 @@
-From 579683b58546888e50c64f4d6e7ed53d5a042d08 Mon Sep 17 00:00:00 2001
+From 318023624365bff5ddfadcbc5c149d83befcdeab Mon Sep 17 00:00:00 2001
 From: SHORiN-KIWATA <shorin@users.noreply.github.com>
 Date: Fri, 9 Oct 2026 02:21:21 +0900
 Subject: [PATCH] ntoskrnl: Implement InbvAcquireDisplayOwnership and
@@ -10,10 +10,10 @@ Subject: [PATCH] ntoskrnl: Implement InbvAcquireDisplayOwnership and
  2 files changed, 17 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/ntoskrnl.exe/ntoskrnl.c b/dlls/ntoskrnl.exe/ntoskrnl.c
-index dbac4f7050d..469689ff4ca 100644
+index 308659dad74..5f1f727c3b1 100644
 --- a/dlls/ntoskrnl.exe/ntoskrnl.c
 +++ b/dlls/ntoskrnl.exe/ntoskrnl.c
-@@ -3239,6 +3239,21 @@ BOOLEAN WINAPI MmIsAddressValid(PVOID VirtualAddress)
+@@ -3224,6 +3224,21 @@ BOOLEAN WINAPI MmIsAddressValid(PVOID VirtualAddress)
      return !IsBadReadPtr(VirtualAddress, 1);
  }
  
@@ -36,7 +36,7 @@ index dbac4f7050d..469689ff4ca 100644
   *           MmGetPhysicalAddress   (NTOSKRNL.EXE.@)
   */
 diff --git a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
-index 886f367bf3e..a8a31b4f732 100644
+index cd57ab88ad8..7e1b3ac86fd 100644
 --- a/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
 +++ b/dlls/ntoskrnl.exe/ntoskrnl.exe.spec
 @@ -314,7 +314,7 @@

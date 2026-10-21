@@ -1,4 +1,4 @@
-From 6361deedab28aa4a250893d7114b8c814fdc232d Mon Sep 17 00:00:00 2001
+From 49f35a46174b54471bb4ce79807a4ff1cd763353 Mon Sep 17 00:00:00 2001
 From: SHORiN-KIWATA <shorin@users.noreply.github.com>
 Date: Sun, 11 Oct 2026 15:19:13 +0900
 Subject: [PATCH] win32u: Implement NtUserGetWindowBand.
@@ -130,10 +130,10 @@ index 5cb723a52ef..3ccad81a3f7 100644
  @ stub -syscall NtUserGetWindowCompositionInfo
  @ stdcall -syscall NtUserGetWindowContextHelpId(long)
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index 264b3ff1217..cd2fea1b5f8 100644
+index 46096db7867..f8ebf518403 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
-@@ -7121,6 +7121,31 @@ BOOL WINAPI NtUserIsChildWindowDpiMessageEnabled( HWND hwnd )
+@@ -7123,6 +7123,31 @@ BOOL WINAPI NtUserIsChildWindowDpiMessageEnabled( HWND hwnd )
      return FALSE;
  }
  
@@ -185,10 +185,10 @@ index 8bb35d2d3a3..4c001d072b7 100644
  {
      HWND hwnd = get_handle( &args );
 diff --git a/include/ntuser.h b/include/ntuser.h
-index b9d6a0ca43b..0a0a5dba398 100644
+index 36291898846..9de82db5c25 100644
 --- a/include/ntuser.h
 +++ b/include/ntuser.h
-@@ -920,6 +920,7 @@ W32KAPI BOOL    WINAPI NtUserGetTouchInputInfo( HTOUCHINPUT handle, UINT count,
+@@ -921,6 +921,7 @@ W32KAPI BOOL    WINAPI NtUserGetTouchInputInfo( HTOUCHINPUT handle, UINT count,
  W32KAPI INT     WINAPI NtUserGetUpdateRgn( HWND hwnd, HRGN hrgn, BOOL erase );
  W32KAPI BOOL    WINAPI NtUserGetUpdatedClipboardFormats( UINT *formats, UINT size, UINT *out_size );
  W32KAPI BOOL    WINAPI NtUserGetUpdateRect( HWND hwnd, RECT *rect, BOOL erase );

@@ -1,0 +1,55 @@
+From 3629f13604f3ef31dac4e370ad5f4565bf1ee46c Mon Sep 17 00:00:00 2001
+From: Nikolay Sivov <nsivov@codeweavers.com>
+Date: Wed, 30 Sep 2026 15:47:11 +0200
+Subject: [PATCH] mfplat: Handle R8_UINT format in MFCreateDXGISurfaceBuffer().
+
+Signed-off-by: Nikolay Sivov <nsivov@codeweavers.com>
+---
+ dlls/mfplat/buffer.c       | 10 +++++++++-
+ dlls/mfplat/tests/mfplat.c |  4 +---
+ 2 files changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/mfplat/buffer.c b/dlls/mfplat/buffer.c
+index 633b64ea0f9..5bffdfb7e8d 100644
+--- a/dlls/mfplat/buffer.c
++++ b/dlls/mfplat/buffer.c
+@@ -1661,6 +1661,14 @@ static HRESULT create_d3d9_surface_buffer(IUnknown *surface, BOOL bottom_up, IMF
+     return S_OK;
+ }
+ 
++static D3DFORMAT map_dxgi_format_to_dx9_format(DXGI_FORMAT format)
++{
++    if (format == DXGI_FORMAT_R8_UINT)
++        return MFMapDXGIFormatToDX9Format(DXGI_FORMAT_R8_UNORM);
++
++    return MFMapDXGIFormatToDX9Format(format);
++}
++
+ static HRESULT create_dxgi_surface_buffer(IUnknown *surface, unsigned int sub_resource_idx,
+         BOOL bottom_up, IMFMediaBuffer **buffer)
+ {
+@@ -1683,7 +1691,7 @@ static HRESULT create_dxgi_surface_buffer(IUnknown *surface, unsigned int sub_re
+     TRACE("format %#x, %u x %u.\n", desc.Format, desc.Width, desc.Height);
+ 
+     memcpy(&subtype, &MFVideoFormat_Base, sizeof(subtype));
+-    subtype.Data1 = format = MFMapDXGIFormatToDX9Format(desc.Format);
++    subtype.Data1 = format = map_dxgi_format_to_dx9_format(desc.Format);
+ 
+     if (!(stride = mf_format_get_stride(&subtype, desc.Width, &is_yuv)))
+     {
+diff --git a/dlls/mfplat/tests/mfplat.c b/dlls/mfplat/tests/mfplat.c
+index 964e10a8b74..1bfc8aa5cc1 100644
+--- a/dlls/mfplat/tests/mfplat.c
++++ b/dlls/mfplat/tests/mfplat.c
+@@ -11339,10 +11339,8 @@ static void test_d3d11_surface_buffer(void)
+     ok(hr == S_OK, "Failed to create a texture, hr %#lx.\n", hr);
+ 
+     hr = pMFCreateDXGISurfaceBuffer(&IID_ID3D11Texture2D, (IUnknown *)texture, 0, FALSE, &buffer);
+-    todo_wine
+     ok(hr == S_OK, "Failed to create a buffer, hr %#lx.\n", hr);
+-    if (hr == S_OK)
+-        IMFMediaBuffer_Release(buffer);
++    IMFMediaBuffer_Release(buffer);
+ 
+     ID3D11Texture2D_Release(texture);
+ 

@@ -1,0 +1,24 @@
+From 9806a7a885a84a80cd6a6aa158001ffe549ceb44 Mon Sep 17 00:00:00 2001
+From: Zhiyi Zhang <zzhang@codeweavers.com>
+Date: Fri, 23 Jan 2026 14:35:01 +0800
+Subject: [PATCH] d2d1: Warn in d2d_device_context_set_error().
+
+This is helpful to find out d2d errors when they happen.
+
+(cherry picked from commit b3cd00817a3c53f8aa28c571238f4e84dda47be2)
+---
+ dlls/d2d1/device.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/dlls/d2d1/device.c b/dlls/d2d1/device.c
+index 84826973f72..8c3820de1ba 100644
+--- a/dlls/d2d1/device.c
++++ b/dlls/d2d1/device.c
+@@ -272,6 +272,7 @@ static void d2d_device_context_draw(struct d2d_device_context *render_target, en
+ 
+ static void d2d_device_context_set_error(struct d2d_device_context *context, HRESULT code)
+ {
++    WARN("code %#lx.\n", code);
+     context->error.code = code;
+     context->error.tag1 = context->drawing_state.tag1;
+     context->error.tag2 = context->drawing_state.tag2;

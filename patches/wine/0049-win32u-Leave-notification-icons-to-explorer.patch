@@ -1,4 +1,4 @@
-From d3d91507f559ead249a3676aef3d2c89877310bb Mon Sep 17 00:00:00 2001
+From 1b68ea97907b8e2fc7ecc6f8c9048894ab17bbb0 Mon Sep 17 00:00:00 2001
 From: SHORiN-KIWATA <shorin@users.noreply.github.com>
 Date: Mon, 12 Oct 2026 03:26:28 +0900
 Subject: [PATCH] win32u: Leave notification icons to explorer.
@@ -15,7 +15,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  1 file changed, 3 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/win32u/systray.c b/dlls/win32u/systray.c
-index e5ae7e60be9..d3435e2409d 100644
+index 0b7e1474722..23d187eff3d 100644
 --- a/dlls/win32u/systray.c
 +++ b/dlls/win32u/systray.c
 @@ -41,9 +41,10 @@ LRESULT system_tray_call( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam, voi

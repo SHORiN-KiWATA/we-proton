@@ -88,7 +88,7 @@ we/build.sh --name we-proton-<版本> --install   # 同时安装到「~/.local/s
 
 - `patches/wine/`、`patches/vkd3d-proton/we-*.patch`：WE-Proton 的补丁
 - `patches/dwproton/`：DW-Proton 有、GE-Proton 没有的 Wine 补丁
-- `patches/` 下其余目录和 `patches/protonprep-valve-staging.sh`：GE-Proton 的补丁和打补丁脚本（其中 `protonfixes/0003`–`0005` 和 `dxvk/dw-*` 来自 DW-Proton，`protonfixes/0051` 是 WE-Proton 自己的）。子模块停在上游 commit，构建前由脚本打上所有补丁
+- `patches/` 下其余目录和 `patches/protonprep-valve-staging.sh`：GE-Proton 的补丁和打补丁脚本（其中 `protonfixes/0003`–`0006` 来自 DW-Proton，`protonfixes/0051` 是 WE-Proton 自己的）。子模块停在上游 commit，构建前由脚本打上所有补丁
 - `we/fixes/`：每个补丁一份报告（现象、根因、修复、验证）
 - `we/tests/`：测试程序和修复前后的输出
 - `we/diag/`：诊断补丁和脚本，不进正式构建

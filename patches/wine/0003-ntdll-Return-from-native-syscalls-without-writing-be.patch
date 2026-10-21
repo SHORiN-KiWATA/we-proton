@@ -1,4 +1,4 @@
-From 7c718c56f1ec5e015b2bbb084065c1c267e1373d Mon Sep 17 00:00:00 2001
+From 1d3074fe0a959a28af7e4cb7419a040bf49ccb76 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Wed, 7 Oct 2026 07:51:23 +0900
 Subject: [PATCH] ntdll: Return from native syscalls without writing below the
@@ -25,10 +25,10 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  1 file changed, 6 insertions(+), 4 deletions(-)
 
 diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
-index 7d2fa62fa79..432d685113c 100644
+index 948eb465b70..a9c86e6fa06 100644
 --- a/dlls/ntdll/unix/signal_x86_64.c
 +++ b/dlls/ntdll/unix/signal_x86_64.c
-@@ -2912,15 +2912,17 @@ static void sigsys_handler( int signal, siginfo_t *siginfo, void *sigcontext )
+@@ -2932,15 +2932,17 @@ static void sigsys_handler( int signal, siginfo_t *siginfo, void *sigcontext )
      frame->rip = RIP_sig(ucontext) + 0xb;
      frame->rcx = RIP_sig(ucontext);
      frame->eflags = EFL_sig(ucontext);

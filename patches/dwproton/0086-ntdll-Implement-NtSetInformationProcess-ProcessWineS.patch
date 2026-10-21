@@ -1,0 +1,60 @@
+From 95975854a12c6fbe1a1cde349765fed2cbf6dfb1 Mon Sep 17 00:00:00 2001
+From: shxrrydw <sherrydrv@gmail.com>
+Date: Thu, 6 Aug 2026 12:39:22 +0200
+Subject: [PATCH] ntdll: Implement
+ NtSetInformationProcess(ProcessWineSessionId).
+
+App: Hololive Dreams (4282500).
+---
+ dlls/ntdll/unix/process.c | 12 ++++++++++++
+ dlls/wow64/process.c      |  1 +
+ include/winternl.h        |  1 +
+ 3 files changed, 14 insertions(+)
+
+diff --git a/dlls/ntdll/unix/process.c b/dlls/ntdll/unix/process.c
+index 272b0b3ea3e..78da56e033e 100644
+--- a/dlls/ntdll/unix/process.c
++++ b/dlls/ntdll/unix/process.c
+@@ -1971,6 +1971,18 @@ NTSTATUS WINAPI NtSetInformationProcess( HANDLE handle, PROCESSINFOCLASS class,
+         SERVER_END_REQ;
+         break;
+ 
++    case ProcessWineSessionId:
++        if (size != sizeof(ULONG)) return STATUS_INFO_LENGTH_MISMATCH;
++        SERVER_START_REQ( set_process_session )
++        {
++            req->handle = wine_server_obj_handle( handle );
++            req->session_id = *(const ULONG *)info;
++            ret = wine_server_call( req );
++        }
++        SERVER_END_REQ;
++        if (!ret && handle == GetCurrentProcess()) peb->SessionId = *(const ULONG *)info;
++        break;
++
+     case ProcessPowerThrottlingState:
+         FIXME( "ProcessPowerThrottlingState - stub\n" );
+         return STATUS_SUCCESS;
+diff --git a/dlls/wow64/process.c b/dlls/wow64/process.c
+index 90faeb19638..49f6927b342 100644
+--- a/dlls/wow64/process.c
++++ b/dlls/wow64/process.c
+@@ -935,6 +935,7 @@ NTSTATUS WINAPI wow64_NtSetInformationProcess( UINT *args )
+     case ProcessPowerThrottlingState:   /* PROCESS_POWER_THROTTLING_STATE */
+     case ProcessLeapSecondInformation:   /* PROCESS_LEAP_SECOND_INFO */
+     case ProcessWineGrantAdminToken:   /* NULL */
++    case ProcessWineSessionId:   /* ULONG */
+         return NtSetInformationProcess( handle, class, ptr, len );
+ 
+     case ProcessExecuteFlags:   /* ULONG */
+diff --git a/include/winternl.h b/include/winternl.h
+index 70dca914b3d..264e4b35a88 100644
+--- a/include/winternl.h
++++ b/include/winternl.h
+@@ -2034,6 +2034,7 @@ typedef enum _PROCESSINFOCLASS {
+ #ifdef __WINESRC__
+     ProcessWineMakeProcessSystem = 1000,
+     ProcessWineGrantAdminToken = 1002,
++    ProcessWineSessionId = 1003,
+     ProcessWineUnixDebuggerPid = 1100,
+     ProcessWineUnixPid = 1101,
+ #endif

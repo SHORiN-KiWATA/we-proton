@@ -1,0 +1,40 @@
+From d196496749a54dc1e0c0cfaf7f7ae9bc63a5760a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Stefan=20D=C3=B6singer?= <stefan@codeweavers.com>
+Date: Fri, 13 Mar 2026 23:17:37 +0300
+Subject: [PATCH] ddraw/tests: Fix vertex winding in test_ck_rgba.
+
+On recent Windows 11 versions, probably starting with 26H1, RGB software
+devices accidentally enable culling by default for transformed geometry.
+Since this test is run on RGB in addition to HAL devices that causes
+failues.
+
+HAL devices are fine either way, and ddraw2+ looks OK too.
+
+(cherry picked from commit b8d0178d8c2b5b1d8dea5067a37da315d62752d1)
+---
+ dlls/ddraw/tests/ddraw1.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/ddraw/tests/ddraw1.c b/dlls/ddraw/tests/ddraw1.c
+index 48e69848b4c..bb63984dd35 100644
+--- a/dlls/ddraw/tests/ddraw1.c
++++ b/dlls/ddraw/tests/ddraw1.c
+@@ -1833,14 +1833,14 @@ static void test_ck_rgba(const GUID *device_guid)
+     static D3DRECT clear_rect = {{0}, {0}, {640}, {480}};
+     static D3DTLVERTEX tquad[] =
+     {
+-        {{  0.0f}, {480.0f}, {0.25f}, {1.0f}, {0xffffffff}, {0x00000000}, {0.0f}, {0.0f}},
+         {{  0.0f}, {  0.0f}, {0.25f}, {1.0f}, {0xffffffff}, {0x00000000}, {0.0f}, {1.0f}},
+-        {{640.0f}, {480.0f}, {0.25f}, {1.0f}, {0xffffffff}, {0x00000000}, {1.0f}, {0.0f}},
+         {{640.0f}, {  0.0f}, {0.25f}, {1.0f}, {0xffffffff}, {0x00000000}, {1.0f}, {1.0f}},
+-        {{  0.0f}, {480.0f}, {0.75f}, {1.0f}, {0xffffffff}, {0x00000000}, {0.0f}, {0.0f}},
++        {{  0.0f}, {480.0f}, {0.25f}, {1.0f}, {0xffffffff}, {0x00000000}, {0.0f}, {0.0f}},
++        {{640.0f}, {480.0f}, {0.25f}, {1.0f}, {0xffffffff}, {0x00000000}, {1.0f}, {0.0f}},
+         {{  0.0f}, {  0.0f}, {0.75f}, {1.0f}, {0xffffffff}, {0x00000000}, {0.0f}, {1.0f}},
+-        {{640.0f}, {480.0f}, {0.75f}, {1.0f}, {0xffffffff}, {0x00000000}, {1.0f}, {0.0f}},
+         {{640.0f}, {  0.0f}, {0.75f}, {1.0f}, {0xffffffff}, {0x00000000}, {1.0f}, {1.0f}},
++        {{  0.0f}, {480.0f}, {0.75f}, {1.0f}, {0xffffffff}, {0x00000000}, {0.0f}, {0.0f}},
++        {{640.0f}, {480.0f}, {0.75f}, {1.0f}, {0xffffffff}, {0x00000000}, {1.0f}, {0.0f}},
+     };
+     /* Supposedly there was no D3DRENDERSTATE_COLORKEYENABLE in D3D < 5.
+      * Maybe the WARP driver on Windows 8 ignores setting it via the older

@@ -37,7 +37,7 @@ https://github.com/user-attachments/assets/42438b93-5a36-4557-8a0f-4b65b53d5e07
 
 Notes:
 
-- The prefix version is the same as that of the GE-Proton release it is based on (`GE-Proton11-7`). Coming from an older WE-Proton based on DW-Proton (`we-proton-11.0-14-*`), the prefix is upgraded once. The log then says `Prefix has an invalid version?!`: GE-Proton's script doesn't understand versions starting with `dwproton-`, skips its own upgrade steps and leaves the update to Wine, which is fine
+- The prefix version is the same as that of the GE-Proton release it is based on (`GE-Proton11-11`). Coming from an older WE-Proton based on DW-Proton (`we-proton-11.0-14-*`), the prefix is upgraded once. The log then says `Prefix has an invalid version?!`: GE-Proton's script doesn't understand versions starting with `dwproton-`, skips its own upgrade steps and leaves the update to Wine, which is fine
 - 0005 needs userfaultfd asynchronous write-protection, available in Linux 6.7 and later; on older kernels that fix is inactive and everything else works as usual
 
 ## Building from source
@@ -57,7 +57,7 @@ The script fetches the submodules, patches them with `patches/protonprep-valve-s
 
 - `patches/wine/`, `patches/vkd3d-proton/we-*.patch`: WE-Proton's patches
 - `patches/dwproton/`: Wine patches DW-Proton has and GE-Proton doesn't
-- The rest of `patches/` and `patches/protonprep-valve-staging.sh`: GE-Proton's patches and patching script (`protonfixes/0003`–`0005` and `dxvk/dw-*` come from DW-Proton; `protonfixes/0051` is WE-Proton's own). The submodules stay at the upstream commits; the script applies all patches before the build
+- The rest of `patches/` and `patches/protonprep-valve-staging.sh`: GE-Proton's patches and patching script (`protonfixes/0003`–`0006` come from DW-Proton; `protonfixes/0051` is WE-Proton's own). The submodules stay at the upstream commits; the script applies all patches before the build
 - `we/fixes/`: one report per patch (symptoms, root cause, fix, verification)
 - `we/tests/`: test programs and their output before and after each fix
 - `we/diag/`: diagnostic patches and scripts, not part of the release build

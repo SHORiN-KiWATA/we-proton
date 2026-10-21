@@ -15,7 +15,7 @@
 | 层 | 在哪里 | 说明 |
 |---|---|---|
 | GE-Proton | 整个仓库（顶层历史就是 GE-Proton 的）、`patches/` 下除了下面两个目录之外的全部、`patches/protonprep-valve-staging.sh` | 底座。构建前 protonprep 往 Valve 的 Wine 上打 GE-Proton 的补丁和 wine-staging |
-| DW-Proton | `patches/dwproton/`（Wine 补丁）、`patches/protonfixes/0003`–`0005`、`patches/dxvk/dw-hdr-detection-via-displayconfig.patch`、`7zip` 子模块和 `Makefile.in` 里的 7zip 段 | DW-Proton 有、GE-Proton 没有的东西。当前合入的 DW-Proton 版本写在 `we/dw-proton-version` |
+| DW-Proton | `patches/dwproton/`（Wine 补丁）、`patches/protonfixes/0003`–`0006`、`7zip` 子模块和 `Makefile.in` 里的 7zip 段 | DW-Proton 有、GE-Proton 没有的东西。当前合入的 DW-Proton 版本写在 `we/dw-proton-version` |
 | WE-Proton | `patches/wine/`（编号就是 WE-Proton 的补丁号）、`patches/vkd3d-proton/we-*.patch`、`we/` | 自己的修复 |
 
 protonprep 在 `make_requests` 之前依次打 `patches/dwproton/` 和 `patches/wine/`（那一段叫 `(2-8) DW-PROTON AND WE-PROTON PATCHES`）。
@@ -28,7 +28,7 @@ protonprep 在 `make_requests` 之前依次打 `patches/dwproton/` 和 `patches/
 |---|---|
 | `we/sync/wine-dev.sh` | 重置并打好所有子模块，在 `wine/` 里建三个分支：`we-base`（GE-Proton 打完补丁，一个提交）、`we-dw`（+ `patches/dwproton/`）、`we-dev`（+ `patches/wine/`，检出这个） |
 | `we/sync/export-patches.py [--new NNNN]...` | 把 `we-base..we-dw` 写回 `patches/dwproton/`（从 0001 重新编号），把 `we-dw..we-dev` 写回 `patches/wine/`（按标题沿用原来的编号；新补丁用 `--new` 给编号）。生成文件自动排除。只差 From 行的文件保持不动 |
-| `we/sync/dup-titles.py [--remove] <仓库> <范围>` | 列出范围里标题和 GE-Proton 补丁或 wine-staging 补丁相同的提交（GE-Proton 已经带着的）；`--remove` 同时删掉 `patches/dwproton/` 里同标题的补丁文件 |
+| `we/sync/dup-titles.py [--remove] <仓库> <范围>` | 列出范围里标题和 GE-Proton 补丁、wine-staging 补丁，或者和 `wine` 子模块所指的 Valve Wine 历史里的提交相同的提交（GE-Proton 已经带着的）；`--remove` 同时删掉 `patches/dwproton/` 里同标题的补丁文件 |
 | `we/build.sh --name <名字>` | 完整构建，输出到 `build/` |
 | `we/quick-build.sh --base <runner> --name <名字> [--prep] <wine 目录>...` | 在上次完整构建的 `build/obj` 上只重编几个 Wine 模块，出测试版（不能用于发布） |
 | `we/tests/build.sh` | 编测试程序（mingw） |
@@ -96,20 +96,13 @@ git merge <新GE>
 | `Makefile.in` | `git checkout --theirs Makefile.in`，然后把下面「Makefile.in 里的 7zip 段」重新加回去 |
 | `.gitmodules` | 打开文件，保留两边的内容（我们的 `[submodule "7zip"]` 一段 + GE-Proton 的改动），删掉 `<<<<<<<`、`=======`、`>>>>>>>` 行 |
 | 子模块 `dxvk`、`vkd3d-proton`、`protonfixes` | 见下面「子模块版本」 |
-| `patches/protonfixes/` 里的文件 | 用 GE-Proton 的；我们的 `0003`–`0005` 要排在 GE-Proton 的补丁后面，GE-Proton 新加了 `0003` 之类同号文件时，把我们的三个顺延改名 |
+| `patches/protonfixes/` 里的文件 | 用 GE-Proton 的；我们的 `0003`–`0006` 要排在 GE-Proton 的补丁后面，GE-Proton 新加了 `0003` 之类同号文件时，把我们的四个顺延改名 |
 | `patches/dxvk/`、`patches/vkd3d-proton/` 里 GE-Proton 的文件 | `git checkout --theirs <文件>` |
 | `patches/wine-hotfixes/` 里 `we/ge-backports.md` 列出的文件（提前从 GE-Proton 主线搬来的） | `git checkout --theirs <文件>`（GE-Proton 之后又改过它们）；合并完照 `we/ge-backports.md` 最后一节收尾 |
 
-**protonprep 里我们的三处改动**（`git checkout --theirs` 之后都会丢，逐条加回）：
+**protonprep 里我们的两处改动**（`git checkout --theirs` 之后都会丢，逐条加回。HDR 从 GE-Proton11-11 起用 GE-Proton 自己的补丁，不再打 DW-Proton 的）：
 
-1. 在 `pushd dxvk` 那一段里，`patch -Np1 < ../patches/dxvk/layered-overlay-dxvk.patch` 这一行的前面加：
-
-   ```
-       # DW-Proton: report HDR support through NtUserDisplayConfigGetDeviceInfo.
-       apply_patch "../patches/dxvk/dw-hdr-detection-via-displayconfig.patch"
-   ```
-
-2. 在 `pushd vkd3d-proton` 那一段里，`git clean -xdf` 的下一行加：
+1. 在 `pushd vkd3d-proton` 那一段里，`git clean -xdf` 的下一行加：
 
    ```
        # WE-Proton's we-* patch changes the nested dxil-spirv submodule, which the
@@ -117,7 +110,7 @@ git merge <新GE>
        git submodule foreach --recursive --quiet 'git reset --hard -q HEAD && git clean -xdfq'
    ```
 
-3. 在 `echo "WINE: RUN AUTOCONF TOOLS/MAKE_REQUESTS"` 这一行的前面加：
+2. 在 `echo "WINE: RUN AUTOCONF TOOLS/MAKE_REQUESTS"` 这一行的前面加：
 
    ```
    ### (2-8) DW-PROTON AND WE-PROTON PATCHES ###
@@ -138,15 +131,14 @@ git merge <新GE>
 **检查**：
 
 ```
-grep -c 'dw-hdr-detection-via-displayconfig' patches/protonprep-valve-staging.sh       # 1
 grep -c 'git submodule foreach --recursive --quiet' patches/protonprep-valve-staging.sh # 1
 grep -c 'DW-PROTON AND WE-PROTON PATCHES' patches/protonprep-valve-staging.sh          # 2
 grep -n 'DW-PROTON AND WE-PROTON\|RUN AUTOCONF' patches/protonprep-valve-staging.sh
 ```
 
-前三条分别输出 `1`、`1`、`2`。第四条输出三行，形如 `475:### (2-8) DW-PROTON…`、`486:### END DW-PROTON…`、`488:    echo "WINE: RUN AUTOCONF…"`：前两行的行号都要比 `RUN AUTOCONF` 那一行小。
+前两条分别输出 `1`、`2`。第三条输出三行，形如 `475:### (2-8) DW-PROTON…`、`486:### END DW-PROTON…`、`488:    echo "WINE: RUN AUTOCONF…"`：前两行的行号都要比 `RUN AUTOCONF` 那一行小。
 
-GE-Proton 已经没有 `layered-overlay-dxvk.patch` 这一行、没有 `pushd vkd3d-proton`、或者没有 `RUN AUTOCONF` 这一行时：**停下**。
+GE-Proton 已经没有 `pushd vkd3d-proton`、或者没有 `RUN AUTOCONF` 这一行时：**停下**。
 
 **Makefile.in 里的 7zip 段**：从合并前的版本取回来，放回 `## PipeWire ALSA PCM plugin` 那一段的前面：
 
@@ -178,6 +170,15 @@ git commit --no-edit
 ```
 
 ### A3. 重建 Wine 开发分支
+
+先在旧的开发分支上做一遍 A4 的查重：GE-Proton 换了 Valve Wine 的版本时，新 Wine 常常已经带着一批 DW-Proton 补丁，不先删掉的话 `wine-dev.sh` 会在它们那里一个个停下（GE-Proton11-11 时有 50 个）。`wine/` 里有上次留下的 `we-base`、`we-dw` 分支时：
+
+```
+git submodule update --init --filter=tree:0 wine wine-staging
+we/sync/dup-titles.py wine we-base..we-dw
+```
+
+最后一行不是 `0 of …` 就照 A4 的第 1、2 步删掉、记录。没有旧分支就直接往下走。然后：
 
 ```
 we/sync/wine-dev.sh
@@ -365,7 +366,7 @@ for s in dxvk vkd3d-proton protonfixes; do echo "$s $(git ls-tree <旧DW> $s | a
 ```
 
 - `patches/protonfixes/` 有变化：**停下**（要看是不是游戏修复，再决定怎么放进 `patches/protonfixes/0003` 之后）
-- `patches/dxvk/0001-dxvk-Implement-support-for-HDR-detection-via-NtUserD.patch` 有变化：`git show <新DW>:patches/dxvk/0001-dxvk-Implement-support-for-HDR-detection-via-NtUserD.patch > patches/dxvk/dw-hdr-detection-via-displayconfig.patch`。DW-Proton 的这个文件改了名字或删掉了：**停下**
+- `patches/dxvk/` 有变化：不用管（HDR 用 GE-Proton 的补丁）
 - 子模块版本变了（某一行的两个哈希不同）：拿 DW-Proton 新版本用的提交（第二个哈希）和我们现在用的（`git ls-tree HEAD <子模块>`）比，做法和 A2 的「子模块版本」一样，只是把那里的 GE 换成这里的 DW-Proton 新提交：DW-Proton 的更新（我们的提交是它的祖先）就换成它的；我们的更新就不动；分叉就**停下**
 
 ### B6. 导出、构建、测试
@@ -412,15 +413,17 @@ git -C wine status --short | grep '^UU\|^AA\|^DU\|^UD'   # 冲突的文件
 
 | 情况 | 处理 |
 |---|---|
-| GE-Proton 已经有同名补丁：用下面两条命令查，第二条有输出就是 | `git -C wine am --skip` |
+| GE-Proton 已经有同名补丁：用下面三条命令查，第二或第三条有输出就是 | `git -C wine am --skip` |
+| 冲突只是因为 GE-Proton 的 Wine 已经用别的写法改了同一处（`git -C wine diff` 看到 HEAD 一边已经是补丁想要的效果，补丁没有别的改动） | `git -C wine am --skip`，记成 `跳过:GE的Wine已含（<新GE>起）` |
 | 冲突全在 `dlls/winewayland.drv/` 里 | `git -C wine am --skip`（Wayland 用 GE-Proton 的） |
 | 其他 | `git -C wine am --abort`，**停下** |
 
-查同名补丁的两条命令：
+查同名补丁的三条命令：
 
 ```
 git -C wine am --show-current-patch=raw | sed -n '/^Subject:/{N;p}'       # 标题（可能折成两行）
 grep -rlF -- '<标题里冒号后面的前 30 个字>' patches wine-staging/patches | grep -v 'patches/dwproton/\|patches/wine/'
+git -C wine log --oneline -F --grep='<完整标题>' we-base                  # Valve 的 Wine 已经有
 ```
 
 跳过的补丁在 `we/ge-dw-merge-commits.txt` 里改成 `跳过:<原因>（<新GE>起）`。

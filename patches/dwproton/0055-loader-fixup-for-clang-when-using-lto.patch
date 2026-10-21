@@ -1,0 +1,33 @@
+From 0206dda64bd77f6c719d523b9fa14c01e499df24 Mon Sep 17 00:00:00 2001
+From: William Horvath <william@horvath.blog>
+Date: Thu, 14 Nov 2024 02:29:41 -0800
+Subject: [PATCH] loader: fixup for clang when using lto
+
+(cherry picked from commit 4d21996176d389bac5f416abf02f78fc3f182b3b)
+---
+ loader/preloader.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/loader/preloader.c b/loader/preloader.c
+index 1e48a9b2d73..a59fde10614 100644
+--- a/loader/preloader.c
++++ b/loader/preloader.c
+@@ -93,7 +93,9 @@
+ #include "wine/asm.h"
+ #include "main.h"
+ 
++#if !defined(__LLD_LTO__)
+ #pragma GCC visibility push(hidden)
++#endif
+ 
+ /* ELF definitions */
+ #define ELF_PREFERRED_ADDRESS(loader, maplength, mapstartpref) (mapstartpref)
+@@ -1573,6 +1575,8 @@ void* wld_start( void **stack )
+     return (void *)ld_so_map.l_entry;
+ }
+ 
++#if !defined(__LLD_LTO__)
+ #pragma GCC visibility pop
++#endif
+ 
+ #endif /* __linux__ */

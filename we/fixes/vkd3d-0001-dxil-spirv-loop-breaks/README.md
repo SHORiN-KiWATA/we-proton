@@ -1,6 +1,6 @@
 # vkd3d-proton 0001：dxil-spirv 生成非法的结构化控制流
 
-补丁：`patches/vkd3d-proton/we-0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-.patch`（基于 DW-Proton 时叫 `0001-…`）（`subprojects/dxil-spirv/cfg_structurizer.cpp`，约 20 行）。不在 Wine 里：vkd3d-proton 把 D3D12 着色器（DXIL）经 dxil-spirv 翻译成 SPIR-V，再交给 Vulkan 驱动。
+补丁：`patches/vkd3d-proton/we-0001-Iterate-frozen-loop-break-rewrites-until-no-frozen-loop.patch`（基于 DW-Proton 时叫 `0001-…`）（`subprojects/dxil-spirv/cfg_structurizer.cpp`，约 20 行）。不在 Wine 里：vkd3d-proton 把 D3D12 着色器（DXIL）经 dxil-spirv 翻译成 SPIR-V，再交给 Vulkan 驱动。
 
 ## 现象
 
@@ -32,6 +32,14 @@ dxil-spirv 的结构化分两轮。这个着色器的控制流是「三条不同
 - 出问题的那一轮转储下来的 368 个着色器，补丁前后用 dxil-spirv 命令行逐个对比：只有出问题的那个输出变了，而且变成合法的了，其余字节完全相同
 - dxil-spirv 自带测试集（用 DXC 1.9.2609 编译）：vkd3d-proton 这一版带的 dxil-spirv（`c5e5522a`）863 个、当时的上游 master（`b6e310b6`）867 个，补丁前后输出全部相同
 - 实机：程序越过原来退出的阶段，Mesa 没有再拒绝任何着色器
+
+### 跟进 GE-Proton11-11 时重新移植（2026-10-22）
+
+GE-Proton11-11 的 vkd3d-proton（`0bb64c56`）带的 dxil-spirv 是 `8434b063`，上游（`f6c2a8f5`）把 `rewrite_invalid_loop_breaks()` 拆成了 `rewrite_invalid_frozen_loop_breaks()` 和 `rewrite_invalid_real_loop_breaks()`，原补丁打不上。上游没有修这个问题：`we/tests/dxil-spirv/run.sh --unpatched` 在 `8434b063` 上仍然报 `not via a structured exit`。补丁照原来的思路改在 frozen 那一段（改写 + `structurize(1)` 循环到收敛，最多 16 轮），real 那一段上游本来就是循环。
+
+- `we/tests/dxil-spirv/run.sh`：补丁版通过，`--unpatched` 不通过
+- dxil-spirv 自带测试集 867 个（DXC 1.9.2609）：补丁前后输出全部相同
+- 原来那 368 个着色器的转储已经不在了，这次没有重做逐个对比
 
 ## 排查过程
 

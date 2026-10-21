@@ -1,4 +1,4 @@
-From e06fa034c0cba6c0126736833cc9621bac66d28f Mon Sep 17 00:00:00 2001
+From 143a5a8d65d6ed8784b303602b04042b735ea4e9 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Sun, 11 Oct 2026 22:07:47 +0900
 Subject: [PATCH] winex11: Keep pointer input for click-through regular windows
@@ -28,7 +28,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  1 file changed, 28 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 50688be8baa..29295d4cc70 100644
+index eb5c0e45062..42a96c6c467 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -575,6 +575,29 @@ static unsigned long get_mwm_decorations( struct x11drv_win_data *data, DWORD st
@@ -81,7 +81,7 @@ index 50688be8baa..29295d4cc70 100644
      {
          /* For transparent windows, set an empty input shape to allow mouse pass-through */
          static XRectangle empty_rect;
-@@ -1982,6 +2005,8 @@ static void window_set_managed( struct x11drv_win_data *data, BOOL new_managed )
+@@ -2001,6 +2024,8 @@ static void window_set_managed( struct x11drv_win_data *data, BOOL new_managed )
      TRACE( "window %p/%lx, requesting override-redirect %u -> %u serial %lu\n", data->hwnd, data->whole_window,
             !old_managed, !new_managed, NextRequest( data->display ) );
      XChangeWindowAttributes( data->display, data->whole_window, CWOverrideRedirect, &attr );

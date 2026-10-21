@@ -1,4 +1,4 @@
-From 8cc0bdf8ab53836d125bbdb5b0c88a97ef3745ae Mon Sep 17 00:00:00 2001
+From ce56d20bab49a962f06781502bcd81e3c9a1b3c0 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Thu, 8 Oct 2026 14:57:23 +0900
 Subject: [PATCH] win32u: Draw layered child windows into their parent's
@@ -18,11 +18,11 @@ they move, repaint the part of the parent the child uncovered.
 
 Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
 ---
- dlls/win32u/window.c | 79 ++++++++++++++++++++++++++++++++++++++++++--
- 1 file changed, 77 insertions(+), 2 deletions(-)
+ dlls/win32u/window.c | 81 ++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 78 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index f28ab0fa50a..264b3ff1217 100644
+index 842b79a22a5..46096db7867 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
 @@ -2826,6 +2826,62 @@ BOOL WINAPI NtUserSetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alph
@@ -109,12 +109,18 @@ index f28ab0fa50a..264b3ff1217 100644
  
      if (pts_dst)
      {
-@@ -2885,8 +2944,24 @@ BOOL WINAPI NtUserUpdateLayeredWindow( HWND hwnd, HDC hdc_dst, const POINT *pts_
+@@ -2885,13 +2944,29 @@ BOOL WINAPI NtUserUpdateLayeredWindow( HWND hwnd, HDC hdc_dst, const POINT *pts_
  
      TRACE( "window %p new_rects %s\n", hwnd, debugstr_window_rects( &new_rects ) );
  
 -    surface = get_window_surface( hwnd, swp_flags, TRUE, &new_rects, &surface_rect );
+-    if (hdc_src && surface && surface != &dummy_surface)
 +    surface = get_window_surface( hwnd, swp_flags, !is_child, &new_rects, &surface_rect );
++    if (!is_child && hdc_src && surface && surface != &dummy_surface)
+     {
+         if (!(flags & ULW_COLORKEY)) key = CLR_INVALID;
+         window_surface_set_layered( surface, key, -1, 0xff000000 );
+     }
      apply_window_pos( hwnd, 0, swp_flags, surface, &new_rects, NULL );
 +    if (is_child)
 +    {

@@ -1,0 +1,33 @@
+From 171187ce762d5857dc72287cf43a1f23ecbf0926 Mon Sep 17 00:00:00 2001
+From: shxrrydw <sherrydrv@gmail.com>
+Date: Thu, 6 Aug 2026 13:28:28 +0200
+Subject: [PATCH] services: Optionally run in session 0.
+
+Making it run by default in session 0 causes other issues with
+explorer that I haven't managed to debug yet, since literally only
+one app depends on this for now, this can stay opt-in.
+
+App: Hololive Dreams (4282500).
+---
+ programs/services/services.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/programs/services/services.c b/programs/services/services.c
+index 35bdf16db21..a37b66fde41 100644
+--- a/programs/services/services.c
++++ b/programs/services/services.c
+@@ -1306,8 +1306,14 @@ int __cdecl main(int argc, char *argv[])
+     JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_limit;
+     JOBOBJECT_ASSOCIATE_COMPLETION_PORT port_info;
+     HANDLE started_event, process_monitor_thread;
++    ULONG session_id = 0;
++    WCHAR env[2];
+     DWORD err;
+ 
++    if (GetEnvironmentVariableW(L"WINE_SERVICES_SESSION0", env, ARRAY_SIZE(env)) == 1 && env[0] == '1')
++        NtSetInformationProcess(GetCurrentProcess(), ProcessWineSessionId,
++                                &session_id, sizeof(session_id));
++
+     job_object = CreateJobObjectW(NULL, NULL);
+     job_limit.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_BREAKAWAY_OK | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK;
+     if (!SetInformationJobObject(job_object, JobObjectExtendedLimitInformation, &job_limit, sizeof(job_limit)))

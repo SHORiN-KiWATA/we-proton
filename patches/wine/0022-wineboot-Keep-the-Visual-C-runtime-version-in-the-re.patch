@@ -1,4 +1,4 @@
-From dbd87b598efec2ce2a5c95f102cac41ffb6acde2 Mon Sep 17 00:00:00 2001
+From df0d5320780bb30cc2bc343d837aca2ffd5e33bb Mon Sep 17 00:00:00 2001
 From: SHORiN-KIWATA <shorin@users.noreply.github.com>
 Date: Sun, 11 Oct 2026 19:19:52 +0900
 Subject: [PATCH] wineboot: Keep the Visual C++ runtime version in the registry
@@ -21,7 +21,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  1 file changed, 80 insertions(+)
 
 diff --git a/programs/wineboot/wineboot.c b/programs/wineboot/wineboot.c
-index 9afa1875fe8..ad65f71777b 100644
+index 00f6baeaa8b..1cf5394713f 100644
 --- a/programs/wineboot/wineboot.c
 +++ b/programs/wineboot/wineboot.c
 @@ -1083,6 +1083,85 @@ static void create_known_dlls(void)
@@ -110,11 +110,11 @@ index 9afa1875fe8..ad65f71777b 100644
  /* Some broken applications expect the ProxyEnable registry value to exist.
   * This value is automatically created by wininet when initializing.
   * This value is not initialized for new users on Windows, but it is created
-@@ -2028,6 +2107,7 @@ int __cdecl main( int argc, char *argv[] )
+@@ -2048,6 +2127,7 @@ int __cdecl main( int argc, char *argv[] )
      create_sqm_machine_id();
      create_volatile_environment_registry_key();
      create_known_dlls();
 +    update_vcruntime_keys();
      initialize_internet();
+     if (init || (kill && !restart)) start_samss_service();
  
-     ProcessRunKeys( HKEY_LOCAL_MACHINE, L"RunOnce", TRUE, TRUE );

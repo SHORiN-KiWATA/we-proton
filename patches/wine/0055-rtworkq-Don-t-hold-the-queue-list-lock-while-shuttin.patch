@@ -1,8 +1,8 @@
-From 947f30e57e69c220b1a7a020fede7ad73028fa12 Mon Sep 17 00:00:00 2001
+From 2af1754250bbb0bc43be61be225a4ebc28b61e6b Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Mon, 12 Oct 2026 17:25:34 +0900
-Subject: [PATCH] rtworkq: Don't hold the queue list lock while shutting
- down system queues.
+Subject: [PATCH] rtworkq: Don't hold the queue list lock while shutting down
+ system queues.
 
 shutdown_system_queues() held queues_section while shutting the system
 queues down, and shutting a pool queue down waits for the callbacks still
@@ -28,7 +28,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  1 file changed, 32 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/rtworkq/queue.c b/dlls/rtworkq/queue.c
-index cc9dcbd..f2a219f 100644
+index cc9dcbda1ac..f2a219ffc87 100644
 --- a/dlls/rtworkq/queue.c
 +++ b/dlls/rtworkq/queue.c
 @@ -66,6 +66,17 @@ static CRITICAL_SECTION_DEBUG queues_critsect_debug =
@@ -124,6 +124,3 @@ index cc9dcbd..f2a219f 100644
  }
  
  HRESULT WINAPI RtwqShutdown(void)
--- 
-2.56.0
-

@@ -1,4 +1,4 @@
-From 2751e144be635f04defed874bbd39fac9c57e7a7 Mon Sep 17 00:00:00 2001
+From fde5ca1c42cc72378e8c5252f62b6ea4ccbef856 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Wed, 7 Oct 2026 07:51:23 +0900
 Subject: [PATCH] server: Free thread input attachments when either queue is
@@ -21,7 +21,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  1 file changed, 20 insertions(+), 9 deletions(-)
 
 diff --git a/server/queue.c b/server/queue.c
-index 377500ede51..28cdd36156e 100644
+index f3ddf46f492..2f3754cdbdb 100644
 --- a/server/queue.c
 +++ b/server/queue.c
 @@ -119,6 +119,7 @@ struct pointer_state

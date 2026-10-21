@@ -1,4 +1,4 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From bf40f7996d0396cb84325a8bb1407e5f3e4ddb72 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Sat, 17 Oct 2026 03:15:00 +0900
 Subject: [PATCH] user32: Implement ShutdownBlockReasonCreate/Query/Destroy.
@@ -27,7 +27,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  3 files changed, 90 insertions(+), 9 deletions(-)
 
 diff --git a/dlls/user32/user32.spec b/dlls/user32/user32.spec
-index 056e5be..b638ee1 100644
+index 056e5be492d..b638ee1d308 100644
 --- a/dlls/user32/user32.spec
 +++ b/dlls/user32/user32.spec
 @@ -1137,7 +1137,7 @@
@@ -40,7 +40,7 @@ index 056e5be..b638ee1 100644
  @ stdcall SkipPointerFrameMessages(long)
  # @ stub SoftModalMessageBox
 diff --git a/dlls/user32/user_main.c b/dlls/user32/user_main.c
-index c7e4ddf..5deb2ec 100644
+index c7e4ddf672b..5deb2ecd663 100644
 --- a/dlls/user32/user_main.c
 +++ b/dlls/user32/user_main.c
 @@ -315,24 +315,104 @@ int WINAPI RegisterServicesProcess(DWORD ServicesProcessId)
@@ -157,7 +157,7 @@ index c7e4ddf..5deb2ec 100644
  
  const char *SPY_GetMsgName( UINT msg, HWND hwnd )
 diff --git a/include/winuser.h b/include/winuser.h
-index b74bc3f..d4a7395 100644
+index b74bc3fd6a6..d4a73958daf 100644
 --- a/include/winuser.h
 +++ b/include/winuser.h
 @@ -4679,6 +4679,7 @@ WINUSERAPI BOOL        WINAPI ShowWindow(HWND,INT);
@@ -168,6 +168,3 @@ index b74bc3f..d4a7395 100644
  WINUSERAPI BOOL        WINAPI SkipPointerFrameMessages(UINT32);
  WINUSERAPI BOOL        WINAPI SubtractRect(LPRECT,const RECT*,const RECT*);
  WINUSERAPI BOOL        WINAPI SwapMouseButton(BOOL);
--- 
-2.56.0
-

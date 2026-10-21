@@ -1,4 +1,4 @@
-From 95a32239472db6a17e7a781190ab0d18e24886ca Mon Sep 17 00:00:00 2001
+From ce63528500c86d5c84528ae608d118e3c8a1f44e Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Mon, 12 Oct 2026 12:00:00 +0900
 Subject: [PATCH] kernelbase: Don't report unwritten write-copy pages as
@@ -31,7 +31,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  2 files changed, 9 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/kernelbase/memory.c b/dlls/kernelbase/memory.c
-index 99fc3e2..8c2d354 100644
+index 99fc3e2d6d3..8c2d3542051 100644
 --- a/dlls/kernelbase/memory.c
 +++ b/dlls/kernelbase/memory.c
 @@ -583,9 +583,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH  VirtualLock( void *addr, SIZE_T size )
@@ -46,10 +46,10 @@ index 99fc3e2..8c2d354 100644
  
  
 diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
-index c360a4a..42368b2 100644
+index 6e61f810970..8ca4905bcd9 100644
 --- a/dlls/ntdll/unix/virtual.c
 +++ b/dlls/ntdll/unix/virtual.c
-@@ -6047,6 +6047,14 @@ NTSTATUS WINAPI NtProtectVirtualMemory( HANDLE process, PVOID *addr_ptr, SIZE_T
+@@ -6023,6 +6023,14 @@ NTSTATUS WINAPI NtProtectVirtualMemory( HANDLE process, PVOID *addr_ptr, SIZE_T
                      set_page_vprot_bits(base, page_size, VPROT_COPIED, 0);
                  }
              }
@@ -64,6 +64,3 @@ index c360a4a..42368b2 100644
          }
          else status = STATUS_NOT_COMMITTED;
      }
--- 
-2.56.0
-

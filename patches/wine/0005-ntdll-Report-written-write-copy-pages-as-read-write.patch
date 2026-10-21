@@ -1,4 +1,4 @@
-From 2855718124aa0459b8dd04faadf0ac53d3cd237e Mon Sep 17 00:00:00 2001
+From a66ddc0dd65a3ad4bb3dddae5432fe88ddca009a Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Wed, 7 Oct 2026 17:19:50 +0900
 Subject: [PATCH] ntdll: Report written write-copy pages as read-write.
@@ -67,7 +67,7 @@ index 4bf3bbbf29c..ad8036587ea 100644
                             "VirtualProtect wrong prot, map %#lx, view %#lx, requested prot %#lx got %#lx\n",
                             page_prot[i], view[j].prot, page_prot[k], info.Protect );
 diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
-index 4eb51d8d089..c360a4a37f1 100644
+index 627e4baf719..6e61f810970 100644
 --- a/dlls/ntdll/unix/virtual.c
 +++ b/dlls/ntdll/unix/virtual.c
 @@ -270,6 +270,7 @@ struct file_view
@@ -178,7 +178,7 @@ index 4eb51d8d089..c360a4a37f1 100644
  /***********************************************************************
   *           get_vprot_flags
   *
-@@ -3514,6 +3596,7 @@ static NTSTATUS map_image_into_view( struct file_view *view, const UNICODE_STRIN
+@@ -3490,6 +3572,7 @@ static NTSTATUS map_image_into_view( struct file_view *view, const UNICODE_STRIN
      VALGRIND_LOAD_PDB_DEBUGINFO(fd, ptr, total_size, ptr - (char *)wine_server_get_ptr( image_info->base ));
  #endif
      r_debug_add_module( ptr, fd, ptr - (char *)wine_server_get_ptr( image_info->base ) );
@@ -186,7 +186,7 @@ index 4eb51d8d089..c360a4a37f1 100644
      status = STATUS_SUCCESS;
  
  done:
-@@ -5931,6 +6014,7 @@ NTSTATUS WINAPI NtProtectVirtualMemory( HANDLE process, PVOID *addr_ptr, SIZE_T
+@@ -5907,6 +5990,7 @@ NTSTATUS WINAPI NtProtectVirtualMemory( HANDLE process, PVOID *addr_ptr, SIZE_T
  
      if ((view = find_view( base, size )))
      {
@@ -194,7 +194,7 @@ index 4eb51d8d089..c360a4a37f1 100644
          /* Make sure all the pages are committed */
          if (get_committed_size( view, base, size, &vprot, VPROT_COMMITTED ) >= size && (vprot & VPROT_COMMITTED))
          {
-@@ -6101,9 +6185,16 @@ static unsigned int fill_basic_memory_info( const void *addr, MEMORY_BASIC_INFOR
+@@ -6077,9 +6161,16 @@ static unsigned int fill_basic_memory_info( const void *addr, MEMORY_BASIC_INFOR
      else
      {
          BYTE vprot;

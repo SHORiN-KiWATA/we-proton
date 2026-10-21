@@ -1,4 +1,4 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From c61438db8bfdacd2b2111e9e6d6032d90eef4fb9 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Sat, 17 Oct 2026 03:00:00 +0900
 Subject: [PATCH] win32u: Keep top level windows in place when the virtual
@@ -30,7 +30,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  1 file changed, 27 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/win32u/defwnd.c b/dlls/win32u/defwnd.c
-index 65e1bf1..c229267 100644
+index 65e1bf1ae4d..c2292670499 100644
 --- a/dlls/win32u/defwnd.c
 +++ b/dlls/win32u/defwnd.c
 @@ -3121,6 +3121,28 @@ static void update_children_window_state( HWND hwnd )
@@ -85,6 +85,3 @@ index 65e1bf1..c229267 100644
          NtUserSetThreadDpiAwarenessContext( context );
  
          update_children_window_state( hwnd );
--- 
-2.56.0
-

@@ -1,4 +1,4 @@
-From e4505b4cb1d57bb0cd05b5ba960dc2f79f003697 Mon Sep 17 00:00:00 2001
+From c3bbd44d6b08f3d5a491e4fd286fbb837712129a Mon Sep 17 00:00:00 2001
 From: SHORiN-KIWATA <shorin@users.noreply.github.com>
 Date: Mon, 12 Oct 2026 03:35:26 +0900
 Subject: [PATCH] winewayland: Keep a fullscreen state the compositor applies
@@ -27,10 +27,10 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  3 files changed, 50 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index 751c607c155..2e46063f806 100644
+index e9b63d864f2..e1717b3c0ac 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
-@@ -2165,6 +2165,7 @@ void wayland_surface_clear_role(struct wayland_surface *surface)
+@@ -2183,6 +2183,7 @@ void wayland_surface_clear_role(struct wayland_surface *surface)
          }
  
          surface->requested_output = NULL;
@@ -39,10 +39,10 @@ index 751c607c155..2e46063f806 100644
  
      case WAYLAND_SURFACE_ROLE_LAYER:
 diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
-index aace6fd9db0..4f6a124738f 100644
+index d34bde9a157..9fc8727db7f 100644
 --- a/dlls/winewayland.drv/waylanddrv.h
 +++ b/dlls/winewayland.drv/waylanddrv.h
-@@ -507,6 +507,10 @@ struct wayland_surface
+@@ -508,6 +508,10 @@ struct wayland_surface
              struct xdg_toplevel_icon_v1 *xdg_toplevel_icon;
              struct zxdg_toplevel_decoration_v1 *zxdg_toplevel_decoration_v1;
              const struct wl_output *requested_output;
@@ -54,10 +54,10 @@ index aace6fd9db0..4f6a124738f 100644
          struct
          {
 diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
-index 839103600ff..71ca6cea869 100644
+index 7b2ffa628d5..40d40fd337d 100644
 --- a/dlls/winewayland.drv/window.c
 +++ b/dlls/winewayland.drv/window.c
-@@ -250,6 +250,12 @@ static void wayland_win_data_get_config(struct wayland_win_data *data,
+@@ -277,6 +277,12 @@ static void wayland_win_data_get_config(struct wayland_win_data *data,
      {
          window_state |= pending_state;
      }
@@ -70,7 +70,7 @@ index 839103600ff..71ca6cea869 100644
      /* The fullscreen state is implied by the window position and style. */
      else if (fullscreen)
      {
-@@ -535,8 +541,12 @@ static void wayland_surface_update_state_toplevel(struct wayland_surface *surfac
+@@ -552,8 +558,12 @@ static void wayland_surface_update_state_toplevel(struct wayland_surface *surfac
          {
              xdg_toplevel_unset_maximized(surface->xdg_toplevel);
          }
@@ -84,7 +84,7 @@ index 839103600ff..71ca6cea869 100644
          {
              xdg_toplevel_unset_fullscreen(surface->xdg_toplevel);
              wayland_surface_shortcut_control(surface, FALSE);
-@@ -550,7 +560,9 @@ static void wayland_surface_update_state_toplevel(struct wayland_surface *surfac
+@@ -567,7 +577,9 @@ static void wayland_surface_update_state_toplevel(struct wayland_surface *surfac
          {
              xdg_toplevel_set_maximized(surface->xdg_toplevel);
          }
@@ -95,7 +95,7 @@ index 839103600ff..71ca6cea869 100644
          {
              struct wayland_output *output;
              struct wl_output *wl_output = NULL;
-@@ -1066,6 +1078,7 @@ static void wayland_configure_window(HWND hwnd)
+@@ -1095,6 +1107,7 @@ static void wayland_configure_window(HWND hwnd)
      DWORD style;
      BOOL needs_enter_size_move = FALSE;
      BOOL needs_exit_size_move = FALSE;
@@ -103,7 +103,7 @@ index 839103600ff..71ca6cea869 100644
      struct wayland_win_data *data;
      RECT rect;
  
-@@ -1094,6 +1107,26 @@ static void wayland_configure_window(HWND hwnd)
+@@ -1123,6 +1136,26 @@ static void wayland_configure_window(HWND hwnd)
      memset(&surface->requested, 0, sizeof(surface->requested));
  
      state = surface->processing.state;
@@ -130,7 +130,7 @@ index 839103600ff..71ca6cea869 100644
      /* Ignore size hints if we don't have a state that requires strict
       * size adherence, in order to avoid spurious resizes.
       * The tiled and maximized states have a strict size adherance, so
-@@ -1112,6 +1145,14 @@ static void wayland_configure_window(HWND hwnd)
+@@ -1141,6 +1174,14 @@ static void wayland_configure_window(HWND hwnd)
          width = height = 0;
      }
  
@@ -145,7 +145,7 @@ index 839103600ff..71ca6cea869 100644
      if ((state & WAYLAND_SURFACE_CONFIG_STATE_RESIZING) && !surface->resizing)
      {
          surface->resizing = TRUE;
-@@ -1138,7 +1179,8 @@ static void wayland_configure_window(HWND hwnd)
+@@ -1167,7 +1208,8 @@ static void wayland_configure_window(HWND hwnd)
       * the compositor is requesting, don't force a resize, since some applications
       * are very insistent on a particular fullscreen size (which may not match
       * the monitor size). */

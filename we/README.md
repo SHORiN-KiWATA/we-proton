@@ -2,12 +2,12 @@
 
 基于 [GE-Proton](https://github.com/GloriousEggroll/proton-ge-custom) 和 [DW-Proton](https://dawn.wine/dawn-winery/dwproton) 的个人 Proton，攒一些 Wine（和 vkd3d-proton）的 bug 修复。自己和朋友用，不往上游提。
 
-- 顶层是 GE-Proton 的仓库，从 tag `GE-Proton11-7` 起的分支。子模块版本用 GE-Proton 的，只有 dxvk、vkd3d-proton、protonfixes 换成了 DW-Proton 用的更新版本（比较见 [`ge-dw-merge.md`](ge-dw-merge.md)）
+- 顶层是 GE-Proton 的仓库，从 tag `GE-Proton11-7` 起的分支，之后跟进到 `GE-Proton11-11`。子模块版本都用 GE-Proton 的（`GE-Proton11-7` 时 dxvk、vkd3d-proton、protonfixes 曾换成 DW-Proton 用的更新版本，`GE-Proton11-11` 的已经比它们新，比较见 [`ge-dw-merge.md`](ge-dw-merge.md)）
 - Wine 子模块不改：`patches/protonprep-valve-staging.sh`（GE-Proton 的脚本）在构建前往 Valve 的 Wine 上打 GE-Proton 的补丁和 staging，最后打 `patches/dwproton/` 和 `patches/wine/`
-- `patches/dwproton/`：DW-Proton（`dwproton-11.0-14`）的 Wine 提交里 GE-Proton 没有的那些，冲突解决过。怎么挑的、丢了哪些、冲突怎么解的，见 [`ge-dw-merge.md`](ge-dw-merge.md)
+- `patches/dwproton/`：DW-Proton（`dwproton-11.0-14`，之后跟进到 `dwproton-11.0-15`）的 Wine 提交里 GE-Proton 没有的那些，冲突解决过。怎么挑的、丢了哪些、冲突怎么解的，见 [`ge-dw-merge.md`](ge-dw-merge.md)
 - `patches/wine/`：WE-Proton 自己的 Wine 补丁，编号沿用原来的（中间的空号是这一版不再需要的，见下表）
 - vkd3d-proton 的修复是 `patches/vkd3d-proton/we-*.patch`（路径相对 vkd3d-proton 根目录），排在 GE-Proton 的补丁后面
-- DW-Proton 的 protonfixes 游戏修复是 `patches/protonfixes/0003`–`0005`（WE-Proton 自己的 protonfixes 补丁是 `0051`），dxvk 的 HDR 检测是 `patches/dxvk/dw-hdr-detection-via-displayconfig.patch`
+- DW-Proton 的 protonfixes 游戏修复是 `patches/protonfixes/0003`–`0006`（WE-Proton 自己的 protonfixes 补丁是 `0051`）。dxvk 的 HDR 检测从 `GE-Proton11-11` 起用 GE-Proton 自己的（`dxgi-respect-output-hdr-state`、`dxgi-auto-detect-hdr`），不再打 DW-Proton 的
 
 ## 补丁
 
@@ -66,13 +66,13 @@
 | `wine/0059-win32u-Keep-top-level-windows-in-place-when-the-virt` | 虚拟屏原点（主显示器左上角）变化时，桌面窗口把所有没最小化的顶层窗口平移同样的量，旧原点取自桌面窗口自己的矩形；原来窗口矩形不动、X 窗口也不动，左边屏上的窗口会被算到虚拟屏外面而撤掉 |
 | `wine/0060-user32-Implement-ShutdownBlockReasonCreate-Query-Des` | `ShutdownBlockReasonCreate/Query/Destroy`：原因存成窗口属性，参数检查和错误码照 Windows 11 实测（只限顶层窗口、空原因 87、无效窗口 1400、桌面窗口返回 5），导出原来缺的 Query |
 | `protonfixes/0051-protonfixes-Also-run-fixes-for-run-when-PROTONFIXES_` | 设了 `PROTONFIXES_RUN_VERB=1` 时，用 `proton run` 启动的程序也执行 protonfixes（`waitforexitandrun` 要先等 wineserver 退出，往运行中的会话里加程序只能用 `run`）；`PROTONFIXES_DISABLE` 仍然优先 |
-| `vkd3d-proton/we-0001-Iterate-loop-break-rewrites-until-no-frozen-loop-is-` | dxil-spirv 生成非法的结构化控制流 |
+| `vkd3d-proton/we-0001-Iterate-frozen-loop-break-rewrites-until-no-frozen-loop` | dxil-spirv 生成非法的结构化控制流 |
 | `vkd3d-proton/0002-vkd3d-bound-present-waits-during-swapchain-drain` | （这一版没有：GE-Proton 直接带着原版）（GE）销毁交换链时等待呈现有上限，不再卡死 |
 | `dxvk/0002`–`0007` | （这一版没有：GE-Proton 直接带着原版）（GE）分层覆盖窗口的 DXVK 一半、获取图像受阻时保留交换链、《最终幻想14》多屏失焦不缩窗（三个）、黑色沙漠的 DXVK 一半 |
 
 每个补丁的现象、根因、Windows 实测、验证和排查过程见 `we/fixes/`。
 
-GE-Proton 主线在 GE-Proton11-7 之后的一部分修复提前搬了过来，放在 GE 自己的补丁目录里，见 `we/ge-backports.md`；0011 为此改了一处上下文。
+GE-Proton 主线在正式版之前的一部分修复会提前搬过来，放在 GE 自己的补丁目录里，见 `we/ge-backports.md`。
 
 0003、0016、0023 在换到 GE-Proton 底座时改过（0049、0050、0052–0056、0059、0060 是换底座之后新加的）：0003 改到 GE-Proton 新的 SIGSYS 处理函数里；0016 修了一处 `-Werror` 下报错的格式串；0023 和 GE-Proton 覆盖层窗口的条件合并。
 
@@ -179,7 +179,7 @@ gh release create <名字> --target <提交> --title <名字> --notes-file <说�
 
 ## 用法
 
-runner 名字就是 `we-proton-ge…`，wegame-launcher 自动选找到的最新 WE-Proton，其他启动器里手动选。`proton` 脚本里的 `CURRENT_PREFIX_VERSION` 是 GE-Proton 的（`GE-Proton11-7`），从基于 DW-Proton 的旧版换过来时前缀会升级一次。
+runner 名字就是 `we-proton-ge…`，wegame-launcher 自动选找到的最新 WE-Proton，其他启动器里手动选。`proton` 脚本里的 `CURRENT_PREFIX_VERSION` 是 GE-Proton 的（`GE-Proton11-11`），从基于 DW-Proton 的旧版换过来时前缀会升级一次。
 
 ## 跟进上游新版本
 

@@ -1,4 +1,4 @@
-From 4ca2f434e023aba4d5017625b225bec845f10e84 Mon Sep 17 00:00:00 2001
+From 2d2af782bc096469b8c44918529de35230bb6bec Mon Sep 17 00:00:00 2001
 From: SHORiN-KiWATA <feng13862095732@gmail.com>
 Date: Thu, 8 Oct 2026 22:18:35 +0900
 Subject: [PATCH] kernelbase: Implement private namespaces.
@@ -18,7 +18,7 @@ Subject: [PATCH] kernelbase: Implement private namespaces.
  11 files changed, 524 insertions(+), 18 deletions(-)
 
 diff --git a/dlls/kernel32/kernel32.spec b/dlls/kernel32/kernel32.spec
-index 1e007bde175..9a2218ec1bb 100644
+index ace3578a434..3f433e7ec8b 100644
 --- a/dlls/kernel32/kernel32.spec
 +++ b/dlls/kernel32/kernel32.spec
 @@ -141,11 +141,11 @@
@@ -162,7 +162,7 @@ index 3c35a4b1bba..76773ac2f57 100644
  static inline BOOL set_ntstatus( NTSTATUS status )
  {
 diff --git a/dlls/kernel32/sync.c b/dlls/kernel32/sync.c
-index b354b1c5653..33ab2458b71 100644
+index 8ebc2bb78a3..f607aa4b70c 100644
 --- a/dlls/kernel32/sync.c
 +++ b/dlls/kernel32/sync.c
 @@ -60,6 +60,7 @@ static void get_create_object_attributes( OBJECT_ATTRIBUTES *attr, UNICODE_STRIN
@@ -182,7 +182,7 @@ index b354b1c5653..33ab2458b71 100644
  }
  
 diff --git a/dlls/kernelbase/kernelbase.spec b/dlls/kernelbase/kernelbase.spec
-index bba5e007161..8a554136553 100644
+index 14d99d97c8c..7d5af1533ae 100644
 --- a/dlls/kernelbase/kernelbase.spec
 +++ b/dlls/kernelbase/kernelbase.spec
 @@ -25,7 +25,7 @@
@@ -282,7 +282,7 @@ index d2d3eff47ba..a21cefcd17c 100644
  
  /******************************************************************************
 diff --git a/dlls/kernelbase/sync.c b/dlls/kernelbase/sync.c
-index ad9c769410b..461651384fb 100644
+index 86b4ed8cf89..2a03b082963 100644
 --- a/dlls/kernelbase/sync.c
 +++ b/dlls/kernelbase/sync.c
 @@ -36,6 +36,7 @@
@@ -740,7 +740,7 @@ index f25436387c9..47a8b5df04f 100644
 +    RtlFreeHeap( GetProcessHeap(), 0, desc );
 +}
 diff --git a/include/winbase.h b/include/winbase.h
-index 483afbc625d..0219ed842dc 100644
+index 3b2287140b1..799f39b0fd0 100644
 --- a/include/winbase.h
 +++ b/include/winbase.h
 @@ -1483,6 +1483,7 @@ WINADVAPI  BOOL        WINAPI AddAccessAllowedAceEx(PACL,DWORD,DWORD,DWORD,PSID)
@@ -761,7 +761,7 @@ index 483afbc625d..0219ed842dc 100644
  WINADVAPI  BOOL        WINAPI CreatePrivateObjectSecurity(PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR*,BOOL,HANDLE,PGENERIC_MAPPING);
  WINADVAPI  BOOL        WINAPI CreatePrivateObjectSecurityEx(PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR*,GUID*,BOOL,ULONG,HANDLE,PGENERIC_MAPPING);
  WINADVAPI  BOOL        WINAPI CreatePrivateObjectSecurityWithMultipleInheritance(PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR,PSECURITY_DESCRIPTOR*,GUID**,ULONG,BOOL,ULONG,HANDLE,PGENERIC_MAPPING);
-@@ -2261,6 +2265,9 @@ WINBASEAPI HANDLE      WINAPI OpenJobObjectW(DWORD,BOOL,LPCWSTR);
+@@ -2264,6 +2268,9 @@ WINBASEAPI HANDLE      WINAPI OpenJobObjectW(DWORD,BOOL,LPCWSTR);
  WINBASEAPI HANDLE      WINAPI OpenMutexA(DWORD,BOOL,LPCSTR);
  WINBASEAPI HANDLE      WINAPI OpenMutexW(DWORD,BOOL,LPCWSTR);
  #define                       OpenMutex WINELIB_NAME_AW(OpenMutex)
