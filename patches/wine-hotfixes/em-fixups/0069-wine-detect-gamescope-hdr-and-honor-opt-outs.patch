@@ -1,0 +1,140 @@
+From: GloriousEggroll <gloriouseggroll@gmail.com>
+Subject: [PATCH] wine: Detect Gamescope HDR and honor HDR opt-outs.
+
+Native Wayland already reports the compositor's per-output HDR state.
+X11 still reports HDR solely from DXVK_HDR, requiring an opt-in even
+when Gamescope can describe the current HDR path.
+
+Read GAMESCOPE_HDR_OUTPUT_FEEDBACK from the X root, the same property
+used by Gamescope's WSI layer. Validate its type, format, and length.
+A reported SDR state takes precedence over an inherited DXVK_HDR=1.
+Refresh display state when the desktop thread receives feedback changes.
+
+Without feedback, default to SDR but preserve an explicit DXVK_HDR=1
+for older HDR WSI implementations. This does not infer enabled HDR from
+EDID capability, the presence of a Wayland session, or another monitor.
+
+Honor DXVK_HDR=0 and DXVK_NO_HDR=1 in X11 and native Wayland. Apply the
+Wayland opt-out before generating HDR EDID metadata.
+
+Together with dxgi-auto-detect-hdr.patch, this removes the need for the
+Proton HDR launch flags without advertising HDR on unknown SDR paths.
+No compositor configuration or graphics-driver selection is changed.
+
+References:
+ https://github.com/ValveSoftware/gamescope/blob/master/src/steamcompmgr.cpp
+ https://github.com/ValveSoftware/gamescope/blob/master/layer/VkLayer_FROG_gamescope_wsi.cpp
+
+Manual validation after rebuilding:
+- Gamescope HDR enabled/disabled, both without DXVK_HDR.
+- Change Gamescope HDR state while the application is open.
+- Ordinary X11/XWayland without feedback defaults to SDR.
+- Explicit HDR disable on both Wine drivers.
+- Existing Wayland output detection and legacy X11 HDR opt-in.
+---
+
+diff --git a/dlls/winex11.drv/display.c b/dlls/winex11.drv/display.c
+--- a/dlls/winex11.drv/display.c
++++ b/dlls/winex11.drv/display.c
+@@ -482,6 +482,33 @@
+     return !!host_handler.register_event_handlers;
+ }
+ 
++static BOOL is_hdr_enabled(void)
++{
++    unsigned long count, remaining;
++    unsigned char *data = NULL;
++    BOOL enabled, valid;
++    const char *env;
++    Atom type;
++    int format;
++
++    if ((env = getenv("DXVK_NO_HDR")) && *env == '1') return FALSE;
++    if ((env = getenv("DXVK_HDR")) && *env == '0') return FALSE;
++
++    /* Gamescope publishes this on each of its Xwayland roots. A known SDR
++     * result must win over the legacy HDR opt-in inherited from the session. */
++    valid = !XGetWindowProperty( gdi_display, DefaultRootWindow(gdi_display),
++                                x11drv_atom(GAMESCOPE_HDR_OUTPUT_FEEDBACK), 0, 1, False,
++                                XA_CARDINAL, &type, &format, &count, &remaining, &data );
++    valid = valid && type == XA_CARDINAL && format == 32 && count == 1 && !remaining;
++    enabled = valid && *(unsigned long *)data != 0;
++    if (data) XFree( data );
++    if (valid) return enabled;
++
++    /* Preserve explicit opt-in for older HDR WSI implementations. Unknown
++     * X11/Xwayland outputs remain SDR when no override was requested. */
++    return (env = getenv("DXVK_HDR")) && *env == '1';
++}
++
+ UINT X11DRV_UpdateDisplayDevices( const struct gdi_device_manager *device_manager, void *param )
+ {
+     INT gpu_count, adapter_count, monitor_count, current_adapter_count = 0;
+@@ -490,13 +517,12 @@
+     struct x11drv_gpu *gpus;
+     INT gpu, adapter, monitor;
+     struct x11drv_mode *modes;
+-    const char *env;
+     BOOL hdr_enabled;
+     UINT mode_count;
+ 
+     TRACE( "via %s\n", debugstr_a(host_handler.name) );
+ 
+-    hdr_enabled = (env = getenv("DXVK_HDR")) && *env == '1';
++    hdr_enabled = is_hdr_enabled();
+     TRACE( "hdr_enabled %d.\n", hdr_enabled );
+ 
+     /* Initialize GPUs */
+
+diff --git a/dlls/winex11.drv/event.c b/dlls/winex11.drv/event.c
+--- a/dlls/winex11.drv/event.c
++++ b/dlls/winex11.drv/event.c
+@@ -1497,6 +1497,10 @@
+     if (event->atom == x11drv_atom(_NET_SUPPORTED)) handle_net_supported_notify( event );
+     if (event->atom == x11drv_atom(_NET_ACTIVE_WINDOW)) handle_net_active_window( event );
+     if (event->atom == x11drv_atom(_NET_SUPPORTING_WM_CHECK)) handle_net_supporting_wm_check_notify( event );
++    if (event->atom == x11drv_atom(GAMESCOPE_HDR_OUTPUT_FEEDBACK) &&
++        event->window == DefaultRootWindow(event->display) && hwnd == NtUserGetDesktopWindow() &&
++        NtUserGetWindowThread( hwnd, NULL ) == GetCurrentThreadId())
++        NtUserCallNoParam( NtUserCallNoParam_DisplayModeChanged );
+ 
+     return TRUE;
+ }
+
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -598,6 +598,7 @@
+     XATOM_text_uri_list,
+     XATOM_GAMESCOPE_XALIA_OVERLAY,
+     XATOM_GAMESCOPE_DISPLAY_EDID_PATH,
++    XATOM_GAMESCOPE_HDR_OUTPUT_FEEDBACK,
+     NB_XATOMS
+ };
+ 
+
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -210,6 +210,7 @@
+     "text/uri-list",
+     "GAMESCOPE_XALIA_OVERLAY",
+     "GAMESCOPE_DISPLAY_EDID_PATH",
++    "GAMESCOPE_HDR_OUTPUT_FEEDBACK",
+ };
+ 
+ /***********************************************************************
+
+diff --git a/dlls/winewayland.drv/display.c b/dlls/winewayland.drv/display.c
+--- a/dlls/winewayland.drv/display.c
++++ b/dlls/winewayland.drv/display.c
+@@ -385,6 +385,8 @@
+     /* An HDR request cannot enable HDR on an SDR compositor output. */
+     if ((env = getenv("DXVK_NO_HDR")) && *env == '1')
+         monitor.hdr_enabled = FALSE;
++    if ((env = getenv("DXVK_HDR")) && *env == '0')
++        monitor.hdr_enabled = FALSE;
+ 
+     info->flags = MONITOR_INFO_HAS_PRIMARIES | MONITOR_INFO_HAS_PREFERRED_MODE
+                   | MONITOR_INFO_HAS_PHYSICAL_DIMENSIONS | MONITOR_INFO_HAS_MONITOR_NAME;
+

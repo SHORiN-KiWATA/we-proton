@@ -1,5 +1,118 @@
 # EM-11 patch import
 
+## Component refresh (2026-10-19)
+
+Validated bases:
+
+- Wine: `c53678ab22a` (`experimental-wine-bleeding-edge-11.0-453226-20261016`).
+- DXVK: `2cb40186c43d617b5bd349a3756721aa4bd24b6d`.
+- D7VK: `bcd66d0c95e7530e3b24bdab1ee5e7aae7131059`.
+- VKD3D-Proton: `0bb64c56c8f0dcc11ecc0f6c56e00e4f7bd8d506`.
+
+Wine now contains EM's Syscall User Dispatch rework, so these imports were
+removed (git history keeps them):
+
+- 0257, 0258, 0259, 0260, 0265: identical to `9f00f2a60e6` (plus the separate
+  fixup revert `6eb78e124f1`), `f909ced378b`, `679feeaac90`, `cb8a1857536` and
+  `79ab44b2d67`.
+- 0102 and its revert 0256: they cancel out, and 0102 targets the seccomp
+  filter that upstream no longer has.
+
+Wine also gained its own EAC native-syscall hack (`2f445676483`,
+`WINE_HACK_NATIVE_SYSCALLS`). It runs before 0271's handler for the same EOS
+bootstrapper and `start_protected_game.exe` launchers, so 0271's sigsys path is
+now effectively unused. 0271 is only refreshed here; removing it also needs
+em-fixups 0008 reworked.
+
+Other resolutions:
+
+- Refresh 0271, `ntdll-remove-redundant-packed-split-lock`, and ds5-haptic 0197
+  and 0208 for new context (`hack_native_syscalls`, and Witcher 3 joining the
+  get_state rescan hack in `eb674084226`). Their changed lines are unchanged.
+- DXVK now contains the clang AVX change (`2cb40186`); drop our copy. D7VK
+  still needs it.
+
+Validation: isolated replay of the whole prep script in a scratch worktree at
+the bases above: 864 patch applications at `--fuzz=0` with no failures,
+skipped patches, or rejects, plus automatic staging, `autoreconf` and
+`tools/make_requests`. No build or runtime test.
+
+## Component refresh (2026-10-10)
+
+Validated bases:
+
+- Wine: `981e2f0b9007fd70a6e0ed6119cb18f4164e26f9`.
+- DXVK: `71ec7b5be6c517db39bcca4d38f38a63f6ddbc56`.
+- VKD3D-Proton: `2230755878b01993b4b82d0ac0c0624f3ab4d333`.
+- lsteamclient update: root commit `06be8505af167aea52e5dce20ac9c663d802ff95`.
+- WineOpenXR update: root commit `afcee17be30bea965c041fec420745f1433d99e2`.
+- Root checkout: `fb7978fc`. The EM import snapshot below is unchanged.
+
+Twenty-six ntoskrnl imports are now upstream and moved to `../disabled/`
+without altering their original author headers. See that directory's README
+for the replacement commit for each patch. The remaining ntoskrnl imports
+retain upstream's process layout and use the result of the debug-port query
+itself when checking for failure.
+
+Other rebase resolutions:
+
+- Refresh server-protocol, native-DLL heuristic, and Vulkan generator context.
+  Keep upstream's new thread-affinity fields, Unix-library loader declaration,
+  and D3D12 timeline-semaphore support. The managed-swapchain validity helper
+  remains beside the swapchain helpers, not inside the new semaphore code.
+- Preserve upstream CPUID emulation when removing seccomp and initializing
+  EM's signal-restorer-based syscall dispatch.
+- Keep Return to Krondor's restricted bitmap-readback exception alongside
+  upstream's display-DC and 8-bit-display validation changes.
+- Apply GE-rebased `winedevice-Default_Drivers` staging copies manually after
+  automatic staging. Only the test context changed; the staging submodule
+  remains untouched, and Michael Mueller's original authorship is retained.
+- Refresh the GStreamer transform deletion against upstream's new padding
+  logic. The FFmpeg backend remains active. Video patch 0070 is now upstream
+  (`c8df1a2d652`) and retained under `ge-video-rework/disabled/`.
+- DXVK already contains the swapchain-colorspace instance-extension fix
+  (`3c40ca1b946b`, GloriousEggroll). Keep the old patch in `dxvk/disabled/`;
+  the separate output-HDR-state fallback patch still applies.
+- Rebase external-VR support onto WineOpenXR's new shared function lookup,
+  checked Unix calls, session mapping, and WoW64 Vulkan callbacks. The cached
+  native Vulkan function pointer uses a fixed-width field so Unix64 does not
+  overwrite a PE32 pointer-sized field. Keep the new upstream callback thunks.
+- VKD3D-Proton's patch and all 14 lsteamclient patches need no changes.
+  Existing overlay, child-process rendering, SNI, controller, media, and HDR
+  behavior remains part of the active patch stack.
+
+Validation: isolated replay in prep order of 809 GE/manual Wine patches,
+173 automatic Wine-staging patches, and 24 component patches (DXVK,
+VKD3D-Proton, WineOpenXR, lsteamclient), with no failures, skipped patches,
+or rejects. GE/manual patches apply with `--fuzz=0`; automatic staging uses
+its normal `git apply` backend. `bash -n`, patch whitespace checks, and Python
+syntax checks for the patched Vulkan/lsteamclient generators pass. Server
+protocol regeneration with `tools/make_requests` also succeeds in the scratch
+tree. All 28 retired patches retain their original author headers and diffs.
+
+No build, autoconf, runtime test, or real-worktree reset was performed. The
+user must rerun the prep script before their normal build. Unrelated local
+changes and the component source worktrees were left untouched.
+
+## Bleeding-edge refresh (2026-09-22)
+
+Wine base validated at this refresh: `1c78596625336a73dbfc035dbbcf0dbdd95b06eb`.
+The EM import snapshot below is unchanged. Imports 0295 and 0296 now live in
+`../disabled/`, because Wine includes Remi Bernon's fixes as `a16c7d16e5b`
+and `15b9d161776`. Preserve the base's constructor/alias signature and avoid
+duplicating its returnedonly property. See the disabled README for provenance.
+
+The accompanying GE video rebase refreshes the old GStreamer parser deletion
+over Conor McCarthy's `3cd4638c4dc` read-buffer change and fixes blank-line
+context in video patch 0062. The FFmpeg replacement and the non-seekable live
+source behavior remain enabled; no video fix is dropped.
+
+A clean isolated checkout replayed all 774 GE Wine patch entries and the
+selected automatic Wine-staging patches in prep order without failures,
+skipped patches, or rejects. The two rebased video patches applied with zero
+fuzz. The affected live source files match that replay. No autoconf, source
+generators, builds, or runtime tests were run.
+
 ## Source snapshot (2026-09-09)
 
 - Wine bleeding-edge base: `542ca26b64ed53cc61de065ed4c0b0ab8802e7d6`.
@@ -9,8 +122,8 @@
 - Upstream: https://github.com/Etaash-mathamsetty/wine-valve/tree/em-11
 - Wine-staging snapshot: `6cc805ea57132eeaf44764e9213823c9b8d0d300`.
 
-Existing patch numbers are retained for review. There are 287 active patches
-in this directory; gaps are intentional. Unused imports are kept under
+Existing patch numbers are retained for review. This snapshot had 285 active
+patches in this directory; gaps are intentional. Unused imports are kept under
 `../disabled/` with their original author headers.
 
 ## New commits
@@ -29,8 +142,8 @@ dates, and original commit IDs are preserved in the patch mail headers.
 | 0292 | `f035e2fc6e50` | Reset size hints only on state changes | Etaash Mathamsetty |
 | 0293 | `0484cd7b40cd` | Use wl_output version 4 | Etaash Mathamsetty |
 | 0294 | `c68ed3899afe` | Remove optional window-move hack | Etaash Mathamsetty; disabled, duplicates Wineland 0073 |
-| 0295 | `21f4d8ae1e9e` | Check individual Vulkan returnedonly members | Remi Bernon |
-| 0296 | `73e68369d2f2` | Exclude dynamic arrays from returnedonly | Remi Bernon |
+| 0295 | `21f4d8ae1e9e` | Check individual Vulkan returnedonly members | Remi Bernon; disabled on 2026-09-22, now in Wine |
+| 0296 | `73e68369d2f2` | Exclude dynamic arrays from returnedonly | Remi Bernon; disabled on 2026-09-22, now in Wine |
 | 0297 | `a886bddc2a9d` | Move display flush out of image-description helper | Etaash Mathamsetty |
 | 0298 | `cc0e38f99125` | Extract flash-window helper | Etaash Mathamsetty |
 | 0299 | `ce0fa7a14ec0` | Activation-token handling | Etaash Mathamsetty |
@@ -83,7 +196,7 @@ under `../wine-staging/`: `ntdll-Hide_Wine_Exports`, `kernel32-Debugger`,
 rebased context without modifying the Wine-staging submodule. Their original
 patch authors are retained.
 
-## Validation
+## Original Snapshot Validation
 
 A clean, isolated replay on the pinned Wine base applied all 909 Wine patch
 entries in prep order. GE/manual patches were checked and applied with GNU

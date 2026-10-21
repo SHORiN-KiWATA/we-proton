@@ -1,0 +1,35 @@
+From: GloriousEggroll <gloriouseggroll@gmail.com>
+Subject: [PATCH] PipelineCache: inherit the device's current stencil reference
+
+GraphicsDevice.ReferenceStencil can override the reference without mutating
+the bound DepthStencilState. When an effect changes another depth/stencil
+field, BeginApplyDepthStencil seeds the replacement state from that bound
+object, losing the dynamic reference even if the effect never sets it.
+
+Meridian: New World uses this path for terrain lighting. In a captured
+frame, the reference changes from 220 to zero when depth writes are enabled
+for a later effect. The NotEqual stencil test then rejects the terrain's
+direct-light draw against the cleared buffer. Preserving the three affected
+references in an otherwise unchanged frame capture restores the lighting.
+
+Inherit the effective device reference, including any pending state handled
+by the preceding GraphicsDevice ordering fix. Explicit STENCILREF effect
+states still replace it through the existing effect-state parser. Keep the
+caller's state object immutable and the reference in the pipeline cache key.
+
+This is a GE-Proton downstream patch, not an upstream FNA submission.
+Issue: https://github.com/GloriousEggroll/proton-ge-custom/issues/430
+---
+diff --git a/src/Graphics/PipelineCache.cs b/src/Graphics/PipelineCache.cs
+--- a/src/Graphics/PipelineCache.cs
++++ b/src/Graphics/PipelineCache.cs
+@@ -389,7 +389,8 @@ namespace Microsoft.Xna.Framework.Graphics
+ 			CCWStencilDepthBufferFail = oldDepthStencilState.CounterClockwiseStencilDepthBufferFail;
+ 			StencilMask = oldDepthStencilState.StencilMask;
+ 			StencilWriteMask = oldDepthStencilState.StencilWriteMask;
+-			ReferenceStencil = oldDepthStencilState.ReferenceStencil;
++			// Effects inherit the dynamic reference unless the pass overrides it.
++			ReferenceStencil = device.ReferenceStencil;
+ 		}
+ 
+ 		public void EndApplyDepthStencil()

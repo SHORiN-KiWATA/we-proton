@@ -1,0 +1,61 @@
+From: GloriousEggroll <gloriouseggroll@gmail.com>
+Subject: [PATCH] dxgi: Detect output HDR state by default on Win32.
+
+The active-output checks in dxgi-respect-output-hdr-state.patch already
+prevent HDR10 from being reported for SDR or unqueryable outputs. Default
+the Win32 HDR policy to enabled so these checks can detect HDR without
+requiring PROTON_ENABLE_HDR, PROTON_USE_HDR, or DXVK_HDR.
+
+Keep explicit DXVK_HDR and dxgi.enableHDR settings, and let DXVK_NO_HDR=1
+disable HDR even when a configuration file enables it. Preserve the UE4
+D3D11 compatibility exclusions, the Vulkan surface-format requirement,
+and the existing opt-in policy for non-Win32 WSI backends.
+
+Apply after dxgi-respect-output-hdr-state.patch. Wine Wayland already
+reports compositor color-management state; the matching Wine fixup adds
+Gamescope XWayland feedback and consistent disable handling.
+
+Manual validation after rebuilding:
+- Native Wayland HDR output, no HDR flags: game HDR becomes available.
+- SDR output and mixed SDR/HDR monitors: only the HDR output reports HDR.
+- Gamescope HDR on/off and ordinary XWayland SDR.
+- DXVK_HDR=0, DXVK_NO_HDR=1, and dxgi.enableHDR=False.
+- DX11, DX12 (which shares DXGI), and native Vulkan games using NVAPI.
+---
+
+diff --git a/src/dxgi/dxgi_options.cpp b/src/dxgi/dxgi_options.cpp
+--- a/src/dxgi/dxgi_options.cpp
++++ b/src/dxgi/dxgi_options.cpp
+@@ -199,7 +199,14 @@
+       this->hideIntelGpu = true;
+     }
+ 
+-    this->enableHDR = config.getOption<bool>("dxgi.enableHDR", env::getEnvVar("DXVK_HDR") == "1");
++    const std::string hdr = env::getEnvVar("DXVK_HDR");
++    bool enableHdrDefault = hdr == "1";
++#ifdef _WIN32
++    // Wine reports the active output state; HDR10 also needs surface support.
++    enableHdrDefault |= hdr.empty();
++#endif
++    this->enableHDR = config.getOption<bool>("dxgi.enableHDR", enableHdrDefault)
++                  && env::getEnvVar("DXVK_NO_HDR") != "1";
+ 
+     bool enableUe4Workarounds = config.getOption<bool>("dxgi.enableUe4Workarounds", false);
+ 
+
+diff --git a/dxvk.conf b/dxvk.conf
+--- a/dxvk.conf
++++ b/dxvk.conf
+@@ -11,7 +11,10 @@
+ # Many (broken) games will need this to be set to consider exposing HDR output
+ # as determine it based on the DXGIOutput's current ColorSpace instead of
+ # using CheckColorSpaceSupport.
+-# This defaults to the value of the DXVK_HDR environment variable.
++# On Win32 this defaults to automatic detection of the active output's HDR state.
++# HDR10 presentation also requires support from the Vulkan surface.
++# DXVK_HDR=0 or dxgi.enableHDR=False disables it; DXVK_NO_HDR=1 takes precedence.
++# Other WSI backends retain the DXVK_HDR=1 opt-in.
+ #
+ # Supported values: True, False
+ 
+

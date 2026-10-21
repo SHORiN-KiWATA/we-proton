@@ -1,0 +1,71 @@
+From: GloriousEggroll <gloriouseggroll@gmail.com>
+Subject: [PATCH] winewayland: Detect HDR independently of Windows image descriptions.
+
+Dragon's Dogma 2 no longer exposes HDR after 58448e1e added DXGI checks
+against Wine's active output state. Replacing DXVK with the GE-Proton11-7
+release version avoids the check, but does not correct the output state.
+
+The em11 color-management code requires supports_win_scrgb before marking
+an output as HDR. These Windows-specific image descriptions are optional:
+the Vulkan driver can present HDR10 through standard Wayland parametric
+color management without either Windows-specific feature.
+
+On the affected labwc session, both outputs advertise BT.2020/PQ with
+max_lum=10000 and ref_lum=203, and RADV exposes HDR10_ST2084 on Wayland
+surfaces. Neither Windows image description is advertised, so Wine
+incorrectly reports SDR and DXGI rejects HDR before presentation.
+
+Derive output HDR state from its reported luminance headroom, independently
+of the optional presentation path. Keep Windows image-description support
+as the gate for Wine's passthrough mapping in vulkan.c; otherwise the
+original colorspace is passed to Vulkan WSI. Surface-format support checks,
+per-output SDR fallback, and explicit HDR opt-outs remain unchanged.
+
+Downgrade the missing optional-feature messages to traces: their absence
+does not imply broken HDR when Vulkan WSI supports the requested colorspace.
+
+Follow-up to the color-management implementation by Etaash Mathamsetty
+<45927311+Etaash-mathamsetty@users.noreply.github.com>.
+
+Validation before rebuilding:
+- wayland-info: HDR output luminances, no windows_scrgb/windows_bt2100.
+- vulkaninfo: RADV exposes HDR10_ST2084 for VK_KHR_wayland_surface.
+
+Manual validation needed after rebuilding:
+- Dragon's Dogma 2 with native Wayland and HDR enabled, without HDR flags.
+- HDR disabled and mixed SDR/HDR outputs must retain SDR fallback.
+- DXVK_NO_HDR=1 and DXVK_HDR=0 must still disable HDR reporting.
+- Compositors with Windows image descriptions retain passthrough mapping.
+---
+
+diff --git a/dlls/winewayland.drv/wayland_output.c b/dlls/winewayland.drv/wayland_output.c
+--- a/dlls/winewayland.drv/wayland_output.c
++++ b/dlls/winewayland.drv/wayland_output.c
+@@ -196,8 +196,9 @@ static void wayland_output_done(struct wayland_output *output)
+         output->current.ref_lum = output->pending.ref_lum;
+     }
+ 
+-    output->current.supports_hdr = process_wayland.supports_win_scrgb &&
+-                                    (output->current.max_lum > output->current.ref_lum);
++    /* Output HDR state is independent of the optional Windows image descriptions.
++     * Vulkan WSI can handle HDR colorspaces through standard color management. */
++    output->current.supports_hdr = output->current.max_lum > output->current.ref_lum;
+ 
+     output->current.flags |= output->pending.flags;
+     output->pending.flags = 0;
+diff --git a/dlls/winewayland.drv/wayland.c b/dlls/winewayland.drv/wayland.c
+--- a/dlls/winewayland.drv/wayland.c
++++ b/dlls/winewayland.drv/wayland.c
+@@ -745,10 +745,10 @@ BOOL wayland_process_init(void)
+         ERR("Wayland compositor doesn't support xdg_activation_v1! (Window Activation will not be supported)\n");
+ 
+     if (!process_wayland.supports_win_pq)
+-        ERR("Wayland compositor doesn't expose windows_bt2100 image description (HDR may look broken)!\n");
++        TRACE("No windows_bt2100 image description; using Vulkan WSI for HDR10.\n");
+ 
+     if (!process_wayland.supports_win_scrgb)
+-        ERR("Wayland compositor doesn't expose windows_scrgb image description (HDR may look broken)!\n");
++        TRACE("No windows_scrgb image description; using Vulkan WSI for scRGB.\n");
+ 
+     if (!process_wayland.zwp_linux_dmabuf_v1)
+         WARN("Wayland compositor doesn't support optional zwp_linux_dmabuf_v1 (HWND dmabuf forwarding won't work)\n");

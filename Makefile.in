@@ -671,10 +671,10 @@ WINE_aarch64_AUTOCONF_ARGS = \
 
 WINE_i386_AUTOCONF_ARGS += \
   VKD3D_PE_CFLAGS="-I$(VULKAN_HEADERS_i386_DST)/include -I$(VKD3D_i386_DST)/include/vkd3d" \
-  VKD3D_PE_LIBS="-L$(VKD3D_i386_LIBDIR)/vkd3d/i386-windows -l:libvkd3d-1.dll -l:libvkd3d-shader-1.dll -l:libvkd3d-utils-1.dll"
+  VKD3D_PE_LIBS="-L$(VKD3D_i386_LIBDIR) -lvkd3d -lvkd3d-shader -lvkd3d-utils"
 WINE_x86_64_AUTOCONF_ARGS += \
   VKD3D_PE_CFLAGS="-I$(VULKAN_HEADERS_x86_64_DST)/include -I$(VKD3D_x86_64_DST)/include/vkd3d" \
-  VKD3D_PE_LIBS="-L$(VKD3D_x86_64_LIBDIR)/vkd3d/x86_64-windows -l:libvkd3d-1.dll -l:libvkd3d-shader-1.dll -l:libvkd3d-utils-1.dll"
+  VKD3D_PE_LIBS="-L$(VKD3D_x86_64_LIBDIR) -lvkd3d -lvkd3d-shader -lvkd3d-utils"
 
 WINE_DEPENDS = ffmpeg openfst kaldi vosk libxml2 libxkbcommon libpcap
 WINE_i386_DEPENDS = vkd3d
@@ -865,6 +865,7 @@ DXVK_NVAPI_arm64ec_MESON_ARGS = --bindir=$(DXVK_NVAPI_arm64ec_DST)/lib/wine/nvap
 $(eval $(call rules-source,dxvk-nvapi,$(SRCDIR)/dxvk-nvapi))
 $(eval $(call rules-meson,dxvk-nvapi,i386,windows))
 $(eval $(call rules-meson,dxvk-nvapi,x86_64,windows))
+$(eval $(call rules-meson,dxvk-nvapi,arm64ec,windows))
 
 $(OBJ)/.dxvk-nvapi-post-source:
 	mkdir -p $(DST_LIBDIR)/wine/nvapi
@@ -1033,11 +1034,17 @@ endif # WITHOUT_VKLAYERS
 
 ifneq ($(findstring aarch64,$(unix_ARCHS)),)
 FEX_COMMON_CMAKE_ARGS = \
-  -DENABLE_FEXCORE_PROFILER=True -DCMAKE_BUILD_TYPE=Release -DENABLE_LTO=False \
+  -DENABLE_FEXCORE_PROFILER=True -DENABLE_LTO=False \
   -DBUILD_TESTING=False -DTUNE_CPU=none -DRANGES_NATIVE=OFF \
   -DBUILD_STEAM_SUPPORT=True \
   -DOVERRIDE_VERSION=$$(cat $(FEX_SRC)/.git_describe) \
   -DOVERRIDE_HASH=$$(cat $(FEX_SRC)/.git_rev)
+
+ifneq ($(UNSTRIPPED_BUILD),)
+FEX_COMMON_CMAKE_ARGS += -DCMAKE_BUILD_TYPE=RelWithDebInfo
+else
+FEX_COMMON_CMAKE_ARGS += -DCMAKE_BUILD_TYPE=Release
+endif
 
 FEX_CMAKE_ARGS = $(FEX_COMMON_CMAKE_ARGS) \
   -DCMAKE_TOOLCHAIN_FILE=$(FEX_SRC)/Data/CMake/toolchain_mingw.cmake \
@@ -1463,9 +1470,10 @@ WINEMONO_RUNTIME_SRC := $(OBJ)/src-wine-mono-$(WINEMONO_VER)
 WINEMONO_SOURCE_STAMP := $(OBJ)/.wine-mono-$(WINEMONO_VER)-source
 WINEMONO_RUNTIME_STAMP := $(OBJ)/.wine-mono-$(WINEMONO_VER)-runtime
 WINEMONO_DRAWING_STAMP := $(OBJ)/.wine-mono-$(WINEMONO_VER)-drawing
+WINEMONO_FNA_STAMP := $(OBJ)/.wine-mono-$(WINEMONO_VER)-fna
 WINEMONO_DRAWING_SRC := $(WINEMONO_RUNTIME_SRC)/mono/mcs/class/lib/net_4_x-win32
 DIST_WINEMONO_DRAWING := $(DIST_WINEMONO_TARGET)/lib/mono/gac/System.Drawing/4.0.0.0__b03f5f7f11d50a3a
-WINEMONO_PATCHES := $(sort $(wildcard $(SRC)/patches/wine-mono/*.patch))
+WINEMONO_PATCHES := $(sort $(wildcard $(SRC)/patches/wine-mono/*.patch $(SRC)/patches/wine-mono/fna/*.patch))
 
 $(SRC)/contrib/$(WINEMONO_TARBALL):
 	mkdir -p $(dir $@)
@@ -1501,16 +1509,29 @@ $(WINEMONO_DRAWING_STAMP): $(WINEMONO_RUNTIME_STAMP)
 	test -s $(WINEMONO_DRAWING_SRC)/System.Drawing.dll
 	touch $@
 
+$(WINEMONO_FNA_STAMP): $(WINEMONO_DRAWING_STAMP)
+	# Reuse the host Mono compiler; retain the release's FNA3D and XNA ABI stubs.
+	+$(MAKE) -C $(WINEMONO_RUNTIME_SRC) AUTO_LLVM_MINGW=0 \
+	    BUILDDIR=$(WINEMONO_RUNTIME_SRC)/build build_profiles=net_4_x WineMono.FNA.dll
+	test -s $(WINEMONO_RUNTIME_SRC)/FNA/bin/Release/WineMono.FNA.dll
+	touch $@
+
 $(DIST_WINEMONO_TARGET): $(SRC)/contrib/$(WINEMONO_TARBALL)
 	mkdir -p $(DIST_WINEMONO_DIR)
 	rm -rf $(DIST_WINEMONO_DIR)/wine-mono-$(WINEMONO_VER)
 	tar --no-same-owner -xf $< -C $(DIST_WINEMONO_DIR)
 
-$(DIST_WINEMONO): $(DIST_WINEMONO_TARGET) $(WINEMONO_DRAWING_STAMP)
+$(DIST_WINEMONO): $(DIST_WINEMONO_TARGET) $(WINEMONO_FNA_STAMP)
 	cp $(WINEMONO_RUNTIME_SRC)/image/bin/libmono-2.0-x86.dll $(WINEMONO_RUNTIME_SRC)/image/bin/libmono-2.0-x86_64.dll $(DIST_WINEMONO_TARGET)/bin/
 	cp $(WINEMONO_RUNTIME_SRC)/image/bin/libmono-2.0-x86.dbg $(WINEMONO_RUNTIME_SRC)/image/bin/libmono-2.0-x86_64.dbg $(DIST_WINEMONO_TARGET)/bin/
 	cp $(WINEMONO_DRAWING_SRC)/System.Drawing.dll $(DIST_WINEMONO_DRAWING)/
 	if test -f $(WINEMONO_DRAWING_SRC)/System.Drawing.pdb; then cp $(WINEMONO_DRAWING_SRC)/System.Drawing.pdb $(DIST_WINEMONO_DRAWING)/; fi
+	# Require the exact assembly identity already shipped by the binary release.
+	set -- $(WINEMONO_RUNTIME_SRC)/image/lib/mono/gac/WineMono.FNA/*/WineMono.FNA.dll; \
+	    test "$$#" -eq 1 && test -s "$$1" || exit 1; \
+	    version=$$(basename "$$(dirname "$$1")"); \
+	    dest="$(DIST_WINEMONO_TARGET)/lib/mono/gac/WineMono.FNA/$$version/WineMono.FNA.dll"; \
+	    test -f "$$dest" && cp "$$1" "$$dest"
 	rm -f $(DIST_WINEMONO_DIR)/wine-mono; ln -s wine-mono-$(WINEMONO_VER) $(DIST_WINEMONO_DIR)/wine-mono
 	touch $@
 

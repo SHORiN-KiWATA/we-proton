@@ -1,0 +1,76 @@
+From: GloriousEggroll <gloriouseggroll@gmail.com>
+Subject: [PATCH] GraphicsDevice: flush pending depth/stencil state before reference access
+
+DepthStencilState is applied lazily, but ReferenceStencil goes directly to
+FNA3D. Setting a new state followed by ReferenceStencil therefore applies
+the calls in reverse order: the next draw overwrites the explicit reference
+with the state's default value. The getter can likewise return the old
+state's reference before the first draw.
+
+SunBurn's forward renderer uses this sequence for its direct-light passes,
+with StencilFunction.NotEqual, a nonzero reference, and a stencil buffer
+cleared to zero. Resetting the reference to zero rejects those passes and
+leaves only ambient lighting in Meridian: New World.
+
+Flush only the pending depth/stencil state before accessing the dynamic
+reference. Do not mutate the caller's immutable DepthStencilState object
+or flush unrelated sampler/rasterizer state.
+
+Issue: https://github.com/GloriousEggroll/proton-ge-custom/issues/430
+---
+diff --git a/src/Graphics/GraphicsDevice.cs b/src/Graphics/GraphicsDevice.cs
+--- a/src/Graphics/GraphicsDevice.cs
++++ b/src/Graphics/GraphicsDevice.cs
+@@ -223,14 +223,13 @@ namespace Microsoft.Xna.Framework.Graphics
+ 		{
+ 			get
+ 			{
++				ApplyDepthStencilState();
+ 				return FNA3D.FNA3D_GetReferenceStencil(GLDevice);
+ 			}
+ 			set
+ 			{
+-				/* FIXME: Does this affect the value found in
+-				 * DepthStencilState?
+-				 * -flibit
+-				 */
++				// Commit a pending state before overriding its stencil reference.
++				ApplyDepthStencilState();
+ 				FNA3D.FNA3D_SetReferenceStencil(GLDevice, value);
+ 			}
+ 		}
+@@ -1581,14 +1580,7 @@ namespace Microsoft.Xna.Framework.Graphics
+ 				);
+ 				currentBlend = nextBlend;
+ 			}
+-			if (currentDepthStencil != nextDepthStencil)
+-			{
+-				FNA3D.FNA3D_SetDepthStencilState(
+-					GLDevice,
+-					ref nextDepthStencil.state
+-				);
+-				currentDepthStencil = nextDepthStencil;
+-			}
++			ApplyDepthStencilState();
+ 
+ 			// Always update RasterizerState, as it depends on other device states
+ 			FNA3D.FNA3D_ApplyRasterizerState(
+@@ -1599,6 +1591,18 @@ namespace Microsoft.Xna.Framework.Graphics
+ 			ApplySamplers();
+ 		}
+ 
++		private void ApplyDepthStencilState()
++		{
++			if (currentDepthStencil != nextDepthStencil)
++			{
++				FNA3D.FNA3D_SetDepthStencilState(
++					GLDevice,
++					ref nextDepthStencil.state
++				);
++				currentDepthStencil = nextDepthStencil;
++			}
++		}
++
+ 		private void ApplySamplers()
+ 		{
+ 			for (int sampler = 0; sampler < modifiedSamplers.Length; sampler += 1)

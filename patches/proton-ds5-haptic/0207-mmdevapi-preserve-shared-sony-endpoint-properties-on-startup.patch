@@ -1,0 +1,56 @@
+From: GloriousEggroll <gloriouseggroll@gmail.com>
+Date: Mon, 12 Oct 2026 10:00:00 -0600
+Subject: [PATCH] mmdevapi: Preserve shared Sony endpoint properties on startup.
+
+Patch 0019 avoids preloading persisted Sony endpoints so that current driver
+enumeration, rather than stale registry records, determines which controllers
+are present. However, it also deletes the endpoint's MMDevices registry key.
+This runs in every process loading mmdevapi, while the registry is shared.
+A second process can therefore delete the properties of an endpoint that the
+game has already enumerated and still holds in its process-local device list.
+
+The R2 trace in issue #750 shows this failure in Arknights: Endfield:
+
+  468691.227: PID 0140 opens the controller endpoint
+              {1bd72244-d350-40a7-a443-4f2e33b20d56}.
+  468694.168-173: PID 0474 loads mmdevapi and removes three persisted
+                 DualSense endpoints from the shared registry.
+  468706.622 onward: PID 0140 repeatedly fails to read the original
+                    endpoint's container ID and device format with error 2.
+
+Replugging publishes a fresh endpoint and allows audio haptics to work. The
+initial streams were stopped and released before the registry deletion, so
+this change addresses the broken rediscovery/retry path, not the application's
+reason for closing those first streams. Absence of the one-second PCM peak
+trace on those short-lived streams is not evidence of a stalled audio pump.
+
+Skip persisted Sony endpoints without deleting their shared property stores.
+They remain absent from this process's collection until live driver discovery
+publishes them, preserving the purpose of 0019. Keep normal-device preloading,
+physical hotplug cleanup, routing, controller identity, and Steam Input
+selection unchanged. The registry enumeration index must advance normally
+because no key is removed from the enumeration.
+
+Bug: https://github.com/GloriousEggroll/proton-ge-custom/issues/750#issuecomment-6126806805
+---
+ dlls/mmdevapi/devenum.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/mmdevapi/devenum.c b/dlls/mmdevapi/devenum.c
+--- a/dlls/mmdevapi/devenum.c
++++ b/dlls/mmdevapi/devenum.c
+@@ -2012,9 +2012,11 @@
+         {
+             if (is_dualsense_endpoint_name( pv.pwszVal ))
+             {
+-                TRACE("Removing persisted DualSense endpoint %s.\n", debugstr_w(pv.pwszVal));
+-                if (RegDeleteTreeW(cur, guidvalue) == ERROR_SUCCESS)
+-                    i--;
++                /* A different process may still use this shared property store.
++                 * Skip the cached endpoint locally; only live driver discovery
++                 * should publish it in this process. */
++                TRACE("Skipping persisted Sony endpoint %s (%s); keeping shared properties.\n",
++                        debugstr_w(pv.pwszVal), debugstr_guid(&guid));
+             }
+             else
+                 MMDevice_Create(pv.pwszVal, &guid, curflow,

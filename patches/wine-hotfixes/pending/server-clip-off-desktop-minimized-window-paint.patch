@@ -1,0 +1,127 @@
+From: GloriousEggroll <gloriouseggroll@gmail.com>
+Date: Tue, 13 Oct 2026 01:00:00 -0600
+Subject: [PATCH] server: Clip painting of off-desktop minimized windows.
+
+Deadlock briefly paints a white 160x31 rectangle at startup on Niri,
+even after unsupported minimization is reconciled and with Steam's
+overlay disabled. The existing X11 traces show SW_MINIMIZE parking the
+Win32 window at (-32000,-32000) with exactly that iconic size, followed
+by non-client GDI painting into the still-mapped full-size X drawable.
+
+Top-level visible regions normally rely on the native window manager
+for clipping. That assumption fails when the host does not implement
+minimization and keeps the normal-sized window mapped while Wine waits
+to restore its Win32 state.
+
+Return an empty GDI visible region for minimized top-level windows whose
+iconic rectangle lies wholly outside the desktop. Map the desktop bounds
+to the window's DPI before comparing them. Keep child windows, on-screen
+minimized icons (including virtual desktops), and non-minimized windows
+on the existing path. Normal positioning invalidates DCs and restores
+their visible region when the window is restored.
+
+Do this in the shared server path so buffered GDI painting and direct
+X11 drawing are clipped consistently, including Wine-Wayland. Do not
+change Vulkan surface lifetime, host mapping, or focus reconciliation.
+Keep the existing Wine-Wayland 0068 and satellite minimization fixes.
+
+Add coverage for cached and own DCs across minimize/restore, including
+the non-client DC used for the iconic frame. Skip the off-desktop checks
+when the host restores the window or displays its minimized icon.
+
+Bug: https://github.com/GloriousEggroll/proton-ge-custom/issues/762
+---
+diff --git a/server/window.c b/server/window.c
+--- a/server/window.c
++++ b/server/window.c
+@@ -1453,6 +1453,17 @@
+         return region;
+     }
+ 
++    /* Native window managers normally clip top-level windows, but may keep an
++     * unsupported minimize mapped. Do not paint its off-desktop iconic frame
++     * into the retained host window. On-screen minimized icons still paint. */
++    if ((win->style & WS_MINIMIZE) && is_desktop_window( win->parent ))
++    {
++        struct rectangle desktop = win->parent->client_rect;
++
++        map_dpi_rect( win, &desktop, get_window_dpi( win->parent ), get_window_dpi( win ) );
++        if (!intersect_rect( &desktop, &desktop, &win->visible_rect )) return region;
++    }
++
+     /* create a region relative to the window itself */
+ 
+     if ((flags & DCX_PARENTCLIP) && !is_desktop_window( win->parent ))
+diff --git a/dlls/user32/tests/dce.c b/dlls/user32/tests/dce.c
+--- a/dlls/user32/tests/dce.c
++++ b/dlls/user32/tests/dce.c
+@@ -711,6 +711,61 @@
+     DestroyWindow(hwnd_cache_rtl);
+ }
+ 
++static void test_minimized_dc_visrgn(void)
++{
++    static const char *classes[] = { "cache_class", "owndc_class" };
++    RECT desktop, rect, intersect;
++    HWND hwnd;
++    HDC hdc, window_dc;
++    unsigned int i;
++    int ret;
++
++    SetRect( &desktop, GetSystemMetrics( SM_XVIRTUALSCREEN ), GetSystemMetrics( SM_YVIRTUALSCREEN ), 0, 0 );
++    desktop.right = desktop.left + GetSystemMetrics( SM_CXVIRTUALSCREEN );
++    desktop.bottom = desktop.top + GetSystemMetrics( SM_CYVIRTUALSCREEN );
++
++    for (i = 0; i < ARRAY_SIZE(classes); ++i)
++    {
++        winetest_push_context( "%s", classes[i] );
++        hwnd = CreateWindowA( classes[i], NULL, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
++                              0, 0, 200, 150, 0, 0, GetModuleHandleA(0), NULL );
++        ok( !!hwnd, "CreateWindow failed, error %lu\n", GetLastError() );
++        if (!hwnd)
++        {
++            winetest_pop_context();
++            continue;
++        }
++
++        hdc = GetDC( hwnd );
++        ok( !!hdc, "GetDC failed\n" );
++        ShowWindow( hwnd, SW_SHOWMINNOACTIVE );
++        GetWindowRect( hwnd, &rect );
++        if (!IsIconic( hwnd ) || IntersectRect( &intersect, &desktop, &rect ))
++            skip( "Window manager did not park the minimized window outside the desktop\n" );
++        else
++        {
++            ret = GetClipBox( hdc, &rect );
++            ok( ret == NULLREGION, "Minimized client region %d, %s\n", ret, wine_dbgstr_rect(&rect) );
++            window_dc = GetWindowDC( hwnd );
++            ok( !!window_dc, "GetWindowDC failed\n" );
++            ret = GetClipBox( window_dc, &rect );
++            ok( ret == NULLREGION, "Minimized window region %d, %s\n", ret, wine_dbgstr_rect(&rect) );
++            ReleaseDC( hwnd, window_dc );
++        }
++
++        ShowWindow( hwnd, SW_RESTORE );
++        ret = GetClipBox( hdc, &rect );
++        ok( ret > NULLREGION, "Restored client region %d, %s\n", ret, wine_dbgstr_rect(&rect) );
++        ReleaseDC( hwnd, hdc );
++        window_dc = GetWindowDC( hwnd );
++        ret = GetClipBox( window_dc, &rect );
++        ok( ret > NULLREGION, "Restored window region %d, %s\n", ret, wine_dbgstr_rect(&rect) );
++        ReleaseDC( hwnd, window_dc );
++        DestroyWindow( hwnd );
++        winetest_pop_context();
++    }
++}
++
+ static void test_destroyed_window(void)
+ {
+     HDC dc, old_dc;
+@@ -833,6 +888,7 @@
+     test_scroll_window();
+     test_invisible_create();
+     test_dc_layout();
++    test_minimized_dc_visrgn();
+     /* this should be last */
+     test_destroyed_window();
+ }

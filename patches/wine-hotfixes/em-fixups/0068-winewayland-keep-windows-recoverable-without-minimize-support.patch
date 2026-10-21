@@ -1,0 +1,186 @@
+From: GloriousEggroll <gloriouseggroll@gmail.com>
+Date: Sun, 11 Oct 2026 12:00:00 -0600
+Subject: [PATCH] winewayland: Keep windows recoverable without host minimization.
+
+Deadlock can minimize its window during startup on Niri before creating
+its Vulkan surface. Niri advertises maximize and fullscreen capabilities,
+but not minimize. The capability guard in the minimized-toplevel check
+then lets the offscreen Win32 iconic rectangle destroy the xdg_toplevel.
+The resulting keyboard leave cannot restore a window which is no longer
+mapped. The same sequence occurs with the Steam overlay disabled.
+
+Keep established, visible minimized toplevels mapped on these compositors
+as well. Preserve their last usable geometry, decorations and input region
+instead of applying the iconic rectangle. Do not send unsupported minimize
+requests or change fullscreen state, but continue processing compositor
+configures. Explicit hides, destruction and non-toplevel windows retain
+their existing behavior.
+
+Queue the existing window-state handler on the unsupported transition.
+Restore only when the toplevel actually has Wayland keyboard focus, even
+if Wine's foreground HWND has not changed. Otherwise keep the window
+available for the user to focus and restore later. Do not reposition its
+iconic Win32 rectangle from an output-enter notification in the meantime.
+Unknown capabilities and compositors which support minimization retain
+their existing minimize/restore behavior.
+
+Complements the renderer preservation in fixup 0067. The original
+minimized-toplevel implementation was authored by
+Erhan Bilgili <erhan.bilgili@gmail.com>:
+https://github.com/nanomatters/wine-salkim/commit/7d3c16911a81d263c5f7a4769a8d57d17b3f1151
+
+Bug: https://github.com/GloriousEggroll/proton-ge-custom/issues/762
+---
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -156,6 +156,10 @@
+ {
+     HRGN shape_region, owned_shape_region = 0;
+ 
++    /* Retain a focusable host window when the compositor cannot minimize it. */
++    if (wayland_surface_is_toplevel(surface) && surface->window.minimized &&
++        !wayland_surface_supports_minimize(surface)) return;
++
+     if (window_surface && window_surface->shape_region)
+         shape_region = window_surface->shape_region;
+     else
+@@ -1181,7 +1185,7 @@
+     if (!(cap & WAYLAND_SURFACE_WM_CAPS_MAXIMIZE))
+         WARN("Compositor does not support maximize!\n");
+     if (!(cap & WAYLAND_SURFACE_WM_CAPS_MINIMIZE))
+-        WARN("Compositor does not support minimize, cannot implement window focus loss!\n");
++        TRACE("Compositor does not support minimize, keeping minimized toplevels mapped.\n");
+ 
+     if (!(data = wayland_win_data_get(hwnd))) return;
+ 
+diff --git a/dlls/winewayland.drv/waylanddrv.h b/dlls/winewayland.drv/waylanddrv.h
+--- a/dlls/winewayland.drv/waylanddrv.h
++++ b/dlls/winewayland.drv/waylanddrv.h
+@@ -649,6 +649,18 @@
+     return surface->role == WAYLAND_SURFACE_ROLE_TOPLEVEL && surface->xdg_toplevel;
+ }
+ 
++static inline BOOL wayland_surface_supports_minimize(const struct wayland_surface *surface)
++{
++    enum wayland_surface_wm_caps caps = surface->pending.caps;
++
++    /* Capabilities may arrive before the configure carrying them is applied. */
++    if (!caps) caps = surface->requested.caps;
++    if (!caps) caps = surface->processing.caps;
++    if (!caps) caps = surface->current.caps;
++
++    return !caps || (caps & WAYLAND_SURFACE_WM_CAPS_MINIMIZE);
++}
++
+ static inline BOOL wayland_surface_is_popup(struct wayland_surface *surface)
+ {
+     return surface->role == WAYLAND_SURFACE_ROLE_POPUP && surface->xdg_popup;
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -298,10 +298,7 @@
+                                                   DWORD style)
+ {
+     if (!surface || surface->role != WAYLAND_SURFACE_ROLE_TOPLEVEL) return FALSE;
+-    if (!(style & WS_MINIMIZE)) return FALSE;
+-
+-    return !surface->current.caps ||
+-           (surface->current.caps & WAYLAND_SURFACE_WM_CAPS_MINIMIZE);
++    return !!(style & WS_MINIMIZE);
+ }
+ 
+ static BOOL is_menu_popup_candidate_style(DWORD style, DWORD exstyle)
+@@ -363,7 +360,7 @@
+     struct wayland_client_surface *client = data->client_surface;
+     struct wayland_surface *surface;
+     enum wayland_surface_role role;
+-    BOOL visible, layer_set, server_decor = FALSE;
++    BOOL visible, layer_set, keep_minimized_geometry, server_decor = FALSE;
+     DWORD exstyle = NtUserGetWindowLongW(data->hwnd, GWL_EXSTYLE);
+     DWORD style = NtUserGetWindowLongW(data->hwnd, GWL_STYLE);
+ 
+@@ -438,7 +435,22 @@
+     }
+ 
+     surface->window.visible = visible;
+-    wayland_win_data_get_config(data, &surface->window);
++    keep_minimized_geometry = role == WAYLAND_SURFACE_ROLE_TOPLEVEL &&
++                              should_keep_minimized_toplevel_mapped(surface, style) &&
++                              !wayland_surface_supports_minimize(surface);
++    if (keep_minimized_geometry)
++    {
++        /* Without host minimization, the existing window is the only way to
++         * focus and restore the app. Do not replace its usable geometry with
++         * Win32's offscreen iconic rectangle or empty client/input region. */
++        if (!surface->window.minimized)
++        {
++            TRACE("hwnd=%p keeping minimized toplevel without host minimize support\n", data->hwnd);
++            NtUserPostMessage(data->hwnd, WM_WINE_WINDOW_STATE_CHANGED, 0, 0);
++        }
++        surface->window.minimized = TRUE;
++    }
++    else wayland_win_data_get_config(data, &surface->window);
+ 
+     /* If the window is a visible toplevel make it a wayland
+      * xdg_toplevel. Otherwise keep it role-less to avoid polluting the
+@@ -459,7 +471,7 @@
+                                         stack_below_parent);
+         break;
+     case WAYLAND_SURFACE_ROLE_TOPLEVEL:
+-        wayland_surface_make_toplevel(surface, server_decor);
++        if (!keep_minimized_geometry) wayland_surface_make_toplevel(surface, server_decor);
+         break;
+     }
+ 
+@@ -495,6 +507,9 @@
+           processing_config ? "processing" : "current",
+           processing_config ? surface->processing.state : surface->current.state);
+ 
++    if (!processing_config && surface->window.minimized &&
++        !wayland_surface_supports_minimize(surface)) return;
++
+     /* update the parent here as well to ensure that its not stale if the owner is updated
+      * with no new contents comitted or state change */
+     wayland_surface_update_toplevel_parent(surface);
+@@ -1643,7 +1658,7 @@
+     struct wayland_win_data *data;
+     DWORD style;
+     HWND focused_hwnd, old_foreground;
+-    BOOL ret;
++    BOOL ret, host_minimize_supported = TRUE;
+ 
+     /* win32u uses a second call with NULL outputs to release any host state
+      * lock acquired by the first call. Wine-Wayland does not acquire one. */
+@@ -1670,6 +1685,9 @@
+     SetRectEmpty(&data->state_update_rect);
+     data->state_update_foreground = NULL;
+ 
++    if ((surface = data->wayland_surface) && wayland_surface_is_toplevel(surface))
++        host_minimize_supported = wayland_surface_supports_minimize(surface);
++
+     wayland_win_data_release(data);
+ 
+     /* in these cases we dont need to update the window focus, borrowed from winemac */
+@@ -1689,8 +1707,11 @@
+     if (!*foreground && old_foreground != focused_hwnd) *foreground = focused_hwnd;
+ 
+     /* we can't track if the host window is minimized or unminimized, but
+-     * if we have keyboard focus on this window we can treat it as restored. */
+-    if (!*state_cmd && (style & WS_MINIMIZE) && focused_hwnd == hwnd && old_foreground != hwnd)
++     * if we have keyboard focus on this window we can treat it as restored.
++     * An unsupported minimize may never have changed the host keyboard focus,
++     * so do not require a foreground transition in that case. */
++    if (!*state_cmd && (style & WS_MINIMIZE) && focused_hwnd == hwnd &&
++        (old_foreground != hwnd || !host_minimize_supported))
+         *state_cmd = MAKELONG(SC_RESTORE, 1);
+     else if (!*state_cmd && !*swp_flags && (data = wayland_win_data_get(hwnd)))
+     {
+@@ -1698,6 +1719,7 @@
+ 
+         if (!(surface = data->wayland_surface)) goto skip;
+         if (!wayland_surface_is_toplevel(surface)) goto skip;
++        if ((style & WS_MINIMIZE) && !host_minimize_supported) goto skip;
+         if (wl_list_empty(&surface->output_list)) goto skip;
+         /* the output hint syncs the win32u position to the toplevel position */
+         if (surface->window.state & WAYLAND_SURFACE_CONFIG_STATE_FULLSCREEN) goto skip;

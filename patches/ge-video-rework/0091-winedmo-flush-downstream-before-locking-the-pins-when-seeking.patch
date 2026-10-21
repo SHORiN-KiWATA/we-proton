@@ -1,0 +1,47 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Alexandre Derumier <aderumier@gmail.com>
+Date: Sun, 11 Oct 2026 18:40:00 +0200
+Subject: [PATCH] winedmo: Flush downstream before locking the pins when
+ seeking.
+
+dmo_seeking_SetPositions() took each output pin's flushing_cs before
+sending BeginFlush downstream. The stream thread holds that lock while it
+delivers a sample (IMemInputPin_Receive), and a renderer may block in
+Receive until it is flushed: the seek then waits for the stream thread,
+which waits for the renderer, which waits for the flush. SNK Heroines Tag
+Team Frenzy (its own renderer, looping movies) hung right after START.
+
+Send BeginFlush first, as the Windows parsers and Wine's other parsers
+do: the renderer returns from Receive, the stream thread releases the
+lock, and the seek goes on.
+---
+ dlls/winedmo/winedmo_quartz_parser.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/winedmo/winedmo_quartz_parser.c b/dlls/winedmo/winedmo_quartz_parser.c
+--- a/dlls/winedmo/winedmo_quartz_parser.c
++++ b/dlls/winedmo/winedmo_quartz_parser.c
+@@ -636,6 +636,11 @@
+     for (i = 0; i < filter->source_count; ++i)
+         WakeConditionVariable(&filter->sources[i]->queue_cv);
+ 
++    /* Flush downstream first: a stream thread holds its pin's flushing_cs during Receive, and
++     * a renderer may block in Receive until it is flushed (Windows parsers do the same). */
++    if (!(current_flags & AM_SEEKING_NoFlush))
++        dmo_parser_begin_downstream_flush(filter);
++
+     /* Acquire per-pin flushing_cs to ensure no Receive is in progress. */
+     for (i = 0; i < filter->source_count; ++i)
+     {
+@@ -643,9 +648,6 @@
+             EnterCriticalSection(&filter->sources[i]->flushing_cs);
+     }
+ 
+-    if (!(current_flags & AM_SEEKING_NoFlush))
+-        dmo_parser_begin_downstream_flush(filter);
+-
+     SourceSeekingImpl_SetPositions(iface, current, current_flags, stop, stop_flags);
+ 
+     /* Perform the actual seek. */
+-- 
+2.51.0

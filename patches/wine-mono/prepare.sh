@@ -38,5 +38,13 @@ echo "WINE-MONO: apply runtime and class-library patches"
     done
 )
 
+echo "WINE-MONO: apply FNA patches"
+(
+    cd wine-mono/FNA
+    for patch_file in "$patch_dir"/fna/*.patch; do
+        patch --batch --fuzz=0 -Np1 < "$patch_file"
+    done
+)
+
 # Publish this only after every patch succeeds, so a failed prep cannot build.
 touch wine-mono/.proton-prepared

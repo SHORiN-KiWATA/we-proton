@@ -1,0 +1,98 @@
+From 9aee0e713e004256419e3a253a3634364a104e18 Mon Sep 17 00:00:00 2001
+From: Nikolay Sivov <nsivov@codeweavers.com>
+Date: Tue, 24 Mar 2026 21:14:15 +0100
+Subject: [PATCH] secur32/tests: Test required buffer size in case of
+ SEC_E_INCOMPLETE_MESSAGE.
+
+Required remaining size is returned for both SECBUFFER_DATA and the first SECBUFFER_EMPTY buffer.
+
+Signed-off-by: Nikolay Sivov <nsivov@codeweavers.com>
+---
+ dlls/secur32/tests/schannel.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/dlls/secur32/tests/schannel.c b/dlls/secur32/tests/schannel.c
+index 2f693c6f871..66e995ba21c 100644
+--- a/dlls/secur32/tests/schannel.c
++++ b/dlls/secur32/tests/schannel.c
+@@ -1371,11 +1371,15 @@ static void test_communication(void)
+ 
+     /* Incomplete data */
+     buffers[0].pBuffers[1].BufferType = SECBUFFER_EMPTY;
++    buffers[0].pBuffers[1].cbBuffer = 1;
+     buffers[0].pBuffers[0].cbBuffer = (data[3]<<8) | data[4];
+     status = DecryptMessage(&context, &buffers[0], 0, NULL);
+     ok(status == SEC_E_INCOMPLETE_MESSAGE, "Expected SEC_E_INCOMPLETE_MESSAGE, got %08lx\n", status);
+     ok(buffers[0].pBuffers[0].BufferType == SECBUFFER_MISSING, "Expected first buffer to be SECBUFFER_MISSING\n");
+     ok(buffers[0].pBuffers[0].cbBuffer == 5, "Expected first buffer to be a five bytes\n");
++    ok(buffers[0].pBuffers[1].BufferType == SECBUFFER_MISSING, "Unexpected buffer type\n");
++    todo_wine
++    ok(buffers[0].pBuffers[1].cbBuffer == 5, "Unexpected buffer size\n");
+ 
+     /* Renegotiate */
+     buffers[0].pBuffers[0].BufferType = SECBUFFER_DATA;
+-- 
+GitLab
+
+From 35b1e7eb9a7e66c49fac8583e50186c6c21736e6 Mon Sep 17 00:00:00 2001
+From: Nikolay Sivov <nsivov@codeweavers.com>
+Date: Tue, 24 Mar 2026 22:11:38 +0100
+Subject: [PATCH] secur32/schannel: Fix returned required buffer size for
+ incomplete messages in DecryptMessage().
+
+Signed-off-by: Nikolay Sivov <nsivov@codeweavers.com>
+---
+ dlls/secur32/schannel.c       | 6 +++---
+ dlls/secur32/tests/schannel.c | 1 -
+ 2 files changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/secur32/schannel.c b/dlls/secur32/schannel.c
+index 3ad6be5e738..83aea0b4737 100644
+--- a/dlls/secur32/schannel.c
++++ b/dlls/secur32/schannel.c
+@@ -1486,13 +1486,13 @@ static void schan_decrypt_fill_buffer(PSecBufferDesc message, ULONG buffer_type,
+ static SECURITY_STATUS SEC_ENTRY schan_DecryptMessage(PCtxtHandle context_handle,
+         PSecBufferDesc message, ULONG message_seq_no, PULONG quality)
+ {
++    unsigned expected_size, remaining_size;
+     SECURITY_STATUS status = SEC_E_OK;
+     struct schan_context *ctx;
+     struct recv_params params;
+     SecBuffer *buffer;
+     SIZE_T data_size;
+     char *data;
+-    unsigned expected_size;
+     ULONG received = 0;
+     int idx;
+     unsigned char *buf_ptr;
+@@ -1517,13 +1517,13 @@ static SECURITY_STATUS SEC_ENTRY schan_DecryptMessage(PCtxtHandle context_handle
+     {
+         TRACE("Expected %u bytes, but buffer only contains %lu bytes\n", expected_size, buffer->cbBuffer);
+         buffer->BufferType = SECBUFFER_MISSING;
+-        buffer->cbBuffer = expected_size - buffer->cbBuffer;
++        buffer->cbBuffer = remaining_size = expected_size - buffer->cbBuffer;
+ 
+         /* This is a bit weird, but windows does it too */
+         idx = schan_find_sec_buffer_idx(message, 0, SECBUFFER_EMPTY);
+         buffer = &message->pBuffers[idx];
+         buffer->BufferType = SECBUFFER_MISSING;
+-        buffer->cbBuffer = expected_size - buffer->cbBuffer;
++        buffer->cbBuffer = remaining_size;
+ 
+         TRACE("Returning SEC_E_INCOMPLETE_MESSAGE\n");
+         return SEC_E_INCOMPLETE_MESSAGE;
+diff --git a/dlls/secur32/tests/schannel.c b/dlls/secur32/tests/schannel.c
+index 66e995ba21c..04ef9ca6880 100644
+--- a/dlls/secur32/tests/schannel.c
++++ b/dlls/secur32/tests/schannel.c
+@@ -1378,7 +1378,6 @@ static void test_communication(void)
+     ok(buffers[0].pBuffers[0].BufferType == SECBUFFER_MISSING, "Expected first buffer to be SECBUFFER_MISSING\n");
+     ok(buffers[0].pBuffers[0].cbBuffer == 5, "Expected first buffer to be a five bytes\n");
+     ok(buffers[0].pBuffers[1].BufferType == SECBUFFER_MISSING, "Unexpected buffer type\n");
+-    todo_wine
+     ok(buffers[0].pBuffers[1].cbBuffer == 5, "Unexpected buffer size\n");
+ 
+     /* Renegotiate */
+-- 
+GitLab
+

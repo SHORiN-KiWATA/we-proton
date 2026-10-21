@@ -1,0 +1,139 @@
+From: GloriousEggroll <gloriouseggroll@gmail.com>
+Date: Mon, 12 Oct 2026 01:00:00 -0600
+Subject: [PATCH] winex11: Reconcile unsupported minimization on satellite.
+
+Both X11 traces for Deadlock on Niri show the same startup transition,
+with and without the user's window rule. The game calls SW_MINIMIZE
+before creating its Vulkan surface. Wine requests NormalState ->
+IconicState, but the window manager does not acknowledge that request.
+The iconic Win32 client rectangle then produces a 1x1 Vulkan child.
+Refocusing causes WM_STATE=NormalState to arrive, clears the pending
+request and restores the child to 3440x1440.
+
+xwayland-satellite does not handle the WM_CHANGE_STATE message sent by
+XIconifyWindow. It writes NormalState on mapping and focusing instead:
+https://github.com/Supreeeme/xwayland-satellite/blob/ae88928f7334556d298b8d9552abdf395931931b/src/xstate/mod.rs
+
+First recognize its WM name: satellite writes _NET_WM_NAME as STRING
+rather than UTF8_STRING. Request either string type and validate the
+format; otherwise Xlib returns success with an empty buffer for the type
+mismatch and Wine identifies the window manager as "".
+
+For managed, non-embedded satellite windows without advertised HIDDEN
+support, keep the desired host state NormalState rather than queueing an
+unsupported iconify request. Post the normal window-state reconciliation
+message, and repeat it if restoration had to wait for decoration hints.
+Only restore the Win32 minimized state while the host reports the window
+active, so a background game's focus-loss minimize cannot steal focus.
+
+Do not infer unsupported minimization from absent EWMH capabilities on
+other window managers: legacy ICCCM WMs can minimize without those hints.
+Preserve hidden windows, embedded windows, virtual desktops, and the
+existing paths for other WMs or satellite advertising HIDDEN support.
+This complements Wine-Wayland fixup 0068; it does not replace it.
+
+Bug: https://github.com/GloriousEggroll/proton-ge-custom/issues/762
+Logs: https://github.com/GloriousEggroll/proton-ge-custom/issues/762#issuecomment-6116456428
+---
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1803,6 +1803,15 @@
+     return cached;
+ }
+ 
++static BOOL window_minimize_unsupported( struct x11drv_win_data *data )
++{
++    /* Satellite ignores WM_CHANGE_STATE. Do not infer this for other WMs from
++     * missing EWMH hints alone, since legacy ICCCM WMs can still minimize. */
++    return data->managed && !data->embedded && !is_virtual_desktop() &&
++           X11DRV_HasWindowManager( "xwayland-satellite" ) &&
++           !is_net_supported( x11drv_atom(_NET_WM_STATE_HIDDEN) );
++}
++
+ static void window_set_wm_state( struct x11drv_win_data *data, UINT new_state, BOOL activate )
+ {
+     UINT old_state = data->pending_state.wm_state;
+@@ -1818,6 +1827,17 @@
+         activate = FALSE;
+     }
+ 
++    if (new_state == IconicState && window_minimize_unsupported( data ))
++    {
++        /* Keep the mapped host state instead of waiting for an acknowledgment
++         * that will never arrive. Reconcile Win32 state on the window thread. */
++        TRACE( "window %p/%lx, host minimization unsupported, keeping NormalState\n",
++               data->hwnd, data->whole_window );
++        new_state = NormalState;
++        activate = FALSE;
++        NtUserPostMessage( data->hwnd, WM_WINE_WINDOW_STATE_CHANGED, 0, 0 );
++    }
++
+     data->desired_state.wm_state = new_state;
+     data->desired_state.activate = activate;
+     if (data->state_locks) return; /* win32 state is being updated, delay the change */
+@@ -1983,6 +2003,12 @@
+     if (data->mwm_hints_serial) return 0; /* another MWM_HINT update is pending, wait for it to complete */
+     if (data->configure_serial) return 0; /* another config update is pending, wait for it to complete */
+ 
++    /* An ignored minimize must not bring a background window back to the
++     * foreground. Satellite sends WM_STATE again when the user focuses it. */
++    if ((old_style & WS_MINIMIZE) && window_minimize_unsupported( data ) &&
++        get_net_active_window( data->display ) != data->whole_window)
++        return 0;
++
+     new_style = old_style & ~(WS_VISIBLE | WS_MINIMIZE | WS_MAXIMIZE);
+     if (data->current_state.wm_state != WithdrawnState) new_style |= WS_VISIBLE;
+     if (data->current_state.wm_state == IconicState) new_style |= WS_MINIMIZE;
+@@ -2301,6 +2327,11 @@
+ 
+     /* send any pending changes from the desired state */
+     window_request_desired_state( data );
++
++    /* The unsupported-minimize restore may have waited for these hints. */
++    if ((NtUserGetWindowLongW( data->hwnd, GWL_STYLE ) & WS_MINIMIZE) &&
++        window_minimize_unsupported( data ))
++        NtUserPostMessage( data->hwnd, WM_WINE_WINDOW_STATE_CHANGED, 0, 0 );
+ }
+ 
+ void window_wm_normal_hints_notify( struct x11drv_win_data *data, unsigned long serial, const XSizeHints *value )
+@@ -2393,9 +2424,15 @@
+ 
+     *name = NULL;
+     X11DRV_expect_error( display, host_window_error, NULL );
+-    ret = XGetWindowProperty( display, window, x11drv_atom(_NET_WM_NAME), 0, 65536 / sizeof(CARD32), False, x11drv_atom(UTF8_STRING),
++    /* Satellite supplies its ASCII WM name as STRING rather than UTF8_STRING.
++     * A type mismatch otherwise succeeds with an empty buffer from Xlib. */
++    ret = XGetWindowProperty( display, window, x11drv_atom(_NET_WM_NAME), 0, 65536 / sizeof(CARD32), False, AnyPropertyType,
+                               &type, &format, &count, &remaining, (unsigned char **)name );
+-    return !X11DRV_check_error() && !ret && *name;
++    if (!X11DRV_check_error() && !ret && *name && format == 8 && count &&
++        (type == x11drv_atom(UTF8_STRING) || type == XA_STRING)) return TRUE;
++    XFree( *name );
++    *name = NULL;
++    return FALSE;
+ }
+ 
+ static BOOL get_window_wm_name( Display *display, Window window, char **name )
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -545,6 +545,7 @@
+     XATOM__NET_WM_STATE_BELOW,
+     XATOM__NET_WM_STATE_DEMANDS_ATTENTION,
+     XATOM__NET_WM_STATE_FULLSCREEN,
++    XATOM__NET_WM_STATE_HIDDEN,
+     XATOM__NET_WM_STATE_MAXIMIZED_HORZ,
+     XATOM__NET_WM_STATE_MAXIMIZED_VERT,
+     XATOM__NET_WM_STATE_SKIP_PAGER,
+diff --git a/dlls/winex11.drv/x11drv_main.c b/dlls/winex11.drv/x11drv_main.c
+--- a/dlls/winex11.drv/x11drv_main.c
++++ b/dlls/winex11.drv/x11drv_main.c
+@@ -157,6 +157,7 @@
+     "_NET_WM_STATE_BELOW",
+     "_NET_WM_STATE_DEMANDS_ATTENTION",
+     "_NET_WM_STATE_FULLSCREEN",
++    "_NET_WM_STATE_HIDDEN",
+     "_NET_WM_STATE_MAXIMIZED_HORZ",
+     "_NET_WM_STATE_MAXIMIZED_VERT",
+     "_NET_WM_STATE_SKIP_PAGER",

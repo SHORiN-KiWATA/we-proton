@@ -1,0 +1,54 @@
+From: GloriousEggroll <gloriouseggroll@gmail.com>
+Subject: [PATCH] mini: order publication and consumption of delegate trampoline caches.
+
+The Ampere ARM64 build of Wine-Mono 11.3.0 crashes in Roslyn while compiling
+mscorlib.dll. The saved core contains an Action for CompileNamedTypeAsync
+with the optimized invoke_impl but a NULL method_ptr. The shared
+MonoDelegateTrampInfo already contains both valid pointers. The ARM64
+invoke stub loads method_ptr and branches to zero.
+
+mono_delegate_trampoline publishes method_ptr followed by invoke_impl,
+and the inlined constructor reads invoke_impl followed by method_ptr.
+Neither side orders those accesses. On weakly ordered CPUs a constructor
+can therefore copy the new invoke_impl together with the old NULL
+method_ptr, permanently skipping lazy initialization for that delegate.
+
+Publish the target before the optimized entry point with a write barrier,
+and acquire the entry point before reading the target in the generated
+constructor. Keep the invoke_impl-first read order: observing the old lazy
+entry with a new target is safe, but the inverse is not. Also order the
+target before publishing the optimized entry on the delegate itself.
+
+This fixes the runtime protocol rather than disabling Roslyn parallelism
+or changing the compiler or class-library profile. The existing prep loop
+applies it to both the native host Mono and the Windows runtime builds.
+---
+diff --git a/mono/mini/mini-trampolines.c b/mono/mini/mini-trampolines.c
+--- a/mono/mini/mini-trampolines.c
++++ b/mono/mini/mini-trampolines.c
+@@ -1221,9 +1221,13 @@ mono_delegate_trampoline (host_mgreg_t *regs, guint8 *code, gpointer *arg, guint8* tramp)
+ 		code = (guint8 *)mini_add_method_trampoline (m, code, mono_method_needs_static_rgctx_invoke (m, FALSE), FALSE);
+ 	}
+ 
++	/* The optimized entry point uses method_ptr without lazy initialization. */
++	mono_memory_write_barrier ();
+ 	delegate->invoke_impl = mono_get_addr_from_ftnptr (code);
+ 	if (enable_caching && !callvirt && tramp_info->method) {
+ 		tramp_info->method_ptr = delegate->method_ptr;
++		/* Pair with the acquire in the inlined delegate constructor. */
++		mono_memory_write_barrier ();
+ 		tramp_info->invoke_impl = delegate->invoke_impl;
+ 	}
+ 
+diff --git a/mono/mini/method-to-ir.c b/mono/mini/method-to-ir.c
+--- a/mono/mini/method-to-ir.c
++++ b/mono/mini/method-to-ir.c
+@@ -3699,6 +3699,8 @@ handle_delegate_ctor (MonoCompile *cfg, MonoClass *klass, MonoInst *target, MonoMethod *method, int target_method_context_used, int invoke_context_used, gboolean virtual_)
+ 	} else {
+ 		dreg = alloc_preg (cfg);
+ 		MONO_EMIT_NEW_LOAD_MEMBASE (cfg, dreg, tramp_ins->dreg, MONO_STRUCT_OFFSET (MonoDelegateTrampInfo, invoke_impl));
++		/* A cached optimized entry must not be paired with a stale method_ptr. */
++		mini_emit_memory_barrier (cfg, MONO_MEMORY_BARRIER_ACQ);
+ 		MONO_EMIT_NEW_STORE_MEMBASE (cfg, OP_STORE_MEMBASE_REG, obj->dreg, MONO_STRUCT_OFFSET (MonoDelegate, invoke_impl), dreg);
+ 
+ 		dreg = alloc_preg (cfg);

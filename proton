@@ -5,6 +5,7 @@
 import fcntl
 import array
 import fnmatch
+import filecmp
 import os
 import re
 import shutil
@@ -46,7 +47,7 @@ import protonfixes
 #and edit it if needed.
 import utilities
 
-CURRENT_PREFIX_VERSION="GE-Proton11-7"
+CURRENT_PREFIX_VERSION="GE-Proton11-11"
 
 PFX="Proton: "
 ld_path_var = "LD_LIBRARY_PATH"
@@ -356,6 +357,30 @@ def try_copy(src, dst, prefix=None, add_write_perm=True, copy_metadata=False, op
             log('Error while copying to \"' + dst + '\": ' + e.strerror)
         else:
             raise
+
+#rsync-like directory sync, deletes files at dst not present in src
+def dir_sync(dst, src):
+    if not os.path.exists(dst):
+        os.makedirs(dst)
+
+    comp = filecmp.dircmp(src, dst)
+    for f in comp.left_only + comp.diff_files:
+        s = os.path.join(src, f)
+        d = os.path.join(dst, f)
+        if os.path.isdir(s):
+            shutil.copytree(s, d)
+        else:
+            shutil.copy2(s, d, follow_symlinks=False)
+
+    for f in comp.right_only:
+        d = os.path.join(dst, f)
+        if os.path.isdir(d):
+            shutil.rmtree(d)
+        else:
+            os.remove(d)
+
+    for dir in comp.common_dirs:
+        dir_sync(os.path.join(dst, dir), os.path.join(src, dir))
 
 # copy_file_range implementation for old Python versions
 __syscall__copy_file_range = None
@@ -776,6 +801,7 @@ class CompatData:
         self.tracked_files_file = self.path("tracked_files")
         self.prefix_lock = FileLock(self.path("pfx.lock"), timeout=-1)
         self.old_machine_guid = None
+        self.steam_in_pfx_dir = "drive_c/Program Files (x86)/Steam/"
 
     def path(self, d):
         return self.base_dir + d
@@ -1212,8 +1238,7 @@ class CompatData:
             use_wined3d = "wined3d" in g_session.compat_config
             use_dxvk_dxgi = not use_wined3d and \
                     not ("WINEDLLOVERRIDES" in g_session.env and "dxgi=b" in g_session.env["WINEDLLOVERRIDES"])
-            use_nvapi = (('disablenvapi' not in g_session.compat_config or 'forcenvapi' in g_session.compat_config) and
-                        g_proton.host_pe_arch != "aarch64-windows")
+            use_nvapi = 'disablenvapi' not in g_session.compat_config or 'forcenvapi' in g_session.compat_config
             use_dxvk_d3d8 = "dxvkd3d8" in g_session.compat_config
 
             builtin_dll_copy = os.environ.get("PROTON_DLL_COPY",
@@ -1307,8 +1332,7 @@ class CompatData:
 
             with open(self.tracked_files_file, "a") as tracked_files:
                 #copy steam files into place
-                steam_in_pfx_dir = "drive_c/Program Files (x86)/Steam/"
-                makedirs(self.prefix_dir + steam_in_pfx_dir)
+                makedirs(self.prefix_dir + self.steam_in_pfx_dir)
                 filestocopy = [("steamclient.dll", "steamclient.dll"),
                                ("steamclient64.dll", "steamclient64.dll"),
                                ("GameOverlayRenderer64.dll", "GameOverlayRenderer64.dll"),
@@ -1317,7 +1341,7 @@ class CompatData:
                 for (src,tgt) in filestocopy:
                     srcfile = steam_linux_path + '/legacycompat/' + src
                     if os.path.isfile(srcfile):
-                        try_copy(srcfile, steam_in_pfx_dir + tgt, prefix=self.prefix_dir, track_file=tracked_files, link_debug=True)
+                        try_copy(srcfile, self.steam_in_pfx_dir + tgt, prefix=self.prefix_dir, track_file=tracked_files, link_debug=True)
 
                 filestocopy = [("steamclient64.dll", "steamclient64.dll"),
                                ("GameOverlayRenderer.dll", "GameOverlayRenderer.dll"),
@@ -1325,16 +1349,12 @@ class CompatData:
                 for (src,tgt) in filestocopy:
                     srcfile = g_proton.path(src)
                     if os.path.isfile(srcfile):
-                        try_copy(srcfile, steam_in_pfx_dir + tgt, prefix=self.prefix_dir, track_file=tracked_files, link_debug=True)
-
-                try:
-                    self.create_symlink(self.prefix_dir + steam_in_pfx_dir + 'appcache', steam_linux_path + '/appcache')
-                except: pass
+                        try_copy(srcfile, self.steam_in_pfx_dir + tgt, prefix=self.prefix_dir, track_file=tracked_files, link_debug=True)
 
                 # CW Bug 19152. IL-2 Sturmovik: Cliffs of Dover Blitz Edition needs user's localconfig.vdf
                 if os.environ.get("SteamGameId", 0) == "754530":
                     srcdir = os.path.join(steam_linux_path, 'userdata')
-                    dstdir = os.path.join(self.prefix_dir, steam_in_pfx_dir, 'userdata')
+                    dstdir = os.path.join(self.prefix_dir, self.steam_in_pfx_dir, 'userdata')
                     # figuring out the current user is hard, so copy the config for all users
                     for userid in os.listdir(srcdir):
                         srcvdf = os.path.join(srcdir, userid, 'config', 'localconfig.vdf')
@@ -1557,6 +1577,19 @@ class CompatData:
             # add Steam ffmpeg libraries to path
             #prepend_to_env_str(g_session.env, ld_path_var, steam_linux_path + "/ubuntu12_64/video/:" + steam_linux_path + "/ubuntu12_32/video/:" + steam_linux_path + "steamrtarm64/video/", ":")
 
+    def sync_appcache(self):
+        sgi = os.environ.get('SteamGameId', '')
+        if sgi == '':
+            return
+        steam_linux_path = os.environ["STEAM_COMPAT_CLIENT_INSTALL_PATH"]
+        dst = self.prefix_dir + self.steam_in_pfx_dir + 'appcache'
+        try:
+            os.unlink(dst)
+        except: pass
+        try:
+            dir_sync(dst + "/librarycache/" + sgi, steam_linux_path + '/appcache/librarycache/' + sgi)
+        except: pass
+
 def comma_escaped(s):
     escaped = False
     idx = -1
@@ -1574,9 +1607,6 @@ def default_compat_config():
     if "SteamAppId" in os.environ:
         appid = os.environ["SteamAppId"]
         if appid in [
-                #affected by CW bug 19741
-                "1017900", #Age of Empires: Definitive Edition
-
                 #affected by CW bug 20240
                 "1331440", #FUSER
 
@@ -1706,7 +1736,8 @@ def default_compat_config():
                 "2621010", #Simulakros Demo
                 "368500", #Assassin's Creed Syndicate
                 "1524630", #KeepUp Survival
-                "1233570",
+                "1233570", #Mirror's Edge Catalyst
+                "292030", #The Witcher 3: Wild Hunt - Remastered
                 ]:
             try:
                 with open('/proc/modules') as f:
@@ -1756,7 +1787,6 @@ def default_compat_config():
                 "1026680", #FINAL FANTASY VIII - REMASTERED
                 "3513350", #Wuthering Waves
                 "3837340", #FINAL FANTASY VII
-                "337000", #Deus Ex: Mankind Divided
                 ]:
             ret.add("noxalia")
 
@@ -1869,39 +1899,24 @@ class Session:
             if umu_id.startswith("umu-") and umu_id[4:].isdigit():
                 appid = umu_id[4:]
 
-        # These games "support" PS controller input but only provide Xbox icons
-        # It's better to remap PS hidraw to xinput to mimic xbox on these games.
-        # If we use native PS mappings that the game detects, the mappings are wrong.
-        # When forcing xinput and remapping internally, mappings are correct
-        # Even then, AC II still needs manual remapping of axby in-game. The rest are ok
+        # Castlevania caches its playable devices at startup, even though it keeps
+        # polling XInput. Keep player 1 available across controller replacements.
+        if appid == "1018010":  # Castlevania Anniversary Collection
+            self.env["PROTON_XINPUT_PERSISTENT_PLAYER1"] = "1"
+
+        # Diablo IV supports native DualSense, but does not recognize the Edge PID.
+        # Winebus leaves Steam Input and the physical audio/haptics identity intact.
+        if appid == "2344520":  # Diablo IV
+            self.env.setdefault("PROTON_SONY_DUALSENSE_EDGE_AS_DUALSENSE", "1")
+
+        # These games support native Sony controllers without Steam Input, but
+        # also assign the automatic XInput fallback to a player slot. Sackboy
+        # puts the DualSense on player two; Rune Factory 4 Special scrambles DS4 input.
         if appid in [
-                "15100",   # Assassin's Creed
-                "33230",   # Assassin's Creed II
-                "260210",  # Assassin's Creed: Liberation HD
-                "368500",  # Assassin's Creed Syndicate
-                "201870",  # Assassin's Creed: Revelations
-                "277590",  # Assassin's Creed Freedom Cry
-                "311560",  # Assassin's Creed Rogue
-                "289650",  # Assassin's Creed Unity
-                "242050",  # Assassin's Creed IV: Black Flag
-                "354380",  # Assassin's Creed Chronicles: China
-                "359610",  # Assassin's Creed Chronicles: India
-                "359600",  # Assassin's Creed Chronicles: Russia
-                "582660",  # Black Desert Online
-                "814380",  # Sekiro
-                "287290",  # Resident Evil Revelations 2
-                "1364780",  # Street Fighter 6
-                "1446780",  # Monster Hunter Rise
-                "345350",  # FINAL FANTASY XIII: Lightning Returns
-                "1685750",  # Capcom Fighting Collection
-                "2400430",  # Capcom Fighting Collection 2
-                "2634890",  # MARVEL vs. CAPCOM Fighting Collection: Arcade Classics
-                "586200",  # Street Fighter 30th Anniversary Collection
-                "1003590",  # Tetris Effect: Connected
-                "1665460",  # eFootball
-                "1222690",  # Dragon Age Inquisition
+                "1599660",  # Sackboy: A Big Adventure (#843)
+                "1580240",  # Rune Factory 4 Special (#843)
                 ]:
-            self.env["PROTON_SONY_HIDRAW_XINPUT"] = "1"
+            self.env.setdefault("PROTON_SONY_AUTO_XINPUT", "0")
 
         # These games have perfect DS4 mappings, but do not support DS5/DS5 Edge.
         # In this case we fake a DS4 controller for perfect button mappings and icons
@@ -1913,7 +1928,6 @@ class Session:
                 "1174180",  # Red Dead Redemption 2
                 "1190460",  # Death Stranding
                 "1593500",  # God of War (2018)
-                "1151640",  # Horizon Zero Dawn Complete Edition
                 "1172710",  # Dune Awakening
                 "731490",  # Crash Bandicoot N'Sane Trilogy
                 "253230",  # A Hat in Time
@@ -1936,6 +1950,7 @@ class Session:
                 # rjbs91 claims it has proper button mappings and glyphs.
                 "606880",  # Greedfall
                 "570940",  # Dark Souls Remastered
+                "278080", # Dynasty Wariors 8: Xtreme Legends Complete Edition
                 ]:
             self.env["PROTON_SONY_DUALSENSE_AS_DUALSHOCK4"] = "1"
 
@@ -1946,20 +1961,6 @@ class Session:
                 "612880",  # Wolfenstein II: The New Colossus
                 ]:
             self.env["PROTON_SONY_DUALSHOCK4_V2_AS_V1"] = "1"
-
-        # These games rely on Steam Input action manifests. Expose XInput through
-        # lsteamclient's standalone Steam Input implementation. The fallback detects
-        # the current controller layout itself and updates it across hotplug events.
-        if appid in [
-                "2246340", # Monster Hunter Wilds
-                "1151640", # Horizon Zero Dawn Complete Edition
-                "2322010", # God of War Ragnarok
-                "1034860",  # Grandia
-                "330390",  # Grandia II
-                "3255380",  # Lunar
-                ]:
-            self.env["PROTON_SONY_HIDRAW_XINPUT"] = "1"
-            self.env["PROTON_STEAMINPUT_FALLBACK"] = "1"
 
         # Work around quirk caused by our Dynamic exe relocation patch
         if appid in [
@@ -2011,6 +2012,12 @@ class Session:
                 ]:
             self.env["WINE_HIDE_AMD_GPU"] = "1"
 
+        if "WINE_HIDE_AMD_CPU" not in self.env and appid in [
+                    "17300",
+                    "17340",
+                ]:
+            self.env["WINE_HIDE_AMD_CPU"] = "1"
+
         if "WINE_DISABLE_GAMESCOPE_MAX_SIZE_HACK" not in self.env and appid in [
                     "3754990",
                     "3495730"
@@ -2037,6 +2044,7 @@ class Session:
         if "PROTON_USE_WOW64" not in self.env and "SteamGameId" in self.env:
             if self.env["SteamGameId"] in [
                     "747920", # Hero Plus
+                    "4005300", # Dating 4 Girls
                     ]:
                 self.env["PROTON_USE_WOW64"] = "1"
 
@@ -2286,6 +2294,7 @@ class Session:
         self.check_environment("PROTON_ENABLE_WAYLAND", "wayland")
         self.check_environment("PROTON_USE_WAYLAND", "wayland")
         self.check_environment("PROTON_PREFER_SDL", "sdlinput")
+        self.check_environment("PROTON_ENABLE_WINEBTH", "winebth")
         self.check_environment("PROTON_USE_SDL", "sdlinput")
 
         # Sony controllers need hidraw to feed the XInput-backed Steam Input
@@ -2298,7 +2307,6 @@ class Session:
         self.check_environment("PROTON_NATIVE_AGS", "nativeags")
         self.check_environment("PROTON_FSR3_UPGRADE", "fsr3")
         self.check_environment("PROTON_FSR4_UPGRADE", "fsr4")
-        self.check_environment("PROTON_FSR4_RDNA3_UPGRADE", "fsr4rdna3")
         self.check_environment("PROTON_FSR4_INDICATOR", "fsr4hud")
         self.check_environment("PROTON_DLSS_UPGRADE", "dlss")
         self.check_environment("PROTON_DLSS_INDICATOR", "dlsshud")
@@ -2306,6 +2314,8 @@ class Session:
         self.check_environment("PROTON_USE_OPTISCALER", "optiscaler")
 
         self.check_environment("PROTON_NATIVE_AGS", "nativeags")
+        # Legacy overrides only; HDR detection no longer requires either flag.
+        # Preserve PROTON_USE_HDR precedence when both aliases are set.
         self.check_environment("PROTON_ENABLE_HDR", "hdr")
         self.check_environment("PROTON_USE_HDR", "hdr")
         self.check_environment("PROTON_NO_NTSYNC", "nontsync")
@@ -2420,6 +2430,7 @@ class Session:
                 "1051200", #Trover Saves the Universe
                 "285190", #Warhammer 40,000: Dawn of War III
                 "1133320", #Westworld Awakening
+                "522020", #Blue Effect VR
                 ]:
             self.env["OPENSSL_ia32cap"] = "~0x20000000"
 
@@ -2431,6 +2442,10 @@ class Session:
                 "4249150", #Breath of Fire IV
                 ]:
             self.dlloverrides["ddraw"] = "n,b"
+
+        # winebth.sys is disabled by default (see above); BLE apps such as Zwift opt in.
+        if "winebth" in self.compat_config:
+            self.dlloverrides.pop("winebth.sys", None)
 
         # CW Bug 26050
         if os.environ.get("SteamGameId", 0) == "3780660":
@@ -2545,8 +2560,14 @@ class Session:
             if "SDL_GAMECONTROLLER_IGNORE_DEVICES" in self.env:
                 del self.env["SDL_GAMECONTROLLER_IGNORE_DEVICES"]
 
+        # Leave DXVK_HDR unset by default: shared DXGI detects HDR for DX11/DX12
+        # from Wine Wayland output state or Gamescope XWayland feedback.
+        # Retain legacy opt-ins/opt-outs without changing the display driver.
         if "hdr" in self.compat_config:
             self.env["DXVK_HDR"] = "1"
+        elif "PROTON_ENABLE_HDR" in self.env or "PROTON_USE_HDR" in self.env:
+            self.env["DXVK_HDR"] = "0"
+            self.env["DXVK_NO_HDR"] = "1"
 
         if "fnad3d11" in self.compat_config and "FNA3D_FORCE_DRIVER" not in self.env:
             self.env["FNA3D_FORCE_DRIVER"] = "D3D11"
@@ -2567,6 +2588,10 @@ class Session:
 
         if "__GLVND_DISALLOW_PATCHING" not in self.env:
             self.env["__GLVND_DISALLOW_PATCHING"] = "1"
+
+        # Keep native Sony HID available; XInput withdraws only its automatic
+        # fallback when this process consumes native input or Steam Input owns it.
+        self.env.setdefault("PROTON_SONY_AUTO_XINPUT", "1")
 
         if (os.environ.get("SteamGameId", 0) == "1183470"): # Imperiums: Greek Wars
             self.env.setdefault("WINE_MONO_HIDETYPES", "1")
@@ -2731,6 +2756,7 @@ class Session:
 
         if update_prefix_files:
             g_compatdata.setup_prefix()
+        g_compatdata.sync_appcache()
 
         if "fsr4hud" in self.compat_config:
             self.env["FSR_WATERMARK"] = "1"
@@ -2786,6 +2812,7 @@ class Session:
         append_to_env_str(self.env, "WINEDLLOVERRIDES", s, ";")
 
         if platform.machine() == 'aarch64':
+            self.env.setdefault("FEX_DISKCACHE", "1")
             if os.environ.get("SteamGameId", 0) == "1167630": # Teardown
                 # https://github.com/microsoft/mimalloc/issues/958
                 self.env["MIMALLOC_DISABLE_REDIRECT"] = "1"
