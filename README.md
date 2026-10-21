@@ -62,9 +62,17 @@ https://github.com/user-attachments/assets/42438b93-5a36-4557-8a0f-4b65b53d5e07
 ## 安装
 
 1. 从 [Releases](https://github.com/SHORiN-KiWATA/we-proton/releases) 下载 `we-proton-<版本>.tar.xz`
-2. 解压到启动器的 Proton 目录：
-   - Steam：`~/.local/share/Steam/compatibilitytools.d/`
-   - Lutris、Heroic 等：Steam 的或者以及各自的 Proton / runner 目录
+2. 用 `tar` 解压到启动器的 Proton 目录，以 Steam 为例：
+
+   ```
+   mkdir -p ~/.local/share/Steam/compatibilitytools.d
+   tar -xf we-proton-<版本>.tar.xz -C ~/.local/share/Steam/compatibilitytools.d/
+   ```
+
+   Lutris、Heroic 也能识别 Steam 目录里的 Proton，直接用上面的命令即可；也可以把 `-C` 后面换成它们自己的 Proton 目录。
+
+   > 不要用 7-Zip 解压。包里很多 DLL 是符号链接，新版 7-Zip 会把它们当成危险路径跳过，解出来是空文件，前缀会坏掉，各种程序莫名报错。如果解压时出现过 `Dangerous link path was ignored`，请删掉解压出的目录，用上面的命令重新解压，再把用它建过的前缀也删掉重建。
+
 3. 在启动器里选 `we-proton-<版本>`。wegame-launcher 默认自动使用找到的最新 WE-Proton，也可以手动选择：在图形界面的「设置 → 运行器」里选，或者运行
 
    ```
