@@ -1,0 +1,16 @@
+GetWindowBand=7B88A970 NtUserGetWindowBand=7B4B16CC
+top-level hidden             hwnd=0001005A  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+top-level visible            hwnd=00020056  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+topmost popup                hwnd=0001007A  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+layered transparent overlay  hwnd=0001007C  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+child                        hwnd=0001007E  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+owned popup                  hwnd=00010082  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+message-only                 hwnd=00010080  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+desktop                      hwnd=00010020  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+message parent               hwnd=00010028  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+Shell_TrayWnd                hwnd=00030038  user32: ret=1 band=0x1 err=51966  win32u: ret=1 band=0x1 err=51966
+Progman                      hwnd=00000000  user32: ret=0 band=0xdeadbeef err=1400  win32u: ret=0 band=0xdeadbeef err=1400
+console                      hwnd=00000000  user32: ret=0 band=0xdeadbeef err=1400  win32u: ret=0 band=0xdeadbeef err=1400
+NULL                         hwnd=00000000  user32: ret=0 band=0xdeadbeef err=1400  win32u: ret=0 band=0xdeadbeef err=1400
+invalid 0x12345              hwnd=00012345  user32: ret=0 band=0xdeadbeef err=1400  win32u: ret=0 band=0xdeadbeef err=1400
+destroyed                    hwnd=0001005A  user32: ret=0 band=0xdeadbeef err=1400  win32u: ret=0 band=0xdeadbeef err=1400

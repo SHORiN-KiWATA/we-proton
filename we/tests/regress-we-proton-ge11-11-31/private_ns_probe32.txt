@@ -1,0 +1,76 @@
+elevated=0
+[parent] bd name only                                   version=1 items=1 total=48 flags=0: 00000001 0000001a 00650057 00720050 0062006f 002d0065 00000031 00000000
+[parent] AddSID(BA) ret=1 pointer changed
+[parent] bd + BA                                        version=1 items=2 total=72 flags=0: 00000001 0000001a 00650057 00720050 0062006f 002d0065 00000031 00000000 00000002 00000018 00000201 05000000 00000020 00000220
+[parent] bd + BA + World                                version=1 items=3 total=96 flags=0: 00000001 0000001a 00650057 00720050 0062006f 002d0065 00000031 00000000 00000002 00000018 00000201 05000000 00000020 00000220 00000002 00000018 00000101 01000000 00000000 00000000
+[parent] AddIntegrityLabel(medium) ret=1
+[parent] bd + BA + World + IL                           version=1 items=4 total=120 flags=0: 00000001 0000001a 00650057 00720050 0062006f 002d0065 00000031 00000000 00000002 00000018 00000201 05000000 00000020 00000220 00000002 00000018 00000101 01000000 00000000 00000000 00000003 00000018 00000101 10000000 00002000 00000000
+[parent] bd empty name                                  NULL
+[parent] bd flags 1                                     version=1 items=1 total=32 flags=0x1: 00000001 0000000a 00000058 00000000
+[parent] bd A version "abc"                             version=1 items=1 total=32 flags=0: 00000001 0000000e 00620061 00000063
+[parent] Create(B1, "P")                                ok   err=3735928559 type=Directory name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544"
+[parent] Create(B1, "P") again                          NULL err=183
+[parent] Create(B1, "Q")                                NULL err=183
+[parent] Open(B1, "Q")                                  ok   err=3735928559 type=Directory name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544"
+[parent] CreateMutex "P\m"                              ok   err=0 type=Mutant name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\m"
+[parent] CreateMutex "Q\m"                              ok   err=183 type=Mutant name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\m"
+[parent] OpenMutex "p\m" (alias in lower case)          ok   err=3735928559 type=Mutant name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\m"
+[parent] OpenMutex "P\M"                                NULL err=2
+[parent] CreateMutex "Z\m" (no such alias)              NULL err=3
+[parent] CreateMutex "P\sub\m"                          NULL err=3
+[parent] CreateMutex "P\"                               ok   err=0 type=Mutant name=""
+[parent] CreateMutex "Global\P\m"                       NULL err=3
+[parent] CreateMutex "Local\P\m"                        NULL err=3
+[parent] CreateMutexA "P\ma"                            ok   err=0 type=Mutant name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\ma"
+[parent] OpenMutexA "P\m"                               ok   err=3735928559 type=Mutant name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\m"
+[parent] CreateEvent "P\e"                              ok   err=0 type=Event name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\e"
+[parent] OpenEvent "P\e"                                ok   err=3735928559 type=Event name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\e"
+[parent] CreateSemaphore "P\s"                          ok   err=0 type=Semaphore name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\s"
+[parent] CreateWaitableTimer "P\t"                      ok   err=0 type=Timer name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\t"
+[parent] CreateFileMapping "P\f"                        ok   err=0 type=Section name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\f"
+[parent] OpenFileMapping "P\f"                          ok   err=3735928559 type=Section name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\f"
+[parent] CreateJobObject "P\j"                          ok   err=0 type=Job name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\j"
+[parent] CreateMutex "P" (alias alone)                  ok   err=0 type=Mutant name="\Sessions\1\BaseNamedObjects\P"
+[child] Create(B1, "C") from child                     NULL err=183
+[child] Open(B1, "C") from child                       ok   err=3735928559 type=Directory name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544"
+[child] OpenMutex "C\m"                                ok   err=3735928559 type=Mutant name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\m"
+[child] CreateMutex "C\m"                              ok   err=183 type=Mutant name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\m"
+[child] CreateMutex "C\child"                          ok   err=0 type=Mutant name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\child"
+[child] OpenMutex "P\m" (alias of the parent)          NULL err=2
+[parent] OpenMutex "P\child" while the child runs       ok   err=3735928559 type=Mutant name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\child"
+[parent] Create(B1 lower-case name, "L")                ok   err=3735928559 type=Directory name="\PrivateNamespaces\weprobe-1;S-1-5-32-544"
+[parent] Create(name, World, "R")                       ok   err=3735928559 type=Directory name="\PrivateNamespaces\WeProbe-1;S-1-1-0"
+[parent] CreateMutex "R\m"                              ok   err=0 type=Mutant name="\PrivateNamespaces\WeProbe-1;S-1-1-0\m"
+[parent] Create(name, BA+World, "S")                    ok   err=3735928559 type=Directory name="\PrivateNamespaces\WeProbe-1;S-1-1-0;S-1-5-32-544"
+[parent] Create(name, no SID, "T0")                     ok   err=3735928559 type=Directory name="\PrivateNamespaces\WeProbe-1"
+[parent] Create(name, World+BA, "T")                    NULL err=183
+[parent] Create(name, BA, flags 1, "U")                 NULL err=183
+[parent] Create(name, BA+IL, "V")                       ok   err=3735928559 type=Directory name="\PrivateNamespaces\WeProbe-1;IL:S-1-16-8192;S-1-5-32-544"
+[parent] Create(other name, BA, "W")                    ok   err=3735928559 type=Directory name="\PrivateNamespaces\WeProbe-2;S-1-5-32-544"
+[parent] Open(no such boundary, "X")                    NULL err=3
+[parent] Create(B4 with SD, "SD")                       ok   err=3735928559 type=Directory name="\PrivateNamespaces\WeProbe-4;S-1-5-32-544"
+[parent] CreateMutex "SD\m"                             ok   err=0 type=Mutant name="\PrivateNamespaces\WeProbe-4;S-1-5-32-544\m"
+[parent] Create(B5, NULL alias)                         ok   err=3735928559 type=Directory name="\PrivateNamespaces\WeProbe-5;S-1-5-32-544"
+[parent] Create(B6, "" alias)                           NULL err=52
+[parent] Create(B7, "a\b" alias)                        ok   err=3735928559 type=Directory name="\PrivateNamespaces\WeProbe-7;S-1-5-32-544"
+[parent] CreateMutex "a\b\m"                            ok   err=0 type=Mutant name="\PrivateNamespaces\WeProbe-7;S-1-5-32-544\m"
+[parent] Create(B8, no SID, "N")                        ok   err=3735928559 type=Directory name="\PrivateNamespaces\WeProbe-8"
+[parent] CreateMutex "N\m"                              ok   err=0 type=Mutant name="\PrivateNamespaces\WeProbe-8\m"
+[parent] CreatePrivateNamespaceA(B9, "PA")              ok   err=3735928559 type=Directory name="\PrivateNamespaces\WeProbe-9;S-1-5-32-544"
+[parent] CreateMutex "PA\m"                             ok   err=0 type=Mutant name="\PrivateNamespaces\WeProbe-9;S-1-5-32-544\m"
+[parent] Create(other name, BA, "P")                    NULL err=52
+[parent] OpenMutex "P\m" (two namespaces named P)       ok   err=3735928559 type=Mutant name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\m"
+[parent] CreateMutex "P\new"                            ok   err=0 type=Mutant name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\new"
+[parent] Close(second P, 0) ret=0
+[parent] OpenMutex "P\m" after closing the second P     ok   err=3735928559 type=Mutant name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\m"
+[parent] Close(K, 0) ret=1
+[parent] CreateMutex "K\m" after closing K              NULL err=3
+[parent] Close(P, 0) ret=1
+[parent] OpenMutex "Q\m" (Q still open)                 ok   err=3735928559 type=Mutant name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\m"
+[parent] Create(B1, "P2") after closing P               NULL err=183
+[parent] Open(B1, "P3")                                 ok   err=3735928559 type=Directory name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544"
+[parent] Close(P3, DESTROY) ret=1 err=3735928559
+[parent] Open(B1, "P4") after DESTROY                   ok   err=3735928559 type=Directory name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544"
+[parent] OpenMutex "Q\m" after DESTROY                  ok   err=3735928559 type=Mutant name="\PrivateNamespaces\WeProbe-1;S-1-5-32-544\m"
+[parent] Create(B1, "P5") after DESTROY                 NULL err=183
+[parent] OpenMutex "P5\m" (m1 still open)               NULL err=3
