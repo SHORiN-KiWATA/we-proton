@@ -65,6 +65,8 @@
 | `wine/0056-win32u-Report-the-previous-foreground-thread-in-WM_A` | `WM_ACTIVATEAPP(TRUE)` 的 lParam 报上一个前台窗口的线程（前台原来不在 Wine 里时报桌面线程），取代 GE-Proton `game-patches/0001` 报收消息线程自己的做法；`set_foreground_window()` 经 `set_active_window()` 的最后一个参数传下来 |
 | `wine/0059-win32u-Keep-top-level-windows-in-place-when-the-virt` | 虚拟屏原点（主显示器左上角）变化时，桌面窗口把所有没最小化的顶层窗口平移同样的量，旧原点取自桌面窗口自己的矩形；原来窗口矩形不动、X 窗口也不动，左边屏上的窗口会被算到虚拟屏外面而撤掉 |
 | `wine/0060-user32-Implement-ShutdownBlockReasonCreate-Query-Des` | `ShutdownBlockReasonCreate/Query/Destroy`：原因存成窗口属性，参数检查和错误码照 Windows 11 实测（只限顶层窗口、空原因 87、无效窗口 1400、桌面窗口返回 5），导出原来缺的 Query |
+| `wine/0062-nsiproxy-Ignore-stale-Unix-network-interface-entries` | 过滤已失效的 Unix 接口缓存身份，见 [报告](fixes/0062-nsiproxy-live-interfaces/README.md) |
+| `wine/0063-nsiproxy-Reuse-interface-translations-within-a-route` | 复用单次路由枚举内的接口转换，修复 0062 的性能回退，见 [报告](fixes/0063-route-interface-cache/README.md) |
 | `protonfixes/0051-protonfixes-Also-run-fixes-for-run-when-PROTONFIXES_` | 设了 `PROTONFIXES_RUN_VERB=1` 时，用 `proton run` 启动的程序也执行 protonfixes（`waitforexitandrun` 要先等 wineserver 退出，往运行中的会话里加程序只能用 `run`）；`PROTONFIXES_DISABLE` 仍然优先 |
 | `vkd3d-proton/we-0001-Iterate-frozen-loop-break-rewrites-until-no-frozen-loop` | dxil-spirv 生成非法的结构化控制流 |
 | `vkd3d-proton/0002-vkd3d-bound-present-waits-during-swapchain-drain` | （这一版没有：GE-Proton 直接带着原版）（GE）销毁交换链时等待呈现有上限，不再卡死 |
@@ -75,6 +77,10 @@
 GE-Proton 主线在正式版之前的一部分修复会提前搬过来，放在 GE 自己的补丁目录里，见 `we/ge-backports.md`。
 
 0003、0016、0023 在换到 GE-Proton 底座时改过（0049、0050、0052–0056、0059、0060 是换底座之后新加的）：0003 改到 GE-Proton 新的 SIGSYS 处理函数里；0016 修了一处 `-Werror` 下报错的格式串；0023 和 GE-Proton 覆盖层窗口的条件合并。
+
+## 可选的共享网络入口
+
+[网络集成说明](network-integration/README.md)介绍如何调用现有 shorin-proton-wrapper，让原生 Steam 及标准子进程加入加速器网络。入口单独使用，不自动覆盖系统 Steam 命令；配置、接口修复原理与验证范围见该目录。
 
 ## 测试
 
