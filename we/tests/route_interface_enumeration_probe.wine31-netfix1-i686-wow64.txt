@@ -1,0 +1,186 @@
+ProtonFixes[38] WARN: Skipping fix execution. We are probably running a unit test.
+Proton: Upgrading prefix from None to GE-Proton11-11 (/test/prefix/)
+ProtonFixes[38] WARN: Skipping fix execution. We are probably running a unit test.
+Proton: Executable is inside wine prefix, launching normally.
+wineserver: using server-side synchronization.
+Failed to open /etc/machine-id, error No such file or directory.
+READY pid=32
+BEGIN phase=initial
+MAP name=RouteTapA error=0 index_error=0 index=2 luid=6000002000000
+MAP name=RouteTapB error=0 index_error=0 index=3 luid=6000003000000
+STATUS query=v4 error=0
+ROUTE query=v4 family=4 id=1 index=2 luid=6000002000000 metric=101 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=2 index=3 luid=6000003000000 metric=102 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=3 index=2 luid=6000002000000 metric=103 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=4 index=3 luid=6000003000000 metric=104 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=5 index=2 luid=6000002000000 metric=105 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=6 index=3 luid=6000003000000 metric=106 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=7 index=2 luid=6000002000000 metric=107 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=8 index=3 luid=6000003000000 metric=108 prefix=32 next_zero=1
+STATUS query=v6 error=0
+ROUTE query=v6 family=6 id=1 index=2 luid=6000002000000 metric=201 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=2 index=3 luid=6000003000000 metric=202 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=3 index=2 luid=6000002000000 metric=203 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=4 index=3 luid=6000003000000 metric=204 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=5 index=2 luid=6000002000000 metric=205 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=6 index=3 luid=6000003000000 metric=206 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=7 index=2 luid=6000002000000 metric=207 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=8 index=3 luid=6000003000000 metric=208 prefix=128 next_zero=1
+STATUS query=both error=0
+ROUTE query=both family=4 id=1 index=2 luid=6000002000000 metric=101 prefix=32 next_zero=1
+ROUTE query=both family=4 id=2 index=3 luid=6000003000000 metric=102 prefix=32 next_zero=1
+ROUTE query=both family=4 id=3 index=2 luid=6000002000000 metric=103 prefix=32 next_zero=1
+ROUTE query=both family=4 id=4 index=3 luid=6000003000000 metric=104 prefix=32 next_zero=1
+ROUTE query=both family=4 id=5 index=2 luid=6000002000000 metric=105 prefix=32 next_zero=1
+ROUTE query=both family=4 id=6 index=3 luid=6000003000000 metric=106 prefix=32 next_zero=1
+ROUTE query=both family=4 id=7 index=2 luid=6000002000000 metric=107 prefix=32 next_zero=1
+ROUTE query=both family=4 id=8 index=3 luid=6000003000000 metric=108 prefix=32 next_zero=1
+ROUTE query=both family=6 id=1 index=2 luid=6000002000000 metric=201 prefix=128 next_zero=1
+ROUTE query=both family=6 id=2 index=3 luid=6000003000000 metric=202 prefix=128 next_zero=1
+ROUTE query=both family=6 id=3 index=2 luid=6000002000000 metric=203 prefix=128 next_zero=1
+ROUTE query=both family=6 id=4 index=3 luid=6000003000000 metric=204 prefix=128 next_zero=1
+ROUTE query=both family=6 id=5 index=2 luid=6000002000000 metric=205 prefix=128 next_zero=1
+ROUTE query=both family=6 id=6 index=3 luid=6000003000000 metric=206 prefix=128 next_zero=1
+ROUTE query=both family=6 id=7 index=2 luid=6000002000000 metric=207 prefix=128 next_zero=1
+ROUTE query=both family=6 id=8 index=3 luid=6000003000000 metric=208 prefix=128 next_zero=1
+END phase=initial
+BEGIN phase=repeat-initial
+MAP name=RouteTapA error=0 index_error=0 index=2 luid=6000002000000
+MAP name=RouteTapB error=0 index_error=0 index=3 luid=6000003000000
+STATUS query=v4 error=0
+ROUTE query=v4 family=4 id=1 index=2 luid=6000002000000 metric=101 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=2 index=3 luid=6000003000000 metric=102 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=3 index=2 luid=6000002000000 metric=103 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=4 index=3 luid=6000003000000 metric=104 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=5 index=2 luid=6000002000000 metric=105 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=6 index=3 luid=6000003000000 metric=106 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=7 index=2 luid=6000002000000 metric=107 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=8 index=3 luid=6000003000000 metric=108 prefix=32 next_zero=1
+STATUS query=v6 error=0
+ROUTE query=v6 family=6 id=1 index=2 luid=6000002000000 metric=201 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=2 index=3 luid=6000003000000 metric=202 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=3 index=2 luid=6000002000000 metric=203 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=4 index=3 luid=6000003000000 metric=204 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=5 index=2 luid=6000002000000 metric=205 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=6 index=3 luid=6000003000000 metric=206 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=7 index=2 luid=6000002000000 metric=207 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=8 index=3 luid=6000003000000 metric=208 prefix=128 next_zero=1
+STATUS query=both error=0
+ROUTE query=both family=4 id=1 index=2 luid=6000002000000 metric=101 prefix=32 next_zero=1
+ROUTE query=both family=4 id=2 index=3 luid=6000003000000 metric=102 prefix=32 next_zero=1
+ROUTE query=both family=4 id=3 index=2 luid=6000002000000 metric=103 prefix=32 next_zero=1
+ROUTE query=both family=4 id=4 index=3 luid=6000003000000 metric=104 prefix=32 next_zero=1
+ROUTE query=both family=4 id=5 index=2 luid=6000002000000 metric=105 prefix=32 next_zero=1
+ROUTE query=both family=4 id=6 index=3 luid=6000003000000 metric=106 prefix=32 next_zero=1
+ROUTE query=both family=4 id=7 index=2 luid=6000002000000 metric=107 prefix=32 next_zero=1
+ROUTE query=both family=4 id=8 index=3 luid=6000003000000 metric=108 prefix=32 next_zero=1
+ROUTE query=both family=6 id=1 index=2 luid=6000002000000 metric=201 prefix=128 next_zero=1
+ROUTE query=both family=6 id=2 index=3 luid=6000003000000 metric=202 prefix=128 next_zero=1
+ROUTE query=both family=6 id=3 index=2 luid=6000002000000 metric=203 prefix=128 next_zero=1
+ROUTE query=both family=6 id=4 index=3 luid=6000003000000 metric=204 prefix=128 next_zero=1
+ROUTE query=both family=6 id=5 index=2 luid=6000002000000 metric=205 prefix=128 next_zero=1
+ROUTE query=both family=6 id=6 index=3 luid=6000003000000 metric=206 prefix=128 next_zero=1
+ROUTE query=both family=6 id=7 index=2 luid=6000002000000 metric=207 prefix=128 next_zero=1
+ROUTE query=both family=6 id=8 index=3 luid=6000003000000 metric=208 prefix=128 next_zero=1
+END phase=repeat-initial
+BEGIN phase=deleted-A
+MAP name=RouteTapA error=87 index_error=87 index=0 luid=0
+MAP name=RouteTapB error=0 index_error=0 index=3 luid=6000003000000
+STATUS query=v4 error=0
+ROUTE query=v4 family=4 id=2 index=3 luid=6000003000000 metric=102 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=4 index=3 luid=6000003000000 metric=104 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=6 index=3 luid=6000003000000 metric=106 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=8 index=3 luid=6000003000000 metric=108 prefix=32 next_zero=1
+STATUS query=v6 error=0
+ROUTE query=v6 family=6 id=2 index=3 luid=6000003000000 metric=202 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=4 index=3 luid=6000003000000 metric=204 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=6 index=3 luid=6000003000000 metric=206 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=8 index=3 luid=6000003000000 metric=208 prefix=128 next_zero=1
+STATUS query=both error=0
+ROUTE query=both family=4 id=2 index=3 luid=6000003000000 metric=102 prefix=32 next_zero=1
+ROUTE query=both family=4 id=4 index=3 luid=6000003000000 metric=104 prefix=32 next_zero=1
+ROUTE query=both family=4 id=6 index=3 luid=6000003000000 metric=106 prefix=32 next_zero=1
+ROUTE query=both family=4 id=8 index=3 luid=6000003000000 metric=108 prefix=32 next_zero=1
+ROUTE query=both family=6 id=2 index=3 luid=6000003000000 metric=202 prefix=128 next_zero=1
+ROUTE query=both family=6 id=4 index=3 luid=6000003000000 metric=204 prefix=128 next_zero=1
+ROUTE query=both family=6 id=6 index=3 luid=6000003000000 metric=206 prefix=128 next_zero=1
+ROUTE query=both family=6 id=8 index=3 luid=6000003000000 metric=208 prefix=128 next_zero=1
+END phase=deleted-A
+BEGIN phase=recreated-A
+MAP name=RouteTapA error=0 index_error=0 index=4 luid=6000004000000
+MAP name=RouteTapB error=0 index_error=0 index=3 luid=6000003000000
+STATUS query=v4 error=0
+ROUTE query=v4 family=4 id=1 index=4 luid=6000004000000 metric=101 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=2 index=3 luid=6000003000000 metric=102 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=3 index=4 luid=6000004000000 metric=103 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=4 index=3 luid=6000003000000 metric=104 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=5 index=4 luid=6000004000000 metric=105 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=6 index=3 luid=6000003000000 metric=106 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=7 index=4 luid=6000004000000 metric=107 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=8 index=3 luid=6000003000000 metric=108 prefix=32 next_zero=1
+STATUS query=v6 error=0
+ROUTE query=v6 family=6 id=1 index=4 luid=6000004000000 metric=201 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=2 index=3 luid=6000003000000 metric=202 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=3 index=4 luid=6000004000000 metric=203 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=4 index=3 luid=6000003000000 metric=204 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=5 index=4 luid=6000004000000 metric=205 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=6 index=3 luid=6000003000000 metric=206 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=7 index=4 luid=6000004000000 metric=207 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=8 index=3 luid=6000003000000 metric=208 prefix=128 next_zero=1
+STATUS query=both error=0
+ROUTE query=both family=4 id=1 index=4 luid=6000004000000 metric=101 prefix=32 next_zero=1
+ROUTE query=both family=4 id=2 index=3 luid=6000003000000 metric=102 prefix=32 next_zero=1
+ROUTE query=both family=4 id=3 index=4 luid=6000004000000 metric=103 prefix=32 next_zero=1
+ROUTE query=both family=4 id=4 index=3 luid=6000003000000 metric=104 prefix=32 next_zero=1
+ROUTE query=both family=4 id=5 index=4 luid=6000004000000 metric=105 prefix=32 next_zero=1
+ROUTE query=both family=4 id=6 index=3 luid=6000003000000 metric=106 prefix=32 next_zero=1
+ROUTE query=both family=4 id=7 index=4 luid=6000004000000 metric=107 prefix=32 next_zero=1
+ROUTE query=both family=4 id=8 index=3 luid=6000003000000 metric=108 prefix=32 next_zero=1
+ROUTE query=both family=6 id=1 index=4 luid=6000004000000 metric=201 prefix=128 next_zero=1
+ROUTE query=both family=6 id=2 index=3 luid=6000003000000 metric=202 prefix=128 next_zero=1
+ROUTE query=both family=6 id=3 index=4 luid=6000004000000 metric=203 prefix=128 next_zero=1
+ROUTE query=both family=6 id=4 index=3 luid=6000003000000 metric=204 prefix=128 next_zero=1
+ROUTE query=both family=6 id=5 index=4 luid=6000004000000 metric=205 prefix=128 next_zero=1
+ROUTE query=both family=6 id=6 index=3 luid=6000003000000 metric=206 prefix=128 next_zero=1
+ROUTE query=both family=6 id=7 index=4 luid=6000004000000 metric=207 prefix=128 next_zero=1
+ROUTE query=both family=6 id=8 index=3 luid=6000003000000 metric=208 prefix=128 next_zero=1
+END phase=recreated-A
+BEGIN phase=repeat-recreated
+MAP name=RouteTapA error=0 index_error=0 index=4 luid=6000004000000
+MAP name=RouteTapB error=0 index_error=0 index=3 luid=6000003000000
+STATUS query=v4 error=0
+ROUTE query=v4 family=4 id=1 index=4 luid=6000004000000 metric=101 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=2 index=3 luid=6000003000000 metric=102 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=3 index=4 luid=6000004000000 metric=103 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=4 index=3 luid=6000003000000 metric=104 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=5 index=4 luid=6000004000000 metric=105 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=6 index=3 luid=6000003000000 metric=106 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=7 index=4 luid=6000004000000 metric=107 prefix=32 next_zero=1
+ROUTE query=v4 family=4 id=8 index=3 luid=6000003000000 metric=108 prefix=32 next_zero=1
+STATUS query=v6 error=0
+ROUTE query=v6 family=6 id=1 index=4 luid=6000004000000 metric=201 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=2 index=3 luid=6000003000000 metric=202 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=3 index=4 luid=6000004000000 metric=203 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=4 index=3 luid=6000003000000 metric=204 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=5 index=4 luid=6000004000000 metric=205 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=6 index=3 luid=6000003000000 metric=206 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=7 index=4 luid=6000004000000 metric=207 prefix=128 next_zero=1
+ROUTE query=v6 family=6 id=8 index=3 luid=6000003000000 metric=208 prefix=128 next_zero=1
+STATUS query=both error=0
+ROUTE query=both family=4 id=1 index=4 luid=6000004000000 metric=101 prefix=32 next_zero=1
+ROUTE query=both family=4 id=2 index=3 luid=6000003000000 metric=102 prefix=32 next_zero=1
+ROUTE query=both family=4 id=3 index=4 luid=6000004000000 metric=103 prefix=32 next_zero=1
+ROUTE query=both family=4 id=4 index=3 luid=6000003000000 metric=104 prefix=32 next_zero=1
+ROUTE query=both family=4 id=5 index=4 luid=6000004000000 metric=105 prefix=32 next_zero=1
+ROUTE query=both family=4 id=6 index=3 luid=6000003000000 metric=106 prefix=32 next_zero=1
+ROUTE query=both family=4 id=7 index=4 luid=6000004000000 metric=107 prefix=32 next_zero=1
+ROUTE query=both family=4 id=8 index=3 luid=6000003000000 metric=108 prefix=32 next_zero=1
+ROUTE query=both family=6 id=1 index=4 luid=6000004000000 metric=201 prefix=128 next_zero=1
+ROUTE query=both family=6 id=2 index=3 luid=6000003000000 metric=202 prefix=128 next_zero=1
+ROUTE query=both family=6 id=3 index=4 luid=6000004000000 metric=203 prefix=128 next_zero=1
+ROUTE query=both family=6 id=4 index=3 luid=6000003000000 metric=204 prefix=128 next_zero=1
+ROUTE query=both family=6 id=5 index=4 luid=6000004000000 metric=205 prefix=128 next_zero=1
+ROUTE query=both family=6 id=6 index=3 luid=6000003000000 metric=206 prefix=128 next_zero=1
+ROUTE query=both family=6 id=7 index=4 luid=6000004000000 metric=207 prefix=128 next_zero=1
+ROUTE query=both family=6 id=8 index=3 luid=6000003000000 metric=208 prefix=128 next_zero=1
+END phase=repeat-recreated
