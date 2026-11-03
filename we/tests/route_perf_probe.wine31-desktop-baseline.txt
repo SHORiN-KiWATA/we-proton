@@ -1,0 +1,38 @@
+READY count=3000 index=2 luid=17000002000000 error=0
+ENUM iteration=0 milliseconds=4.096 matching=3000 total=3003 warmup=1
+ENUM iteration=1 milliseconds=3.696 matching=3000 total=3003 warmup=0
+ENUM iteration=2 milliseconds=3.778 matching=3000 total=3003 warmup=0
+ENUM iteration=3 milliseconds=3.698 matching=3000 total=3003 warmup=0
+ENUM iteration=4 milliseconds=3.641 matching=3000 total=3003 warmup=0
+ENUM iteration=5 milliseconds=3.653 matching=3000 total=3003 warmup=0
+OLD_ENUM milliseconds=161.565 error=0 total=3003
+DELETE_PROGRESS deleted=250 elapsed_ms=1448.313 batch_ms=1448.313 failures=0
+DELETE_PROGRESS deleted=500 elapsed_ms=2757.441 batch_ms=1309.127 failures=0
+DELETE_PROGRESS deleted=750 elapsed_ms=3943.041 batch_ms=1185.600 failures=0
+DELETE_PROGRESS deleted=1000 elapsed_ms=5013.152 batch_ms=1070.111 failures=0
+DELETE_PROGRESS deleted=1250 elapsed_ms=5943.270 batch_ms=930.118 failures=0
+DELETE_PROGRESS deleted=1500 elapsed_ms=6750.522 batch_ms=807.252 failures=0
+DELETE_PROGRESS deleted=1750 elapsed_ms=7430.994 batch_ms=680.472 failures=0
+DELETE_PROGRESS deleted=2000 elapsed_ms=8008.766 batch_ms=577.772 failures=0
+DELETE_PROGRESS deleted=2250 elapsed_ms=8444.961 batch_ms=436.195 failures=0
+DELETE_PROGRESS deleted=2500 elapsed_ms=8778.928 batch_ms=333.966 failures=0
+DELETE_PROGRESS deleted=2750 elapsed_ms=9019.210 batch_ms=240.282 failures=0
+DELETE_PROGRESS deleted=3000 elapsed_ms=9123.961 batch_ms=104.751 failures=0
+DELETE_TOTAL count=3000 milliseconds=9124.029 failures=0
+FINAL error=0 matching=0
+INTERFACE_METRIC error=0 metric=0
+CREATE_PROGRESS created=250 elapsed_ms=60.836 batch_ms=60.836 failures=0
+CREATE_PROGRESS created=500 elapsed_ms=161.562 batch_ms=100.726 failures=0
+CREATE_PROGRESS created=750 elapsed_ms=300.050 batch_ms=138.489 failures=0
+CREATE_PROGRESS created=1000 elapsed_ms=480.779 batch_ms=180.729 failures=0
+CREATE_PROGRESS created=1250 elapsed_ms=703.111 batch_ms=222.332 failures=0
+CREATE_PROGRESS created=1500 elapsed_ms=973.930 batch_ms=270.819 failures=0
+CREATE_PROGRESS created=1750 elapsed_ms=1285.664 batch_ms=311.734 failures=0
+CREATE_PROGRESS created=2000 elapsed_ms=1642.185 batch_ms=356.521 failures=0
+CREATE_PROGRESS created=2250 elapsed_ms=2037.642 batch_ms=395.457 failures=0
+CREATE_PROGRESS created=2500 elapsed_ms=2469.710 batch_ms=432.068 failures=0
+CREATE_PROGRESS created=2750 elapsed_ms=2951.334 batch_ms=481.624 failures=0
+CREATE_PROGRESS created=3000 elapsed_ms=3486.040 batch_ms=534.705 failures=0
+CREATE_TOTAL count=3000 milliseconds=3486.292 failures=0
+CREATED_FINAL error=0 matching=3000
+RESULT failures=0

@@ -1,0 +1,6 @@
+{
+  "prefix": "~/Games/UU-Accelerator",
+  "runner": "~/.local/share/Steam/compatibilitytools.d/YOUR-TESTED-RUNNER/proton",
+  "wrapper": "~/.local/bin/shorin-proton-wrapper",
+  "steam_real": "/usr/bin/steam"
+}
