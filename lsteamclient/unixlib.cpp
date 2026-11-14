@@ -1068,12 +1068,39 @@ char *steamclient_dos_to_unix_path( const char *src, int is_url )
     }
 
 done:
-    len = strlen( buffer ) + 1;
-    if (!(dst = (char *)malloc( len ))) return NULL;
-    memcpy( dst, buffer, len );
-
+    if (is_url || !IS_ABSOLUTE(src) || !(dst = realpath( buffer, NULL )))
+    {
+        len = strlen( buffer ) + 1;
+        if (!(dst = (char *)malloc( len ))) return NULL;
+        memcpy( dst, buffer, len );
+    }
     TRACE( "-> %s\n", debugstr_a(dst) );
     return dst;
+}
+
+char *steamclient_dos_to_unix_path_fixup_slash( const char *src, int is_url )
+{
+    const char *install_dir_env;
+    char *path, *install_path, *p;
+    size_t len;
+
+    if (!(path = steamclient_dos_to_unix_path( src, is_url ))) return path;
+    if (!(install_dir_env = getenv( "STEAM_COMPAT_INSTALL_PATH" ))) return path;
+    if (!(install_path = realpath( install_dir_env, NULL ))) return path;
+    len = strlen( install_path );
+    if (!memcmp( path, install_path, len ))
+    {
+        p = path + len;
+        if (*p == '/') ++p;
+        while (*p)
+        {
+            if (*p == '/') *p = '\\';
+            ++p;
+        }
+    }
+    free( install_path );
+    TRACE( "-> %s\n", debugstr_a(path) );
+    return path;
 }
 
 void steamclient_free_path( char *path )

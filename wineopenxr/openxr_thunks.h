@@ -27,6 +27,7 @@
 /* Functions for which we have custom implementations outside of the thunks. */
 XrResult wine_xrConvertTimeToWin32PerformanceCounterKHR(XrInstance instance, XrTime time, LARGE_INTEGER *performanceCounter);
 XrResult wine_xrConvertWin32PerformanceCounterToTimeKHR(XrInstance instance, const LARGE_INTEGER *performanceCounter, XrTime *time);
+XrResult wine_xrCreateAppConsumedSwapchainEXT(XrSession session, const XrAppConsumedSwapchainCreateInfoEXT *createInfo, XrAppConsumedSwapchainEXT *appConsumedSwapchain);
 XrResult wine_xrCreateInstance(const XrInstanceCreateInfo *createInfo, XrInstance *instance);
 XrResult wine_xrCreateSession(XrInstance instance, const XrSessionCreateInfo *createInfo, XrSession *session);
 XrResult wine_xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo *createInfo, XrSwapchain *swapchain);
@@ -37,6 +38,7 @@ XrResult wine_xrGetVulkanGraphicsDeviceKHR(XrInstance instance, XrSystemId syste
 XrResult wine_xrGetVulkanInstanceExtensionsKHR(XrInstance instance, XrSystemId systemId, uint32_t bufferCapacityInput, uint32_t *bufferCountOutput, char *buffer);
 
 #define ALL_XR_INSTANCE_FUNCS() \
+    USE_XR_FUNC(xrAcquireAppConsumedSwapchainImageEXT) \
     USE_XR_FUNC(xrAcquireSwapchainImage) \
     USE_XR_FUNC(xrAddTrackableImageDatabaseANDROID) \
     USE_XR_FUNC(xrAllocateWorldMeshBufferML) \
@@ -63,6 +65,7 @@ XrResult wine_xrGetVulkanInstanceExtensionsKHR(XrInstance instance, XrSystemId s
     USE_XR_FUNC(xrCreateAnchorSpaceANDROID) \
     USE_XR_FUNC(xrCreateAnchorSpaceBD) \
     USE_XR_FUNC(xrCreateApiLayerInstance) \
+    USE_XR_FUNC(xrCreateAppConsumedSwapchainEXT) \
     USE_XR_FUNC(xrCreateBodyTrackerBD) \
     USE_XR_FUNC(xrCreateBodyTrackerFB) \
     USE_XR_FUNC(xrCreateBodyTrackerHTC) \
@@ -156,6 +159,7 @@ XrResult wine_xrGetVulkanInstanceExtensionsKHR(XrInstance instance, XrSystemId s
     USE_XR_FUNC(xrDestroyAction) \
     USE_XR_FUNC(xrDestroyActionSet) \
     USE_XR_FUNC(xrDestroyAnchorBD) \
+    USE_XR_FUNC(xrDestroyAppConsumedSwapchainEXT) \
     USE_XR_FUNC(xrDestroyBodyTrackerBD) \
     USE_XR_FUNC(xrDestroyBodyTrackerFB) \
     USE_XR_FUNC(xrDestroyBodyTrackerHTC) \
@@ -222,6 +226,7 @@ XrResult wine_xrGetVulkanInstanceExtensionsKHR(XrInstance instance, XrSystemId s
     USE_XR_FUNC(xrEndSession) \
     USE_XR_FUNC(xrEndSpatialContainerRenderingEXT) \
     USE_XR_FUNC(xrEnumerateApiLayerProperties) \
+    USE_XR_FUNC(xrEnumerateAppConsumedSwapchainImagesEXT) \
     USE_XR_FUNC(xrEnumerateBoundSourcesForAction) \
     USE_XR_FUNC(xrEnumerateColorSpacesFB) \
     USE_XR_FUNC(xrEnumerateColorSpacesSONY) \
@@ -246,6 +251,8 @@ XrResult wine_xrGetVulkanInstanceExtensionsKHR(XrInstance instance, XrSystemId s
     USE_XR_FUNC(xrEnumerateSceneComputeFeaturesMSFT) \
     USE_XR_FUNC(xrEnumerateSpaceSupportedComponentsFB) \
     USE_XR_FUNC(xrEnumerateSpatialAnchorAttachableComponentsANDROID) \
+    USE_XR_FUNC(xrEnumerateSpatialArchetypeComponentTypesEXT) \
+    USE_XR_FUNC(xrEnumerateSpatialArchetypesEXT) \
     USE_XR_FUNC(xrEnumerateSpatialCapabilitiesEXT) \
     USE_XR_FUNC(xrEnumerateSpatialCapabilityComponentTypesEXT) \
     USE_XR_FUNC(xrEnumerateSpatialCapabilityFeaturesEXT) \
@@ -259,6 +266,7 @@ XrResult wine_xrGetVulkanInstanceExtensionsKHR(XrInstance instance, XrSystemId s
     USE_XR_FUNC(xrEnumerateSupportedSpatialContainerGraphicsPresentationsEXT) \
     USE_XR_FUNC(xrEnumerateSupportedTrackableTypesANDROID) \
     USE_XR_FUNC(xrEnumerateSwapchainFormats) \
+    USE_XR_FUNC(xrEnumerateSwapchainFormats2EXT) \
     USE_XR_FUNC(xrEnumerateSwapchainImages) \
     USE_XR_FUNC(xrEnumerateViewConfigurationViews) \
     USE_XR_FUNC(xrEnumerateViewConfigurations) \
@@ -275,6 +283,7 @@ XrResult wine_xrGetVulkanInstanceExtensionsKHR(XrInstance instance, XrSystemId s
     USE_XR_FUNC(xrGetAllTrackablesANDROID) \
     USE_XR_FUNC(xrGetAnchorPersistStateANDROID) \
     USE_XR_FUNC(xrGetAnchorUuidBD) \
+    USE_XR_FUNC(xrGetAppConsumedSwapchainPropertiesEXT) \
     USE_XR_FUNC(xrGetAudioInputDeviceGuidOculus) \
     USE_XR_FUNC(xrGetAudioOutputDeviceGuidOculus) \
     USE_XR_FUNC(xrGetBodySkeletonFB) \
@@ -434,6 +443,7 @@ XrResult wine_xrGetVulkanInstanceExtensionsKHR(XrInstance instance, XrSystemId s
     USE_XR_FUNC(xrQuerySpatialComponentDataEXT) \
     USE_XR_FUNC(xrQuerySystemTrackedKeyboardFB) \
     USE_XR_FUNC(xrRaycastANDROID) \
+    USE_XR_FUNC(xrReleaseAppConsumedSwapchainImageEXT) \
     USE_XR_FUNC(xrReleaseSwapchainImage) \
     USE_XR_FUNC(xrRemoveTrackableImageDatabaseANDROID) \
     USE_XR_FUNC(xrRequestBodyTrackingFidelityMETA) \

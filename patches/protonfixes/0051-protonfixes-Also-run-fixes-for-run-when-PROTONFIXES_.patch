@@ -1,6 +1,6 @@
-From ab4c5adf925eddc37fe86407218becf65cdd1680 Mon Sep 17 00:00:00 2001
+From 6da7e7d8ac0f3706213aaaebcb62786a1bdc07d2 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
-Date: Mon, 12 Oct 2026 04:32:09 +0900
+Date: Sat, 14 Nov 2026 23:06:20 +0900
 Subject: [PATCH] protonfixes: Also run fixes for "run" when
  PROTONFIXES_RUN_VERB=1.
 
@@ -20,12 +20,12 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  1 file changed, 9 insertions(+), 2 deletions(-)
 
 diff --git a/__init__.py b/__init__.py
-index ad1db3e..13a34aa 100644
+index 3b7ec4d..2eae31c 100644
 --- a/__init__.py
 +++ b/__init__.py
-@@ -38,15 +38,22 @@ aarch64_lib_dir: str = (
+@@ -38,14 +38,21 @@ aarch64_lib_dir: str = (
  def check_conditions() -> bool:
-     """Determine, if the actual game was executed and protonfixes isn't deactivated.
+     """Determine if the actual game was executed and protonfixes isn't deactivated.
  
 +    Games are started with "waitforexitandrun", which first waits for the
 +    prefix's wineserver to exit. "run" starts a program while the wineserver
@@ -39,7 +39,6 @@ index ad1db3e..13a34aa 100644
 -        len(sys.argv) >= 1
 +        len(sys.argv) >= 2
          and 'STEAM_COMPAT_DATA_PATH' in os.environ
-         and 'PROTONFIXES_DISABLE' not in os.environ
 -        and 'waitforexitandrun' in sys.argv[1]
 +        and (
 +            'waitforexitandrun' in sys.argv[1]

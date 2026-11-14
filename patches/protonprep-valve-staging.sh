@@ -37,14 +37,13 @@ apply_all_in_dir() {
     apply_patch "../patches/dxvk/dxgi-respect-output-hdr-state.patch"
     # Query the active output by default instead of requiring an HDR opt-in.
     apply_patch "../patches/dxvk/dxgi-auto-detect-hdr.patch"
-    # StarCraft II: avoid GPU hangs with D3D9 constant buffer streaming (#790).
-    apply_patch "../patches/dxvk/starcraft2-disable-constant-buffer-streaming.patch"
+    # StarCraft II: avoid GPU hangs with D3D9 constant buffer streaming on Navi 10 (#790, #845).
+    apply_patch "../patches/dxvk/starcraft2-disable-constant-buffer-streaming-on-navi10.patch"
     popd
 
     pushd d7vk
     git reset --hard HEAD
     git clean -xdf
-    apply_patch "../patches/d7vk/d7vk-allow-avx-with-clang.patch"
     popd
 
     pushd openvr
@@ -72,7 +71,7 @@ apply_all_in_dir() {
     pushd protonfixes
     git reset --hard HEAD
     git clean -xdf
-    echo "PROTONFIXES: add optiscaler support and DW-Proton game fixes"
+    echo "PROTONFIXES: apply GE protonfixes patches"
     apply_all_in_dir "../patches/protonfixes/"
     popd
 
@@ -102,6 +101,7 @@ apply_all_in_dir() {
         lsteamclient/Makefile.in \
         lsteamclient/gen_wrapper.py \
         lsteamclient/steam_input_manual.c \
+        lsteamclient/steam_matchmaking_manual.c \
         lsteamclient/steamclient_main.c \
         lsteamclient/steamclient_private.h \
         lsteamclient/unix_private.h \
@@ -269,7 +269,15 @@ apply_all_in_dir() {
     apply_all_in_dir "../patches/wine-hotfixes/wine-staging/winex11-Window_Style/"
 
     echo "WINE: -STAGING- wininet-Cleanup manually applied"
-    apply_all_in_dir "../wine-staging/patches/wininet-Cleanup/"
+    # Skip 0005: it makes HTTP_ADDREQ_FLAG_REPLACE fail for headers not yet
+    # present, while Windows 10 adds them. TLOU Part II adds Content-Type and
+    # Authorization that way, so its leaderboard requests were sent without
+    # them and rejected (403).
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/463
+    apply_patch "../wine-staging/patches/wininet-Cleanup/0001-wininet-tests-Add-more-tests-for-cookies.patch"
+    apply_patch "../wine-staging/patches/wininet-Cleanup/0002-wininet-tests-Test-auth-credential-reusage-with-host.patch"
+    apply_patch "../wine-staging/patches/wininet-Cleanup/0003-wininet-tests-Check-cookie-behaviour-when-overriding.patch"
+    apply_patch "../wine-staging/patches/wininet-Cleanup/0004-wininet-Strip-filename-if-no-path-is-set-in-cookie.patch"
 
     echo "WINE: -STAGING- Staging manually applied"
     apply_all_in_dir "../wine-staging/patches/Staging/"
@@ -312,6 +320,7 @@ apply_all_in_dir() {
 
     echo "WINE: -GAME FIXES- add TBH: Task Bar Hero fixes"
     apply_patch "../patches/game-patches/layered-overlay-wine.patch"
+    apply_patch "../patches/game-patches/layered-overlay-direct-present.patch"
 
     # multi-process-launcher-x11-fallback.patch is intentionally disabled.
     # Wine-Wayland now renders cross-process launcher windows directly.
@@ -435,6 +444,9 @@ apply_all_in_dir() {
     echo "WINE: -HOTFIX- Reconcile unsupported minimization on xwayland-satellite"
     apply_patch "../patches/wine-hotfixes/pending/winex11-handle-unsupported-minimization-on-satellite.patch"
 
+    echo "WINE: -HOTFIX- winex11: don't wait for the pointer grab with a sent message pending (Arknights: Endfield web view freezes the desktop)"
+    apply_patch "../patches/wine-hotfixes/pending/winex11-bound-pointer-grab-wait.patch"
+
     echo "WINE: -HOTFIX- Do not paint off-desktop minimized frames into retained host windows"
     apply_patch "../patches/wine-hotfixes/pending/server-clip-off-desktop-minimized-window-paint.patch"
 
@@ -456,6 +468,11 @@ apply_all_in_dir() {
     # https://gitlab.winehq.org/wine/wine/-/commit/f4c5b04148db5fc4e5265beec461d3b7d9f4a789
     echo "WINE: -HOTFIX- Reserve top-down space for large-address-aware WoW64 applications"
     apply_patch "../patches/wine-hotfixes/pending/ntdll-reserve-top-down-space-for-large-address-aware-wow64.patch"
+
+    # The NVIDIA driver maps 4G + 2M at the first free address from 0x200000000 for the Vulkan extensions DLSS needs;
+    # bottom-up allocation (ntdll-ForceBottomUpAlloc) can fill that range (DLSS in Star Citizen, #460).
+    echo "WINE: -HOTFIX- Keep the address range the NVIDIA driver reserves for DLSS free"
+    apply_patch "../patches/wine-hotfixes/pending/ntdll-keep-nvidia-dlss-address-range-free.patch"
 
     echo "WINE: -HOTFIX- Remove redundant packed-code split locks"
     apply_patch "../patches/wine-hotfixes/pending/ntdll-remove-redundant-packed-split-lock.patch"
@@ -545,16 +562,21 @@ apply_all_in_dir() {
     echo "WINE: --CUSTOM-- add WINE_HOSTBLOCK envvar to allow working around some problematic anticheats (notably eac)"
     apply_patch "../patches/proton/wine_host_block_envvar.patch"
 
-    echo "WINE: mutter -> cinnamon detection patch for winex11"
-    apply_patch "../patches/proton/winex11-mutter-cinnamon.patch"
-
     echo "WINE: add optiscaler patch"
     apply_patch "../patches/proton/0001-HACK-kernelbase-allow-overriding-dlls-for-DLSS-XeSS-.patch"
     apply_patch "../patches/proton/0002-HACK-ntdll-add-optiscaler-inection-hack.patch"
 
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/875
+    echo "WINE: redirect NVIDIA Streamline dlls for PROTON_STREAMLINE_UPGRADE"
+    apply_patch "../patches/proton/0003-HACK-ntdll-redirect-streamline-dlls-for-upgrade.patch"
+
     # https://github.com/GloriousEggroll/proton-ge-custom/pull/759
     echo "WINE: -PERF- read QueryPerformanceCounter from the TSC in user mode (DCS World: 39 -> 62 FPS)"
     apply_patch "../patches/proton/0001-ntdll-Read-QueryPerformanceCounter-from-the-TSC-in-us.patch"
+
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/873
+    echo "WINE: only check the kernel clocksource for QPC at start-up (P5R Reloaded-II mods crash)"
+    apply_patch "../patches/proton/0002-ntdll-Only-read-the-kernel-clocksource-for-QPC-at-start-up.patch"
 
     echo "WINE: implement IOCTL_SERIAL_GET_DTRRTS (Qt serial device tools, e.g. MOZA Cockpit)"
     apply_patch "../patches/proton/0001-ntdll-Implement-IOCTL_SERIAL_GET_DTRRTS-for-serial-dev.patch"
@@ -578,19 +600,87 @@ apply_all_in_dir() {
     echo "WINE: -HOTFIX- ntdll: skip needless wake in RtlReleaseSRWLockShared (ValveSoftware/wine#367)"
     apply_patch "../patches/wine-hotfixes/pending/ntdll-srwlock-skip-needless-shared-release-wake.patch"
 
+    # https://bugs.winehq.org/show_bug.cgi?id=60589
+    # https://gitlab.winehq.org/wine/wine/-/merge_requests/12472
+    echo "WINE: -HOTFIX- ntdll: reuse free blocks of partially used LFH groups (EVE Online heap growth)"
+    apply_patch "../patches/wine-hotfixes/pending/ntdll-heap-reuse-free-blocks-of-partially-used-lfh-groups.patch"
+
     # https://github.com/ValveSoftware/Proton/issues/8072
+    # https://bugs.winehq.org/show_bug.cgi?id=60523
     echo "WINE: -GAME FIXES- ntdll: don't leave a stale alert after a raced RtlWaitOnAddress() timeout (Space Marine 2 mid-mission crash)"
     apply_patch "../patches/wine-hotfixes/pending/ntdll-take-in-flight-alert-when-wait-on-address-times-out.patch"
+    apply_patch "../patches/wine-hotfixes/pending/ntdll-tests-wait-on-address-wake-racing-timeout.patch"
+
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/870
+    echo "WINE: -GAME FIXES- ntdll: run NCSOFT PURPLE's VMProtect-packed purple-agent.exe in new WoW64 mode (Initialization Error 1)"
+    apply_patch "../patches/wine-hotfixes/pending/ntdll-run-purple-agent-in-new-wow64-mode.patch"
+
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/870
+    echo "WINE: -GAME FIXES- cmd: make CHOICE /T time out on console input (NCSOFT PURPLE post-update restart hang)"
+    apply_patch "../patches/wine-hotfixes/pending/cmd-make-choice-timeout-work-on-console-input.patch"
 
     # https://github.com/GloriousEggroll/proton-ge-custom/issues/837
     echo "WINE: -GAME FIXES- win32u: release swapchain images presented to hidden windows instead of blocking the host present (RuneScape Vulkan on winewayland)"
     apply_patch "../patches/wine-hotfixes/pending/win32u-release-images-presented-to-hidden-windows.patch"
+
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/837
+    echo "WINE: -GAME FIXES- win32u: report B8G8R8A8_UNORM as the first surface format like Windows drivers (RuneScape washed-out colors)"
+    apply_patch "../patches/wine-hotfixes/pending/win32u-report-b8g8r8a8-unorm-surface-format-first.patch"
+
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/898
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/916
+    echo "WINE: -HDR- win32u: prefer the native HDR10/scRGB colorspace when the host supports it (oversaturated MangoHud/Steam overlay in HDR on KWin 6.8)"
+    apply_patch "../patches/wine-hotfixes/pending/win32u-prefer-native-hdr-colorspace-for-host-layers.patch"
+
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/798
+    echo "WINE: -WAYLAND- winewayland: fix win_data locking in the IME text input paths (freeze when using Fcitx5 with WAYLANDDRV_IME=1)"
+    apply_patch "../patches/wine-hotfixes/pending/winewayland-fix-win-data-locking-in-ime-text-input.patch"
+
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/908
+    echo "WINE: -WAYLAND- winewayland: don't take the USER lock under win_data from client surface callbacks, post WM_CANCELMODE on keyboard leave (Galaxy Idle Clicker freeze and exit hang)"
+    apply_patch "../patches/wine-hotfixes/pending/winewayland-avoid-user-lock-under-win-data-in-client-surface-callbacks.patch"
+
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/852
+    echo "WINE: -GAME FIXES- winewayland: advertise the OpenVR/OpenXR Vulkan device pseudo-extensions like winex11 (DXVK/vkd3d device creation fails on Wayland with an OpenXR runtime installed)"
+    apply_patch "../patches/wine-hotfixes/pending/winewayland-advertise-openvr-openxr-device-extensions.patch"
+
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/919
+    echo "WINE: -WAYLAND- winewayland: animate animated cursors (game cursors static on Wine-Wayland, The Sims 3)"
+    apply_patch "../patches/wine-hotfixes/pending/winewayland-animate-animated-cursors.patch"
+
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/899
+    echo "WINE: -GAME FIXES- rtworkq: don't hold queues_section while shutting down the system queues (MFShutdown deadlock, Kingdom Hearts 358/2 Days port hangs after the first cutscene)"
+    apply_patch "../patches/wine-hotfixes/pending/rtworkq-dont-hold-queues-section-during-system-queue-shutdown.patch"
+
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/521
+    echo "WINE: -GAME FIXES- dsound: keep the high quality resampler for any number of buffers (BGM crackles after voice lines in Liarsoft codeX RScript games)"
+    apply_patch "../patches/wine-hotfixes/pending/dsound-keep-hq-resampler-for-any-buffer-count.patch"
+
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/881
+    echo "WINE: -HOTFIX- win32u: defer destroying NVIDIA Wayland host Vulkan instances while another is alive (NVIDIA driver clears its global libwayland table, EA app crash on winewayland)"
+    apply_patch "../patches/wine-hotfixes/pending/win32u-defer-nvidia-wayland-host-instance-destroy.patch"
+
+    # https://bugs.winehq.org/show_bug.cgi?id=60417
+    # https://bugs.winehq.org/show_bug.cgi?id=60524
+    echo "WINE: -PENDING- server: abandon an ntsync mutex whose handle was closed while it was owned or in use"
+    apply_patch "../patches/wine-hotfixes/pending/server-keep-owned-ntsync-mutex-until-owner-releases-or-dies.patch"
+    apply_patch "../patches/wine-hotfixes/pending/server-keep-in-process-mutex-closed-while-in-use.patch"
+    apply_patch "../patches/wine-hotfixes/pending/kernel32-tests-abandon-mutex-acquired-after-close.patch"
 
     # Bluetooth LE GATT and WinRT BLE (Zwift, Rouvy trainers). winebth.sys stays disabled
     # unless PROTON_ENABLE_WINEBTH=1. https://github.com/GloriousEggroll/proton-ge-custom/issues/814
     # https://github.com/evanjt/wine
     echo "WINE: -HOTFIX- Add Bluetooth LE GATT and WinRT BLE support"
     apply_all_in_dir "../patches/wine-hotfixes/bluetooth-le/"
+
+    # https://github.com/jegglest/proton-je/blob/je-11.0/docs-je/killed-thread-stacks.md
+    echo "WINE: -PENDING- ntdll: free the TEB and stacks of a thread killed by another thread (Helldivers 2 memory growth)"
+    apply_patch "../patches/wine-hotfixes/pending/ntdll-free-teb-and-stacks-of-killed-threads.patch"
+    apply_patch "../patches/wine-hotfixes/pending/kernel32-tests-killed-thread-stack-freed.patch"
+
+    # https://github.com/ValveSoftware/Proton/issues/7486#issuecomment-6594771550
+    echo "WINE: -PENDING- ntdll: let a thread killed during its startup exit instead of hanging (Helldivers 2 thread growth)"
+    apply_patch "../patches/wine-hotfixes/pending/ntdll-dont-keep-reply-pipe-open-during-thread-init.patch"
 
 ### (2-8) DW-PROTON AND WE-PROTON PATCHES ###
 
