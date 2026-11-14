@@ -1,0 +1,41 @@
+From 4e66fe06106a410965178f25b548524a0d95541b Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Sun, 15 Nov 2026 03:12:38 +0900
+Subject: [PATCH] winedmo: Use frame threading for H.264 also for low-latency
+ callers.
+
+With MF_LOW_LATENCY set, the H.264 decoder only enabled slice threading.
+Slice threading parallelizes the slices of one picture, so a stream coded
+with a single slice per picture, which is common, is decoded on one
+thread whatever the thread count. 3840x2160 video at 60 frames per second
+then decodes slower than real time, and a player that drops late frames
+shows nothing.
+
+Enable frame threading as well. It delays the first output by a few
+frames, which callers already handle since the decoder returns
+MF_E_TRANSFORM_NEED_MORE_INPUT until a frame is ready.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ dlls/winedmo/unix_transform.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/winedmo/unix_transform.c b/dlls/winedmo/unix_transform.c
+index 03e51cc26c4..b0a648bb23d 100644
+--- a/dlls/winedmo/unix_transform.c
++++ b/dlls/winedmo/unix_transform.c
+@@ -950,9 +950,12 @@ NTSTATUS transform_create( void *arg )
+             int thread_count = av_cpu_count();
+ 
+             /* libavcodec defaults to one thread. Bound the worker count like
+-             * winegstreamer, without adding frame latency to low-latency callers. */
++             * winegstreamer. Frame threading is used even for low-latency
++             * callers: slice threading does nothing for streams coded with one
++             * slice per picture, which leaves high resolution, high frame rate
++             * video decoding on a single core, slower than real time. */
+             t->avctx->thread_count = max( 1, min( thread_count, sizeof(void *) == 4 ? 4 : 16 ) );
+-            t->avctx->thread_type = params->low_latency ? FF_THREAD_SLICE : FF_THREAD_SLICE | FF_THREAD_FRAME;
++            t->avctx->thread_type = FF_THREAD_SLICE | FF_THREAD_FRAME;
+         }
+         else if (is_wmv_video_codec( codec_id ))
+         {
