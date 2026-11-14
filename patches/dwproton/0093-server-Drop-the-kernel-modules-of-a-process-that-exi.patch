@@ -1,4 +1,4 @@
-From 3a02fb5278e4bed7ce10d819e870af60d767a2e5 Mon Sep 17 00:00:00 2001
+From c3c4dec7e23de108562580d75eafe259a607d5f7 Mon Sep 17 00:00:00 2001
 From: shxrrydw <sherrydrv@gmail.com>
 Date: Thu, 6 Aug 2026 17:53:39 +0200
 Subject: [PATCH] server: Drop the kernel modules of a process that exits.
@@ -38,7 +38,7 @@ index 79938845aad..25cd107b234 100644
  DECL_HANDLER(create_device_manager)
  {
 diff --git a/server/object.h b/server/object.h
-index 21f5ea88bd3..7f03289d5d4 100644
+index 90561e393fc..737e2f33b7a 100644
 --- a/server/object.h
 +++ b/server/object.h
 @@ -161,6 +161,8 @@ extern void *open_named_object( struct object *parent, const struct object_ops *
@@ -51,12 +51,12 @@ index 21f5ea88bd3..7f03289d5d4 100644
  /* that the thing pointed to starts with a struct object... */
  extern struct object *grab_object( void *obj );
 diff --git a/server/process.c b/server/process.c
-index 8fe64305e02..d161cbf8693 100644
+index e6deced750d..4f9e8bf5de3 100644
 --- a/server/process.c
 +++ b/server/process.c
-@@ -812,6 +812,7 @@ static void process_destroy( struct object *obj )
- 
+@@ -813,6 +813,7 @@ static void process_destroy( struct object *obj )
      close_process_handles( process );
+     release_kept_inproc_syncs( process );
      set_process_startup_state( process, STARTUP_ABORTED );
 +    free_kernel_modules( process );
  

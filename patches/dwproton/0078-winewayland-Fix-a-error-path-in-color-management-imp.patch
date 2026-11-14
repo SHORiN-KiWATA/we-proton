@@ -1,4 +1,4 @@
-From 1177e25bec62088a32193eca40c6d5b93352708d Mon Sep 17 00:00:00 2001
+From 126ca245defe618661592b6aaeaef87b046d25b5 Mon Sep 17 00:00:00 2001
 From: Etaash Mathamsetty
  <45927311+Etaash-mathamsetty@users.noreply.github.com>
 Date: Wed, 23 Sep 2026 05:06:13 -0500
@@ -12,10 +12,10 @@ squash later
  1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
-index 4226912b006..e9b63d864f2 100644
+index f2073c32404..969bdba2bb8 100644
 --- a/dlls/winewayland.drv/wayland_surface.c
 +++ b/dlls/winewayland.drv/wayland_surface.c
-@@ -5347,7 +5347,7 @@ static void wayland_image_description_v1_ready2(void *user_data,
+@@ -5406,7 +5406,7 @@ static void wayland_image_description_v1_ready2(void *user_data,
          if (!surface->wp_color_management_surface_v1)
          {
              ERR("Failed to create color management surface for client surface!\n");
@@ -24,7 +24,7 @@ index 4226912b006..e9b63d864f2 100644
          }
      }
      wp_color_management_surface_v1_set_image_description(
-@@ -5355,6 +5355,7 @@ static void wayland_image_description_v1_ready2(void *user_data,
+@@ -5414,6 +5414,7 @@ static void wayland_image_description_v1_ready2(void *user_data,
          wp_image_description_v1,
          WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL);
      wp_image_description_v1_destroy(wp_image_description_v1);

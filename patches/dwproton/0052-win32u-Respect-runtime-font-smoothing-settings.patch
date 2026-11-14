@@ -1,4 +1,4 @@
-From de4271a6ea74193bfca234bdc4bf369647b66701 Mon Sep 17 00:00:00 2001
+From 74fef345a21a6099b396fedcbe93a1b877878921 Mon Sep 17 00:00:00 2001
 From: Ziqing Hui <zhui@codeweavers.com>
 Date: Tue, 5 May 2026 14:44:49 +0800
 Subject: [PATCH] win32u: Respect runtime font smoothing settings.
@@ -54,10 +54,10 @@ index d9e87508b2e..f796518ac16 100644
                      *aa_flags = font_smoothing;
              }
 diff --git a/dlls/win32u/sysparams.c b/dlls/win32u/sysparams.c
-index e3e20c7e294..67b8caa489d 100644
+index 6681dc7fc50..ebbeeecddc3 100644
 --- a/dlls/win32u/sysparams.c
 +++ b/dlls/win32u/sysparams.c
-@@ -8753,3 +8753,36 @@ BOOL get_gpu_info_from_uuid( const GUID *uuid, LUID *luid, UINT32 *node_mask, ch
+@@ -8759,3 +8759,36 @@ BOOL get_gpu_info_from_uuid( const GUID *uuid, LUID *luid, UINT32 *node_mask, ch
      unlock_display_devices();
      return found;
  }

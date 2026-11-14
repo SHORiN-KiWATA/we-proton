@@ -1,4 +1,4 @@
-From f9e5dd47ccdf8d73bad2a886ef662887f19c3628 Mon Sep 17 00:00:00 2001
+From 390e0e7f7f640be53359744629a8d31c770b3134 Mon Sep 17 00:00:00 2001
 From: shxrrydw <sherrydrv@gmail.com>
 Date: Thu, 6 Aug 2026 01:36:41 +0200
 Subject: [PATCH] wine.inf.in: Add SystemStartOptions value.
@@ -9,7 +9,7 @@ App: Hololive Dreams (4282500).
  1 file changed, 1 insertion(+)
 
 diff --git a/loader/wine.inf.in b/loader/wine.inf.in
-index f8acd4ed77a..36881d376b4 100644
+index e2f8f6b3927..f785b55725c 100644
 --- a/loader/wine.inf.in
 +++ b/loader/wine.inf.in
 @@ -471,6 +471,7 @@ HKLM,Software\Microsoft\DirectPlay\Service Providers\Serial Connection For Direc

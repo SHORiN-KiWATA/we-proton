@@ -1,4 +1,4 @@
-From 7cc5b5fd9b77987386e67c511b5ccdbbbce7fd12 Mon Sep 17 00:00:00 2001
+From 01f4764dc92c4e34447114509563028f52093b28 Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Tue, 21 Apr 2026 12:38:57 +0200
 Subject: [PATCH] ntdll: Make futex spinlock adaptive.
@@ -9,10 +9,10 @@ Subject: [PATCH] ntdll: Make futex spinlock adaptive.
  1 file changed, 17 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/ntdll/sync.c b/dlls/ntdll/sync.c
-index 634830d1794..0ddd25cb2ad 100644
+index 24d025529a3..4a8f36ccc3f 100644
 --- a/dlls/ntdll/sync.c
 +++ b/dlls/ntdll/sync.c
-@@ -849,8 +849,24 @@ static struct futex_queue *get_futex_queue( const void *addr )
+@@ -846,8 +846,24 @@ static struct futex_queue *get_futex_queue( const void *addr )
  
  static void spin_lock( LONG *lock )
  {

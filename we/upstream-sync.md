@@ -15,7 +15,7 @@
 | 层 | 在哪里 | 说明 |
 |---|---|---|
 | GE-Proton | 整个仓库（顶层历史就是 GE-Proton 的）、`patches/` 下除了下面两个目录之外的全部、`patches/protonprep-valve-staging.sh` | 底座。构建前 protonprep 往 Valve 的 Wine 上打 GE-Proton 的补丁和 wine-staging |
-| DW-Proton | `patches/dwproton/`（Wine 补丁）、`patches/protonfixes/0003`–`0006`、`7zip` 子模块和 `Makefile.in` 里的 7zip 段 | DW-Proton 有、GE-Proton 没有的东西。当前合入的 DW-Proton 版本写在 `we/dw-proton-version` |
+| DW-Proton | `patches/dwproton/`（Wine 补丁）、`patches/protonfixes/0004`–`0007`、`7zip` 子模块和 `Makefile.in` 里的 7zip 段 | DW-Proton 有、GE-Proton 没有的东西。当前合入的 DW-Proton 版本写在 `we/dw-proton-version` |
 | WE-Proton | `patches/wine/`（编号就是 WE-Proton 的补丁号）、`patches/vkd3d-proton/we-*.patch`、`we/` | 自己的修复 |
 
 protonprep 在 `make_requests` 之前依次打 `patches/dwproton/` 和 `patches/wine/`（那一段叫 `(2-8) DW-PROTON AND WE-PROTON PATCHES`）。

@@ -1,4 +1,4 @@
-From 827daff281678c4c94e4e4998ff4579cef2a612f Mon Sep 17 00:00:00 2001
+From 862413ed0fe5e8ba22a57384d6ddbd6a070a9f79 Mon Sep 17 00:00:00 2001
 From: shxrrydw <sherrydrv@gmail.com>
 Date: Sun, 26 Apr 2026 23:18:43 +0200
 Subject: [PATCH] HACK: winex11: Skip rendering some overlay windows.
@@ -12,7 +12,7 @@ App: Neverness to Everness (4508340).
  1 file changed, 14 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 942639c116c..b14cbb4ce42 100644
+index 5379bcf0d8b..4fdc81aa65a 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -1812,6 +1812,16 @@ static BOOL window_minimize_unsupported( struct x11drv_win_data *data )

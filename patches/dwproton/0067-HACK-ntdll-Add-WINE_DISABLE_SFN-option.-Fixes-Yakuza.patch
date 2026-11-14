@@ -1,4 +1,4 @@
-From f353b7c29b5ff639b0204809c7086ccd4ec3f1dc Mon Sep 17 00:00:00 2001
+From b20c6041b9704ca463b21e62680051cdaf7ba2be Mon Sep 17 00:00:00 2001
 From: Pedro Nishiyama <nishiyama.v3@gmail.com>
 Date: Mon, 20 Nov 2023 02:37:07 -0300
 Subject: [PATCH] HACK: ntdll: Add WINE_DISABLE_SFN option. Fixes Yakuza 5
@@ -46,10 +46,10 @@ index 1413f7f7e0c..cb318149ed3 100644
      short_nameW[short_len] = 0;
      wcsupr( short_nameW );
 diff --git a/dlls/ntdll/unix/loader.c b/dlls/ntdll/unix/loader.c
-index d8077468234..ebda267e86a 100644
+index 425a2d72213..3d23ebcd06c 100644
 --- a/dlls/ntdll/unix/loader.c
 +++ b/dlls/ntdll/unix/loader.c
-@@ -2231,6 +2231,7 @@ static ULONG_PTR get_image_address(void)
+@@ -2242,6 +2242,7 @@ static ULONG_PTR get_image_address(void)
      return 0;
  }
  
@@ -57,7 +57,7 @@ index d8077468234..ebda267e86a 100644
  BOOL process_termination_delay;
  BOOL ac_odyssey;
  BOOL fsync_help_simulated_pulse;
-@@ -2356,6 +2357,12 @@ static void hacks_init(void)
+@@ -2367,6 +2368,12 @@ static void hacks_init(void)
          ERR( "HACK: ram_reporting_bias %lldMB.\n", ram_reporting_bias / (1024 * 1024) );
      }
  
@@ -71,10 +71,10 @@ index d8077468234..ebda267e86a 100644
      {
          env_str = getenv("WINE_SIMULATE_ASYNC_READ");
 diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
-index 6ef9efa90a4..9d2c5f464f7 100644
+index ef4db3945d8..19374cb7949 100644
 --- a/dlls/ntdll/unix/unix_private.h
 +++ b/dlls/ntdll/unix/unix_private.h
-@@ -211,6 +211,7 @@ extern pthread_mutex_t fd_cache_mutex;
+@@ -212,6 +212,7 @@ extern pthread_mutex_t fd_cache_mutex;
  extern struct _KUSER_SHARED_DATA *user_shared_data;
  extern ULONG process_cookie;
  

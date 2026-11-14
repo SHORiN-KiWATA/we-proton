@@ -36,7 +36,7 @@
 | wine 0052 | Wayland 驱动在窗口拿到键盘焦点后还向合成器申请激活，niri 分支的网格概览收到申请就关掉：焦点一移到 Wine 窗口网格就没了 | `0052-winewayland-no-activation-on-focus/` |
 | wine 0053 | 网易 UU 加速器的路由模式加速不上：它用旧的 `CreateIpForwardEntry`/`DeleteIpForwardEntry` 加删路由，Wine 里这几个函数什么都不做就返回成功，路由一条也没加上 | `0053-iphlpapi-old-route-functions/` |
 | wine 0054 | 没写过的写时复制页，`VirtualProtect` 报的旧属性是 `PAGE_READWRITE`（Windows 是 `PAGE_WRITECOPY`）：GE-Proton 带的 staging `ntdll-WRITECOPY/0010` 一律改写，把 0005 给出的正确结果改错；改写只留给 0005 跟踪不了的情况 | `0054-kernelbase-writecopy-old-protection/` |
-| wine 0055 | 释放 Media Foundation 的读取器后马上 `MFShutdown` 会卡死：rtworkq 关系统队列时拿着队列表的锁等回调结束，读取器最后一次释放恰好在回调里、也要这把锁（上游的隐患，GE-Proton 的视频补丁把它触发出来）；等回调时不再拿这把锁 | `0055-rtworkq-shutdown-deadlock/` |
+| wine 0055 | （GE-Proton11-12 起去掉：GE-Proton 自己修了同一个死锁）释放 Media Foundation 的读取器后马上 `MFShutdown` 会卡死：rtworkq 关系统队列时拿着队列表的锁等回调结束，读取器最后一次释放恰好在回调里、也要这把锁（上游的隐患，GE-Proton 的视频补丁把它触发出来）；等回调时不再拿这把锁 | `0055-rtworkq-shutdown-deadlock/` |
 | wine 0056 | 窗口激活时 `WM_ACTIVATEAPP` 的 lParam 不对：跨线程、跨进程激活时原版 Wine 报 0，GE-Proton 的补丁改成收消息的线程自己；Windows 实测报上一个前台窗口的线程 | `0056-win32u-activateapp-lparam/` |
 | wine 0059 | 主屏变化后窗口矩形没跟着虚拟屏原点平移：xwayland-satellite 把有焦点窗口所在的输出设成主输出，niri 下把窗口从右边的屏挪到左边的屏时，窗口被算到虚拟屏外面撤掉，又在原来的屏重新出现（雷神加速器、记事本都一样）；桌面窗口在原点变化时平移所有顶层窗口 | `0059-win32u-primary-monitor-origin/` |
 | wine 0060 | WeGame 下载完更新后每次启动都闪退：更新程序调用 `ShutdownBlockReasonCreate` 失败（Wine 里是空壳）就放弃安装、也不重新启动 WeGame；按 Windows 实测实现这三个函数 | `0060-user32-shutdown-block-reason/` |

@@ -1,4 +1,4 @@
-From 6685a0eeef2020af754d57be5260400db2d3dfc9 Mon Sep 17 00:00:00 2001
+From 6d5f9b8340b3ee67745f62836b0290b4037e23ff Mon Sep 17 00:00:00 2001
 From: Ziia Shi <mkrsym1@gmail.com>
 Date: Thu, 6 Aug 2026 22:00:20 +0200
 Subject: [PATCH] wdf01000.sys: Add KMDF stub.
@@ -15,10 +15,10 @@ App: Neverness to Everness (4508340).
  create mode 100644 dlls/wdf01000.sys/main.c
 
 diff --git a/configure.ac b/configure.ac
-index 8875f698de3..18752ad8ddb 100644
+index 98265f54014..cf55aecc1c9 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3343,6 +3343,7 @@ WINE_CONFIG_MAKEFILE(dlls/wbemdisp/tests)
+@@ -3344,6 +3344,7 @@ WINE_CONFIG_MAKEFILE(dlls/wbemdisp/tests)
  WINE_CONFIG_MAKEFILE(dlls/wbemprox)
  WINE_CONFIG_MAKEFILE(dlls/wbemprox/tests)
  WINE_CONFIG_MAKEFILE(dlls/wdfldr.sys)
@@ -194,7 +194,7 @@ index c6572bab1d9..da0cf4764d8 100644
  
  SOURCES = wdfldr_main.c
 diff --git a/loader/wine.inf.in b/loader/wine.inf.in
-index e2494e25ebd..8af1ba504e4 100644
+index 147967e36bf..40b9f8c51a7 100644
 --- a/loader/wine.inf.in
 +++ b/loader/wine.inf.in
 @@ -59,6 +59,7 @@ AddReg=\
@@ -247,7 +247,7 @@ index e2494e25ebd..8af1ba504e4 100644
  [CurrentVersion]
  HKCU,%CurrentVersion%\Explorer\Advanced,,16
  HKCU,%CurrentVersion%\Explorer\FileExts,,16
-@@ -1281,6 +1289,12 @@ LoadOrderGroup="System Bus Extender"
+@@ -1282,6 +1290,12 @@ LoadOrderGroup="System Bus Extender"
  [NsiProxyServiceKeys]
  HKR,,"Tag",0x10001,1
  

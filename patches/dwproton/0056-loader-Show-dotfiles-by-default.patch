@@ -1,4 +1,4 @@
-From 496bea3b2168cdaa3cc6309cee259d2cd727aaf8 Mon Sep 17 00:00:00 2001
+From cddef8a2c844bb0104a7ae1c132d8d4714dedaf3 Mon Sep 17 00:00:00 2001
 From: NelloKudo <marshnelloosu@gmail.com>
 Date: Mon, 5 Jan 2026 16:18:02 +0100
 Subject: [PATCH] loader: Show dotfiles by default.
@@ -9,7 +9,7 @@ Subject: [PATCH] loader: Show dotfiles by default.
  1 file changed, 1 insertion(+)
 
 diff --git a/loader/wine.inf.in b/loader/wine.inf.in
-index e248a435548..dc495083c08 100644
+index 3d6bf40094e..f1fc01908a6 100644
 --- a/loader/wine.inf.in
 +++ b/loader/wine.inf.in
 @@ -610,6 +610,7 @@ HKLM,%MciExtStr%,"wmx",,"MPEGVideo"

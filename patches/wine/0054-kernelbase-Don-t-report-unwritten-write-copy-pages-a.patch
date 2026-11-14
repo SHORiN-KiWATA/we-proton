@@ -1,4 +1,4 @@
-From ce63528500c86d5c84528ae608d118e3c8a1f44e Mon Sep 17 00:00:00 2001
+From 078a1e297c8cf93246af4e1dabbda2dda1a309ab Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Mon, 12 Oct 2026 12:00:00 +0900
 Subject: [PATCH] kernelbase: Don't report unwritten write-copy pages as
@@ -46,10 +46,10 @@ index 99fc3e2d6d3..8c2d3542051 100644
  
  
 diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
-index 6e61f810970..8ca4905bcd9 100644
+index f4b6a16a027..af128017d24 100644
 --- a/dlls/ntdll/unix/virtual.c
 +++ b/dlls/ntdll/unix/virtual.c
-@@ -6023,6 +6023,14 @@ NTSTATUS WINAPI NtProtectVirtualMemory( HANDLE process, PVOID *addr_ptr, SIZE_T
+@@ -6051,6 +6051,14 @@ NTSTATUS WINAPI NtProtectVirtualMemory( HANDLE process, PVOID *addr_ptr, SIZE_T
                      set_page_vprot_bits(base, page_size, VPROT_COPIED, 0);
                  }
              }

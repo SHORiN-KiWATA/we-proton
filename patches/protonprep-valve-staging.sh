@@ -682,6 +682,8 @@ apply_all_in_dir() {
     echo "WINE: -PENDING- ntdll: let a thread killed during its startup exit instead of hanging (Helldivers 2 thread growth)"
     apply_patch "../patches/wine-hotfixes/pending/ntdll-dont-keep-reply-pipe-open-during-thread-init.patch"
 
+    apply_patch "../patches/wine-hotfixes/pending/winedmo-disable-d3d11-aware-for-phantom-blade-zero.patch"
+
 ### (2-8) DW-PROTON AND WE-PROTON PATCHES ###
 
     # DW-Proton commits that GE-Proton doesn't carry. Generated files

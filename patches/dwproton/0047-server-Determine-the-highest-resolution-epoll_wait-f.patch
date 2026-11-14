@@ -1,4 +1,4 @@
-From a4842f87b81b5e08c7ad1d05d0efe708d7d628ce Mon Sep 17 00:00:00 2001
+From 6995b6a51598e101e6786265af7d490d66b5e3c6 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Thu, 27 Feb 2025 19:36:33 -0800
 Subject: [PATCH] server: Determine the highest resolution epoll_wait function
@@ -20,7 +20,7 @@ enable the use of epoll_pwait2 for e.g. SLR SDK builds. (alt)
  2 files changed, 7 insertions(+), 14 deletions(-)
 
 diff --git a/configure.ac b/configure.ac
-index b58a1950327..bf019723571 100644
+index ae1a3e955d8..a036ee45433 100644
 --- a/configure.ac
 +++ b/configure.ac
 @@ -2147,7 +2147,6 @@ AC_CHECK_FUNCS(\

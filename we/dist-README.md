@@ -34,7 +34,6 @@ WE-Proton 是基于 GE-Proton 和 DW-Proton 的个人 Proton：以 GE-Proton（`
 | wine 0052 | 用 Wine 的 Wayland 驱动时，在 niri 分支的网格概览里把焦点移到 Wine 窗口，网格就直接关掉 |
 | wine 0053 | 网易 UU 加速器等用旧接口加路由的程序，路由模式显示在加速，实际没有加速（路由没有真正加上） |
 | wine 0054 | 内存保护属性的一处细节和 Windows 不一致（没写过的写时复制页报成了可读写） |
-| wine 0055 | 用 Media Foundation 放完视频、马上关闭时，程序偶尔卡住不动 |
 | wine 0056 | 窗口激活消息里「上一个前台线程」的值和 Windows 不一致 |
 | wine 0059 | 主显示器变化后窗口坐标没跟着平移：两块屏时把窗口挪到另一块屏，窗口会消失再在原来的屏上出现 |
 | wine 0060 | `ShutdownBlockReasonCreate` 等三个函数没有实现：程序的自动更新装不上，更新后启动就退出 |

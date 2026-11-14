@@ -1,4 +1,4 @@
-From a5e969d12aac1d9797eac56bb6a52be5f7adfaa9 Mon Sep 17 00:00:00 2001
+From 91ea56c24318c1c06bc5c3bd13126b50abb97220 Mon Sep 17 00:00:00 2001
 From: Elizabeth Figura <zfigura@codeweavers.com>
 Date: Mon, 29 Dec 2025 17:36:30 -0600
 Subject: [PATCH] ddraw: Fix caps tracing in IDirectDraw7::GetCaps().
@@ -12,10 +12,10 @@ and we currently may trace invalid members, e.g. ddsCaps.
  1 file changed, 2 insertions(+), 3 deletions(-)
 
 diff --git a/dlls/ddraw/ddraw.c b/dlls/ddraw/ddraw.c
-index 8e42e8e0d9f..f39d6857c7c 100644
+index 4043583eca2..490657aff35 100644
 --- a/dlls/ddraw/ddraw.c
 +++ b/dlls/ddraw/ddraw.c
-@@ -1603,9 +1603,8 @@ static HRESULT WINAPI ddraw7_GetCaps(IDirectDraw7 *iface, DDCAPS *DriverCaps, DD
+@@ -1605,9 +1605,8 @@ static HRESULT WINAPI ddraw7_GetCaps(IDirectDraw7 *iface, DDCAPS *DriverCaps, DD
          if (TRACE_ON(ddraw))
          {
              TRACE("Driver Caps :\n");
@@ -26,7 +26,7 @@ index 8e42e8e0d9f..f39d6857c7c 100644
      }
      if(HELCaps)
      {
-@@ -1613,7 +1612,7 @@ static HRESULT WINAPI ddraw7_GetCaps(IDirectDraw7 *iface, DDCAPS *DriverCaps, DD
+@@ -1615,7 +1614,7 @@ static HRESULT WINAPI ddraw7_GetCaps(IDirectDraw7 *iface, DDCAPS *DriverCaps, DD
          if (TRACE_ON(ddraw))
          {
              TRACE("HEL Caps :\n");

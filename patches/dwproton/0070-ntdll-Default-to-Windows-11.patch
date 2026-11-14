@@ -1,4 +1,4 @@
-From 0461b7e80f529867aa4942861703238cdc625fb4 Mon Sep 17 00:00:00 2001
+From ab228b734bd27235361b21bdfa1362e9385bda63 Mon Sep 17 00:00:00 2001
 From: Stelios Tsampas <loathingkernel@gmail.com>
 Date: Sun, 24 May 2026 20:12:54 +0300
 Subject: [PATCH] ntdll: Default to Windows 11
@@ -25,10 +25,10 @@ index 5a11a6fc634..95dddf468be 100644
      RtlOpenCurrentUser( KEY_ALL_ACCESS, &root );
      InitializeObjectAttributes( &attr, &nameW, OBJ_CASE_INSENSITIVE, root, NULL );
 diff --git a/loader/wine.inf.in b/loader/wine.inf.in
-index dc495083c08..f8acd4ed77a 100644
+index f1fc01908a6..e2f8f6b3927 100644
 --- a/loader/wine.inf.in
 +++ b/loader/wine.inf.in
-@@ -1443,9 +1443,9 @@ HKLM,"System\CurrentControlSet\Services\Winsock2\Parameters\Protocol_Catalog9\Ca
+@@ -1444,9 +1444,9 @@ HKLM,"System\CurrentControlSet\Services\Winsock2\Parameters\Protocol_Catalog9\Ca
  HKLM,%CurrentVersionNT%,"CurrentVersion",2,"6.3"
  HKLM,%CurrentVersionNT%,"CurrentMajorVersionNumber",0x10003,10
  HKLM,%CurrentVersionNT%,"CurrentMinorVersionNumber",0x10003,0
@@ -41,7 +41,7 @@ index dc495083c08..f8acd4ed77a 100644
  HKLM,%CurrentVersionNT%,"CurrentType",2,"Multiprocessor Free"
  HKLM,%CurrentVersionNT%,"DigitalProductId",2,00,00,00,00,00,00,00,00,00,00,00,\
  00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,\
-@@ -1457,7 +1457,7 @@ HKLM,%CurrentVersionNT%,"DigitalProductId",2,00,00,00,00,00,00,00,00,00,00,00,\
+@@ -1458,7 +1458,7 @@ HKLM,%CurrentVersionNT%,"DigitalProductId",2,00,00,00,00,00,00,00,00,00,00,00,\
  HKLM,%CurrentVersionNT%,"DisplayVersion",2,"21H1"
  HKLM,%CurrentVersionNT%,"EditionId",2,"Professional"
  HKLM,%CurrentVersionNT%,"InstallationType",2,"Client"

@@ -1,4 +1,4 @@
-From c9ffdb6bf80598b46d33e9f6c037de503c8f5f6b Mon Sep 17 00:00:00 2001
+From d5e585e1c3c8a5386e6cee6a31bc9aa0ecf88a97 Mon Sep 17 00:00:00 2001
 From: shxrrydw <sherrydrv@gmail.com>
 Date: Thu, 6 Aug 2026 12:24:53 +0200
 Subject: [PATCH] server: Add a request to move a process to another session.
@@ -12,10 +12,10 @@ App: Hololive Dreams (4282500).
  4 files changed, 31 insertions(+)
 
 diff --git a/server/process.c b/server/process.c
-index b3992304aaf..8fe64305e02 100644
+index 7cf792de80a..e6deced750d 100644
 --- a/server/process.c
 +++ b/server/process.c
-@@ -1889,6 +1889,24 @@ DECL_HANDLER(grant_process_admin_token)
+@@ -1891,6 +1891,24 @@ DECL_HANDLER(grant_process_admin_token)
      release_object( process );
  }
  
@@ -41,7 +41,7 @@ index b3992304aaf..8fe64305e02 100644
  DECL_HANDLER(create_job)
  {
 diff --git a/server/protocol.def b/server/protocol.def
-index 4eb22fb2bb1..58d936e4fa7 100644
+index ad3a5b836ac..605209cd586 100644
 --- a/server/protocol.def
 +++ b/server/protocol.def
 @@ -4035,6 +4035,13 @@ struct handle_info

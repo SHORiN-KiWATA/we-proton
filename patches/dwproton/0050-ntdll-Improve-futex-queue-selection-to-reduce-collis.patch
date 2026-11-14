@@ -1,4 +1,4 @@
-From ced9215f10f07d6d7100260968cb6afebf7f9b14 Mon Sep 17 00:00:00 2001
+From a8e3800edb5b8232a0caafab33d10daf46e072de Mon Sep 17 00:00:00 2001
 From: Marc-Aurel Zent <mzent@codeweavers.com>
 Date: Tue, 21 Apr 2026 12:51:25 +0200
 Subject: [PATCH] ntdll: Improve futex queue selection to reduce collisions.
@@ -9,10 +9,10 @@ Subject: [PATCH] ntdll: Improve futex queue selection to reduce collisions.
  1 file changed, 5 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/ntdll/sync.c b/dlls/ntdll/sync.c
-index 3c0ae2b024b..cd56cca1512 100644
+index 160652d213e..0360695b177 100644
 --- a/dlls/ntdll/sync.c
 +++ b/dlls/ntdll/sync.c
-@@ -842,9 +842,12 @@ static struct futex_queue futex_queues[1024];
+@@ -839,9 +839,12 @@ static struct futex_queue futex_queues[1024];
  
  static struct futex_queue *get_futex_queue( const void *addr )
  {

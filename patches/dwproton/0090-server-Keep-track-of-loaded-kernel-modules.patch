@@ -1,4 +1,4 @@
-From a2da1fc006f0f5d7e0b09f80b1ccf864d3393e4a Mon Sep 17 00:00:00 2001
+From c99037e1e3952cafc707fb9303b149365a251d62 Mon Sep 17 00:00:00 2001
 From: shxrrydw <sherrydrv@gmail.com>
 Date: Thu, 6 Aug 2026 16:27:12 +0200
 Subject: [PATCH] server: Keep track of loaded kernel modules.
@@ -120,7 +120,7 @@ index cfd76e46330..79938845aad 100644
 +}
 +
 diff --git a/server/protocol.def b/server/protocol.def
-index 58d936e4fa7..36db03ae50b 100644
+index 605209cd586..388e57e0ddc 100644
 --- a/server/protocol.def
 +++ b/server/protocol.def
 @@ -486,6 +486,14 @@ struct luid_attr

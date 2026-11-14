@@ -2,12 +2,12 @@
 
 基于 [GE-Proton](https://github.com/GloriousEggroll/proton-ge-custom) 和 [DW-Proton](https://dawn.wine/dawn-winery/dwproton) 的个人 Proton，攒一些 Wine（和 vkd3d-proton）的 bug 修复。自己和朋友用，不往上游提。
 
-- 顶层是 GE-Proton 的仓库，从 tag `GE-Proton11-7` 起的分支，之后跟进到 `GE-Proton11-11`。子模块版本都用 GE-Proton 的（`GE-Proton11-7` 时 dxvk、vkd3d-proton、protonfixes 曾换成 DW-Proton 用的更新版本，`GE-Proton11-11` 的已经比它们新，比较见 [`ge-dw-merge.md`](ge-dw-merge.md)）
+- 顶层是 GE-Proton 的仓库，从 tag `GE-Proton11-7` 起的分支，之后跟进到 `GE-Proton11-12`。子模块版本都用 GE-Proton 的（`GE-Proton11-7` 时 dxvk、vkd3d-proton、protonfixes 曾换成 DW-Proton 用的更新版本，`GE-Proton11-11` 的已经比它们新，比较见 [`ge-dw-merge.md`](ge-dw-merge.md)）
 - Wine 子模块不改：`patches/protonprep-valve-staging.sh`（GE-Proton 的脚本）在构建前往 Valve 的 Wine 上打 GE-Proton 的补丁和 staging，最后打 `patches/dwproton/` 和 `patches/wine/`
 - `patches/dwproton/`：DW-Proton（`dwproton-11.0-14`，之后跟进到 `dwproton-11.0-15`）的 Wine 提交里 GE-Proton 没有的那些，冲突解决过。怎么挑的、丢了哪些、冲突怎么解的，见 [`ge-dw-merge.md`](ge-dw-merge.md)
 - `patches/wine/`：WE-Proton 自己的 Wine 补丁，编号沿用原来的（中间的空号是这一版不再需要的，见下表）
 - vkd3d-proton 的修复是 `patches/vkd3d-proton/we-*.patch`（路径相对 vkd3d-proton 根目录），排在 GE-Proton 的补丁后面
-- DW-Proton 的 protonfixes 游戏修复是 `patches/protonfixes/0003`–`0006`（WE-Proton 自己的 protonfixes 补丁是 `0051`）。dxvk 的 HDR 检测从 `GE-Proton11-11` 起用 GE-Proton 自己的（`dxgi-respect-output-hdr-state`、`dxgi-auto-detect-hdr`），不再打 DW-Proton 的
+- DW-Proton 的 protonfixes 游戏修复是 `patches/protonfixes/0004`–`0007`（GE-Proton11-12 加了自己的 `0003`，DW-Proton 的四个顺延；WE-Proton 自己的 protonfixes 补丁是 `0051`）。dxvk 的 HDR 检测从 `GE-Proton11-11` 起用 GE-Proton 自己的（`dxgi-respect-output-hdr-state`、`dxgi-auto-detect-hdr`），不再打 DW-Proton 的
 
 ## 补丁
 
@@ -61,7 +61,7 @@
 | `wine/0052-winewayland-Don-t-ask-for-activation-of-a-window-tha` | Wayland 驱动：窗口因为合成器给了键盘焦点而被激活时，不再用 xdg_activation 向合成器再申请一次激活（niri 分支的网格概览收到申请就关掉） |
 | `wine/0053-iphlpapi-Implement-CreateIpForwardEntry-SetIpForward` | 实现旧的路由函数 `CreateIpForwardEntry`/`SetIpForwardEntry`/`DeleteIpForwardEntry`（原来是什么都不做、返回成功的 stub，网易 UU 的路由模式靠它们加路由）：换成 `MIB_IPFORWARD_ROW2` 交给 0015 的新函数，metric（减去接口 metric）、协议、下一跳按 Windows 实测处理；`GetIpForwardTable` 读回的 metric 加上接口 metric |
 | `wine/0054-kernelbase-Don-t-report-unwritten-write-copy-pages-a` | 去掉 staging `ntdll-WRITECOPY/0010` 在 `VirtualProtect` 里把旧属性 `PAGE_WRITECOPY` 一律改成 `PAGE_READWRITE` 的做法（0005 已经在 ntdll 里报对，0010 把没写过的页改错）；只在 0005 跟踪不了的镜像视图（内核不支持 userfaultfd 异步写保护）上保留这个猜测。依赖 0005 |
-| `wine/0055-rtworkq-Don-t-hold-the-queue-list-lock-while-shuttin` | `shutdown_system_queues()` 等系统队列的回调时不再拿 `queues_section`：回调里释放读取器的最后一个引用要拿这把锁去解锁读取器的队列，原来互相等死。另用 `startup_section` 保证初始化和关闭不同时进行，关闭开始后不再懒创建系统队列 |
+| `wine/0055-rtworkq-Don-t-hold-the-queue-list-lock-while-shuttin` | （这一版没有：GE-Proton11-12 的 `rtworkq-dont-hold-queues-section-during-system-queue-shutdown` 修了同一个死锁）`shutdown_system_queues()` 等系统队列的回调时不再拿 `queues_section`：回调里释放读取器的最后一个引用要拿这把锁去解锁读取器的队列，原来互相等死。另用 `startup_section` 保证初始化和关闭不同时进行，关闭开始后不再懒创建系统队列 |
 | `wine/0056-win32u-Report-the-previous-foreground-thread-in-WM_A` | `WM_ACTIVATEAPP(TRUE)` 的 lParam 报上一个前台窗口的线程（前台原来不在 Wine 里时报桌面线程），取代 GE-Proton `game-patches/0001` 报收消息线程自己的做法；`set_foreground_window()` 经 `set_active_window()` 的最后一个参数传下来 |
 | `wine/0059-win32u-Keep-top-level-windows-in-place-when-the-virt` | 虚拟屏原点（主显示器左上角）变化时，桌面窗口把所有没最小化的顶层窗口平移同样的量，旧原点取自桌面窗口自己的矩形；原来窗口矩形不动、X 窗口也不动，左边屏上的窗口会被算到虚拟屏外面而撤掉 |
 | `wine/0060-user32-Implement-ShutdownBlockReasonCreate-Query-Des` | `ShutdownBlockReasonCreate/Query/Destroy`：原因存成窗口属性，参数检查和错误码照 Windows 11 实测（只限顶层窗口、空原因 87、无效窗口 1400、桌面窗口返回 5），导出原来缺的 Query |
