@@ -1,0 +1,97 @@
+From 0784ca7162a8532a8587b9c3dcf38668379eb3ce Mon Sep 17 00:00:00 2001
+From: Codex <noreply@openai.com>
+Date: Sun, 1 Nov 2026 16:52:42 +0800
+Subject: [PATCH] nsiproxy: Ignore stale Unix network interface entries.
+
+Reject cached entries whose Unix name no longer resolves to the recorded interface index. Keep allocations alive for returned name pointers and preserve the synthetic Ethernet adapter behavior.
+
+Co-Authored-By: Codex <noreply@openai.com>
+---
+ dlls/nsiproxy.sys/ndis.c | 31 +++++++++++++++++++++++++++----
+ 1 file changed, 27 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/nsiproxy.sys/ndis.c b/dlls/nsiproxy.sys/ndis.c
+index e871637..48d585e 100644
+--- a/dlls/nsiproxy.sys/ndis.c
++++ b/dlls/nsiproxy.sys/ndis.c
+@@ -112,12 +112,22 @@ static pthread_mutex_t if_list_lock = PTHREAD_MUTEX_INITIALIZER;
+ 
+ static BOOL have_ethernet_iface;
+ 
++/* Keep old allocations alive: convert_luid_to_unix_name() returns a pointer
++ * into an entry after unlocking. A removed or renamed interface must however
++ * no longer participate in enumeration or name/index/LUID lookups. */
++static BOOL if_entry_is_present( const struct if_entry *entry )
++{
++    /* This compatibility adapter intentionally has no Unix counterpart. */
++    if (entry->if_index == 0xdeadbeef && !strcmp( entry->if_unix_name, "eth0faked" )) return TRUE;
++    return if_nametoindex( entry->if_unix_name ) == entry->if_index;
++}
++
+ static struct if_entry *find_entry_from_index( UINT index )
+ {
+     struct if_entry *entry;
+ 
+     LIST_FOR_EACH_ENTRY( entry, &if_list, struct if_entry, entry )
+-        if (entry->if_index == index) return entry;
++        if (entry->if_index == index && if_entry_is_present( entry )) return entry;
+ 
+     return NULL;
+ }
+@@ -127,7 +137,7 @@ static struct if_entry *find_entry_from_luid( const NET_LUID *luid )
+     struct if_entry *entry;
+ 
+     LIST_FOR_EACH_ENTRY( entry, &if_list, struct if_entry, entry )
+-        if (entry->if_luid.Value == luid->Value) return entry;
++        if (entry->if_luid.Value == luid->Value && if_entry_is_present( entry )) return entry;
+ 
+     return NULL;
+ }
+@@ -436,6 +446,18 @@ static unsigned int update_if_table( void )
+ 
+     if_freenameindex( indices );
+ 
++    /* Removed entries remain allocated, but must not suppress the optional
++     * Ethernet fallback after the last real Ethernet interface disappears. */
++    have_ethernet_iface = FALSE;
++    LIST_FOR_EACH_ENTRY( if_entry, &if_list, struct if_entry, entry )
++    {
++        if (if_entry->if_luid.Info.IfType == MIB_IF_TYPE_ETHERNET && if_entry_is_present( if_entry ))
++        {
++            have_ethernet_iface = TRUE;
++            break;
++        }
++    }
++
+     if (!have_ethernet_iface && fake_ethernet_adapter() && (if_entry = add_entry( 0xdeadbeef, "eth0faked" )))
+     {
+         if_entry->if_type = if_entry->if_luid.Info.IfType = MIB_IF_TYPE_ETHERNET;
+@@ -631,6 +653,7 @@ static NTSTATUS ifinfo_enumerate_all( void *key_data, UINT key_size, void *rw_da
+ 
+     LIST_FOR_EACH_ENTRY( entry, &if_list, struct if_entry, entry )
+     {
++        if (!if_entry_is_present( entry )) continue;
+         if (num < *count)
+         {
+             ifinfo_fill_entry( entry, key_data, rw_data, dynamic_data, static_data );
+@@ -788,7 +811,7 @@ BOOL convert_unix_name_to_luid( const char *unix_name, NET_LUID *luid )
+     {
+         LIST_FOR_EACH_ENTRY( entry, &if_list, struct if_entry, entry )
+         {
+-            if (!strcmp( entry->if_unix_name, unix_name ))
++            if (!strcmp( entry->if_unix_name, unix_name ) && if_entry_is_present( entry ))
+             {
+                 *luid = entry->if_luid;
+                 ret = TRUE;
+@@ -815,7 +838,7 @@ BOOL convert_luid_to_unix_name( const NET_LUID *luid, const char **unix_name )
+     {
+         LIST_FOR_EACH_ENTRY( entry, &if_list, struct if_entry, entry )
+         {
+-            if (entry->if_luid.Value == luid->Value)
++            if (entry->if_luid.Value == luid->Value && if_entry_is_present( entry ))
+             {
+                 *unix_name = entry->if_unix_name;
+                 ret = TRUE;
+-- 
+2.53.0
+

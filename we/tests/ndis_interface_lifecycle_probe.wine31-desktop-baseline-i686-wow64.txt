@@ -1,0 +1,132 @@
+PROBE name=Cache00000020 cycles=3
+TABLE phase=preflight error=0
+CHECK phase=preflight op=GetIfTable2 result=PASS
+CHECK phase=preflight op=table-no-stale-name-records result=PASS
+CREATE phase=cycle1-present success=1 error_if_failed=0
+CURRENT phase=cycle1-present index=2 luid=17000002000000 error=0
+CHECK phase=cycle1-present op=current-index-luid-roundtrip result=PASS
+TABLE phase=cycle1-present error=0
+CHECK phase=cycle1-present op=GetIfTable2 result=PASS
+TABLE_ROW phase=cycle1-present index=2 luid=17000002000000 alias=Cache00000020 status=1
+CHECK phase=cycle1-present op=table-current-identity-once result=PASS
+CHECK phase=cycle1-present op=table-no-stale-name-records result=PASS
+ADDRESSES phase=cycle1-present error=0
+CHECK phase=cycle1-present op=GetAdaptersAddresses result=PASS
+ADDRESS_ROW phase=cycle1-present index=2 luid=17000002000000 alias=Cache00000020 status=1
+CHECK phase=cycle1-present op=addresses-current-identity-once result=PASS
+CHECK phase=cycle1-present op=addresses-no-stale-name-records result=PASS
+ALIAS phase=cycle1-present error=0 luid=17000002000000
+CHECK phase=cycle1-present op=alias-maps-current result=PASS
+OLD_INDEX phase=cycle1-removed index=2 error=0
+CHECK phase=cycle1-removed op=removed-index-GetIfEntry2-fails result=FAIL
+OLD_LUID phase=cycle1-removed luid=17000002000000 error=0
+CHECK phase=cycle1-removed op=removed-luid-GetIfEntry2-fails result=FAIL
+OLD_INDEX_CONVERT phase=cycle1-removed error=0 luid=17000002000000
+CHECK phase=cycle1-removed op=removed-index-conversion-fails result=FAIL
+OLD_LUID_CONVERT phase=cycle1-removed error=0 index=2
+CHECK phase=cycle1-removed op=removed-luid-conversion-fails result=FAIL
+TABLE phase=cycle1-removed error=0
+CHECK phase=cycle1-removed op=GetIfTable2 result=PASS
+TABLE_ROW phase=cycle1-removed index=2 luid=17000002000000 alias=Cache00000020 status=4
+CHECK phase=cycle1-removed op=table-no-stale-name-records result=FAIL
+ADDRESSES phase=cycle1-removed error=0
+CHECK phase=cycle1-removed op=GetAdaptersAddresses result=PASS
+ADDRESS_ROW phase=cycle1-removed index=2 luid=17000002000000 alias=Cache00000020 status=4
+CHECK phase=cycle1-removed op=addresses-no-stale-name-records result=FAIL
+ALIAS phase=cycle1-removed error=0 luid=17000002000000
+CHECK phase=cycle1-removed op=removed-alias-fails result=FAIL
+CREATE phase=cycle2-present success=1 error_if_failed=0
+CURRENT phase=cycle2-present index=3 luid=17000003000000 error=0
+CHECK phase=cycle2-present op=current-index-luid-roundtrip result=PASS
+TABLE phase=cycle2-present error=0
+CHECK phase=cycle2-present op=GetIfTable2 result=PASS
+TABLE_ROW phase=cycle2-present index=2 luid=17000002000000 alias=Cache00000020 status=1
+TABLE_ROW phase=cycle2-present index=3 luid=17000003000000 alias=Cache00000020 status=1
+CHECK phase=cycle2-present op=table-current-identity-once result=PASS
+CHECK phase=cycle2-present op=table-no-stale-name-records result=FAIL
+ADDRESSES phase=cycle2-present error=0
+CHECK phase=cycle2-present op=GetAdaptersAddresses result=PASS
+ADDRESS_ROW phase=cycle2-present index=2 luid=17000002000000 alias=Cache00000020 status=1
+ADDRESS_ROW phase=cycle2-present index=3 luid=17000003000000 alias=Cache00000020 status=1
+CHECK phase=cycle2-present op=addresses-current-identity-once result=PASS
+CHECK phase=cycle2-present op=addresses-no-stale-name-records result=FAIL
+ALIAS phase=cycle2-present error=0 luid=17000002000000
+CHECK phase=cycle2-present op=alias-maps-current result=FAIL
+OLD_INDEX phase=cycle2-present index=2 error=0
+CHECK phase=cycle2-present op=removed-index-GetIfEntry2-fails result=FAIL
+OLD_LUID phase=cycle2-present luid=17000002000000 error=0
+CHECK phase=cycle2-present op=removed-luid-GetIfEntry2-fails result=FAIL
+OLD_INDEX_CONVERT phase=cycle2-present error=0 luid=17000002000000
+CHECK phase=cycle2-present op=removed-index-conversion-fails result=FAIL
+OLD_LUID_CONVERT phase=cycle2-present error=0 index=2
+CHECK phase=cycle2-present op=removed-luid-conversion-fails result=FAIL
+OLD_INDEX phase=cycle2-removed index=3 error=0
+CHECK phase=cycle2-removed op=removed-index-GetIfEntry2-fails result=FAIL
+OLD_LUID phase=cycle2-removed luid=17000003000000 error=0
+CHECK phase=cycle2-removed op=removed-luid-GetIfEntry2-fails result=FAIL
+OLD_INDEX_CONVERT phase=cycle2-removed error=0 luid=17000003000000
+CHECK phase=cycle2-removed op=removed-index-conversion-fails result=FAIL
+OLD_LUID_CONVERT phase=cycle2-removed error=0 index=3
+CHECK phase=cycle2-removed op=removed-luid-conversion-fails result=FAIL
+TABLE phase=cycle2-removed error=0
+CHECK phase=cycle2-removed op=GetIfTable2 result=PASS
+TABLE_ROW phase=cycle2-removed index=2 luid=17000002000000 alias=Cache00000020 status=4
+TABLE_ROW phase=cycle2-removed index=3 luid=17000003000000 alias=Cache00000020 status=4
+CHECK phase=cycle2-removed op=table-no-stale-name-records result=FAIL
+ADDRESSES phase=cycle2-removed error=0
+CHECK phase=cycle2-removed op=GetAdaptersAddresses result=PASS
+ADDRESS_ROW phase=cycle2-removed index=2 luid=17000002000000 alias=Cache00000020 status=4
+ADDRESS_ROW phase=cycle2-removed index=3 luid=17000003000000 alias=Cache00000020 status=4
+CHECK phase=cycle2-removed op=addresses-no-stale-name-records result=FAIL
+ALIAS phase=cycle2-removed error=0 luid=17000002000000
+CHECK phase=cycle2-removed op=removed-alias-fails result=FAIL
+CREATE phase=cycle3-present success=1 error_if_failed=0
+CURRENT phase=cycle3-present index=4 luid=17000004000000 error=0
+CHECK phase=cycle3-present op=current-index-luid-roundtrip result=PASS
+TABLE phase=cycle3-present error=0
+CHECK phase=cycle3-present op=GetIfTable2 result=PASS
+TABLE_ROW phase=cycle3-present index=2 luid=17000002000000 alias=Cache00000020 status=1
+TABLE_ROW phase=cycle3-present index=3 luid=17000003000000 alias=Cache00000020 status=1
+TABLE_ROW phase=cycle3-present index=4 luid=17000004000000 alias=Cache00000020 status=1
+CHECK phase=cycle3-present op=table-current-identity-once result=PASS
+CHECK phase=cycle3-present op=table-no-stale-name-records result=FAIL
+ADDRESSES phase=cycle3-present error=0
+CHECK phase=cycle3-present op=GetAdaptersAddresses result=PASS
+ADDRESS_ROW phase=cycle3-present index=2 luid=17000002000000 alias=Cache00000020 status=1
+ADDRESS_ROW phase=cycle3-present index=3 luid=17000003000000 alias=Cache00000020 status=1
+ADDRESS_ROW phase=cycle3-present index=4 luid=17000004000000 alias=Cache00000020 status=1
+CHECK phase=cycle3-present op=addresses-current-identity-once result=PASS
+CHECK phase=cycle3-present op=addresses-no-stale-name-records result=FAIL
+ALIAS phase=cycle3-present error=0 luid=17000002000000
+CHECK phase=cycle3-present op=alias-maps-current result=FAIL
+OLD_INDEX phase=cycle3-present index=3 error=0
+CHECK phase=cycle3-present op=removed-index-GetIfEntry2-fails result=FAIL
+OLD_LUID phase=cycle3-present luid=17000003000000 error=0
+CHECK phase=cycle3-present op=removed-luid-GetIfEntry2-fails result=FAIL
+OLD_INDEX_CONVERT phase=cycle3-present error=0 luid=17000003000000
+CHECK phase=cycle3-present op=removed-index-conversion-fails result=FAIL
+OLD_LUID_CONVERT phase=cycle3-present error=0 index=3
+CHECK phase=cycle3-present op=removed-luid-conversion-fails result=FAIL
+OLD_INDEX phase=cycle3-removed index=4 error=0
+CHECK phase=cycle3-removed op=removed-index-GetIfEntry2-fails result=FAIL
+OLD_LUID phase=cycle3-removed luid=17000004000000 error=0
+CHECK phase=cycle3-removed op=removed-luid-GetIfEntry2-fails result=FAIL
+OLD_INDEX_CONVERT phase=cycle3-removed error=0 luid=17000004000000
+CHECK phase=cycle3-removed op=removed-index-conversion-fails result=FAIL
+OLD_LUID_CONVERT phase=cycle3-removed error=0 index=4
+CHECK phase=cycle3-removed op=removed-luid-conversion-fails result=FAIL
+TABLE phase=cycle3-removed error=0
+CHECK phase=cycle3-removed op=GetIfTable2 result=PASS
+TABLE_ROW phase=cycle3-removed index=2 luid=17000002000000 alias=Cache00000020 status=4
+TABLE_ROW phase=cycle3-removed index=3 luid=17000003000000 alias=Cache00000020 status=4
+TABLE_ROW phase=cycle3-removed index=4 luid=17000004000000 alias=Cache00000020 status=4
+CHECK phase=cycle3-removed op=table-no-stale-name-records result=FAIL
+ADDRESSES phase=cycle3-removed error=0
+CHECK phase=cycle3-removed op=GetAdaptersAddresses result=PASS
+ADDRESS_ROW phase=cycle3-removed index=2 luid=17000002000000 alias=Cache00000020 status=4
+ADDRESS_ROW phase=cycle3-removed index=3 luid=17000003000000 alias=Cache00000020 status=4
+ADDRESS_ROW phase=cycle3-removed index=4 luid=17000004000000 alias=Cache00000020 status=4
+CHECK phase=cycle3-removed op=addresses-no-stale-name-records result=FAIL
+ALIAS phase=cycle3-removed error=0 luid=17000002000000
+CHECK phase=cycle3-removed op=removed-alias-fails result=FAIL
+RESULT failures=35

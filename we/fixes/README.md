@@ -40,6 +40,8 @@
 | wine 0056 | 窗口激活时 `WM_ACTIVATEAPP` 的 lParam 不对：跨线程、跨进程激活时原版 Wine 报 0，GE-Proton 的补丁改成收消息的线程自己；Windows 实测报上一个前台窗口的线程 | `0056-win32u-activateapp-lparam/` |
 | wine 0059 | 主屏变化后窗口矩形没跟着虚拟屏原点平移：xwayland-satellite 把有焦点窗口所在的输出设成主输出，niri 下把窗口从右边的屏挪到左边的屏时，窗口被算到虚拟屏外面撤掉，又在原来的屏重新出现（雷神加速器、记事本都一样）；桌面窗口在原点变化时平移所有顶层窗口 | `0059-win32u-primary-monitor-origin/` |
 | wine 0060 | WeGame 下载完更新后每次启动都闪退：更新程序调用 `ShutdownBlockReasonCreate` 失败（Wine 里是空壳）就放弃安装、也不重新启动 WeGame；按 Windows 实测实现这三个函数 | `0060-user32-shutdown-block-reason/` |
+| wine 0062 | 删除、改名和同名重建后的旧网络接口身份 | `0062-nsiproxy-live-interfaces/` |
+| wine 0063 | 0062 引入的重复接口查询性能回退 | `0063-route-interface-cache/` |
 | wine 0065 | 影之刃零的过场 CG（4K 60 帧）全程黑屏、声音字幕照常：低延迟模式下 H.264 只开切片多线程，单切片视频只用一个核，解码跟不上；打开帧多线程 | `0065-winedmo-h264-frame-threading/` |
 | wine 0066–0069（临时，等 DW-Proton 上游的修复） | 《蓝色星原：旅谣》进游戏后整屏黑、点不了：发行商 SDK 的协议/登录对话框是一个 `SetParent` 进游戏窗口的分层弹窗，淡入显示；Wine 没有把分层子窗口叠到父窗口的 3D 画面上，只改不透明度的 `UpdateLayeredWindow` 也被忽略。X11 驱动在每帧上混合，Wayland 驱动交给合成器 | `0066-layered-child-over-client-surface/` |
 | protonfixes 0051 | 前缀里已有程序在运行时，再用 `proton run` 加入的游戏拿不到 protonfixes 的修正：《战锤40K：暗潮》的修正是绕开启动器，没绕开时启动器把游戏隐藏启动，窗口出不来；设 `PROTONFIXES_RUN_VERB=1` 时 `run` 也执行修正 | `0051-protonfixes-run-verb/` |

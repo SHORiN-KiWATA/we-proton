@@ -1,0 +1,155 @@
+From 28db1f7cd049a6f6e4be9fb5f8ce275868b7a4bb Mon Sep 17 00:00:00 2001
+From: Codex <noreply@openai.com>
+Date: Sun, 1 Nov 2026 19:08:37 +0800
+Subject: [PATCH] nsiproxy: Reuse interface translations within a route
+ enumeration.
+
+Avoid revalidating the same live interface for every route row. Keep the cache local to one enumeration and fall back to uncached successful translations when allocation fails. Preserve immediate validation on subsequent calls and on write paths.
+
+Co-Authored-By: Codex <noreply@openai.com>
+---
+ dlls/nsiproxy.sys/ip.c | 72 ++++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 65 insertions(+), 7 deletions(-)
+
+diff --git a/dlls/nsiproxy.sys/ip.c b/dlls/nsiproxy.sys/ip.c
+index 6092854..6940ba7 100644
+--- a/dlls/nsiproxy.sys/ip.c
++++ b/dlls/nsiproxy.sys/ip.c
+@@ -1440,6 +1440,59 @@ static NTSTATUS ipv6_neighbour_enumerate_all( void *key_data, UINT key_size, voi
+     return STATUS_NOT_IMPLEMENTED;
+ }
+ 
++#ifdef __linux__
++struct route_interface
++{
++    struct route_interface *next;
++    NET_LUID luid;
++    UINT index;
++    char name[];
++};
++
++/* Validate each interface once per enumeration instead of once per route.
++ * Only successful translations are cached, and no state survives the call,
++ * including count-only queries and retries. This is not an atomic snapshot
++ * against interface changes during the enumeration. */
++static BOOL get_route_interface( struct route_interface **interfaces, const char *name,
++                                 NET_LUID *luid, UINT *index )
++{
++    struct route_interface *entry;
++
++    for (entry = *interfaces; entry; entry = entry->next)
++    {
++        if (strcmp( entry->name, name )) continue;
++        *luid = entry->luid;
++        *index = entry->index;
++        return TRUE;
++    }
++
++    if (!convert_unix_name_to_luid( name, luid ) || !convert_luid_to_index( luid, index )) return FALSE;
++
++    /* A cache allocation failure must not drop an otherwise valid route. */
++    if ((entry = malloc( sizeof(*entry) + strlen( name ) + 1 )))
++    {
++        entry->luid = *luid;
++        entry->index = *index;
++        strcpy( entry->name, name );
++        entry->next = *interfaces;
++        *interfaces = entry;
++    }
++    return TRUE;
++}
++
++static void free_route_interfaces( struct route_interface *interfaces )
++{
++    struct route_interface *next;
++
++    while (interfaces)
++    {
++        next = interfaces->next;
++        free( interfaces );
++        interfaces = next;
++    }
++}
++#endif
++
+ struct ipv4_route_data
+ {
+     NET_LUID luid;
+@@ -1510,6 +1563,7 @@ static NTSTATUS ipv4_forward_enumerate_all( void *key_data, UINT key_size, void
+ 
+ #ifdef __linux__
+     {
++        struct route_interface *interfaces = NULL;
+         struct ifaddrs *addrs, *ifentry;
+         char buf[512], *ptr;
+         struct in_addr mask;
+@@ -1521,8 +1575,7 @@ static NTSTATUS ipv4_forward_enumerate_all( void *key_data, UINT key_size, void
+         for (ifentry = addrs; ifentry; ifentry = ifentry->ifa_next)
+         {
+             if (!(ifentry->ifa_flags & IFF_LOOPBACK)) continue;
+-            if (!convert_unix_name_to_luid( ifentry->ifa_name, &entry.luid )) continue;
+-            if (!convert_luid_to_index( &entry.luid, &entry.if_index )) continue;
++            if (!get_route_interface( &interfaces, ifentry->ifa_name, &entry.luid, &entry.if_index )) continue;
+ 
+             if (num < *count)
+             {
+@@ -1554,7 +1607,11 @@ static NTSTATUS ipv4_forward_enumerate_all( void *key_data, UINT key_size, void
+         }
+         freeifaddrs( addrs );
+ 
+-        if (!(fp = fopen( "/proc/net/route", "r" ))) return STATUS_NOT_SUPPORTED;
++        if (!(fp = fopen( "/proc/net/route", "r" )))
++        {
++            free_route_interfaces( interfaces );
++            return STATUS_NOT_SUPPORTED;
++        }
+ 
+         /* skip header line */
+         fgets( buf, sizeof(buf), fp );
+@@ -1563,8 +1620,7 @@ static NTSTATUS ipv4_forward_enumerate_all( void *key_data, UINT key_size, void
+             while (!isspace( *ptr )) ptr++;
+             *ptr++ = '\0';
+ 
+-            if (!convert_unix_name_to_luid( buf, &entry.luid )) continue;
+-            if (!convert_luid_to_index( &entry.luid, &entry.if_index )) continue;
++            if (!get_route_interface( &interfaces, buf, &entry.luid, &entry.if_index )) continue;
+ 
+             entry.prefix.s_addr = strtoul( ptr, &ptr, 16 );
+             entry.next_hop.s_addr = strtoul( ptr + 1, &ptr, 16 );
+@@ -1588,6 +1644,7 @@ static NTSTATUS ipv4_forward_enumerate_all( void *key_data, UINT key_size, void
+             num++;
+         }
+         fclose( fp );
++        free_route_interfaces( interfaces );
+     }
+ #elif defined(HAVE_SYS_SYSCTL_H) && defined(NET_RT_DUMP)
+     {
+@@ -1807,6 +1864,7 @@ static NTSTATUS ipv6_forward_enumerate_all( void *key_data, UINT key_size, void
+ 
+ #ifdef __linux__
+     {
++        struct route_interface *interfaces = NULL;
+         struct ipv6_route_data entry;
+         char buf[512], *ptr, *end;
+         UINT rtf_flags;
+@@ -1837,8 +1895,7 @@ static NTSTATUS ipv6_forward_enumerate_all( void *key_data, UINT key_size, void
+             end = ptr;
+             while (*end && !isspace(*end)) ++end;
+             *end = 0;
+-            if (!convert_unix_name_to_luid( ptr, &entry.luid )) continue;
+-            if (!convert_luid_to_index( &entry.luid, &entry.if_index )) continue;
++            if (!get_route_interface( &interfaces, ptr, &entry.luid, &entry.if_index )) continue;
+ 
+             if (num < *count)
+             {
+@@ -1851,6 +1908,7 @@ static NTSTATUS ipv6_forward_enumerate_all( void *key_data, UINT key_size, void
+             num++;
+         }
+         fclose(fp);
++        free_route_interfaces( interfaces );
+     }
+ #else
+     FIXME( "not implemented\n" );
+-- 
+2.53.0
+

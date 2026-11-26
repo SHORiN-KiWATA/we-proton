@@ -65,6 +65,8 @@
 | `wine/0056-win32u-Report-the-previous-foreground-thread-in-WM_A` | `WM_ACTIVATEAPP(TRUE)` 的 lParam 报上一个前台窗口的线程（前台原来不在 Wine 里时报桌面线程），取代 GE-Proton `game-patches/0001` 报收消息线程自己的做法；`set_foreground_window()` 经 `set_active_window()` 的最后一个参数传下来 |
 | `wine/0059-win32u-Keep-top-level-windows-in-place-when-the-virt` | 虚拟屏原点（主显示器左上角）变化时，桌面窗口把所有没最小化的顶层窗口平移同样的量，旧原点取自桌面窗口自己的矩形；原来窗口矩形不动、X 窗口也不动，左边屏上的窗口会被算到虚拟屏外面而撤掉 |
 | `wine/0060-user32-Implement-ShutdownBlockReasonCreate-Query-Des` | `ShutdownBlockReasonCreate/Query/Destroy`：原因存成窗口属性，参数检查和错误码照 Windows 11 实测（只限顶层窗口、空原因 87、无效窗口 1400、桌面窗口返回 5），导出原来缺的 Query |
+| `wine/0062-nsiproxy-Ignore-stale-Unix-network-interface-entries` | 过滤已失效的 Unix 接口缓存身份，见 [报告](fixes/0062-nsiproxy-live-interfaces/README.md) |
+| `wine/0063-nsiproxy-Reuse-interface-translations-within-a-route` | 复用单次路由枚举内的接口转换，修复 0062 的性能回退，见 [报告](fixes/0063-route-interface-cache/README.md) |
 | `wine/0065-winedmo-Use-frame-threading-for-H.264-also-for-low-l` | H.264 解码在 `MF_LOW_LATENCY` 下也开帧多线程：原来只开切片多线程，每帧一个切片的视频只能单核解码，4K 60 帧跟不上实时，播放器丢掉迟到的帧，画面全黑 |
 | `wine/0066-win32u-Let-winex11-blend-layered-child-windows-over-` | （临时：DW-Proton 上游修了之后换成那边的）分层子窗口（包括 `SetParent` 进别的窗口的分层弹窗）叠到父窗口的 3D 画面上：win32u 保存它的图像和整体不透明度（只改不透明度的 `UpdateLayeredWindow` 不再被忽略），winex11 把它混到父窗口交出的每一帧上 |
 | `wine/0067-winex11-Keep-the-last-frame-when-a-client-window-goe` | （同上）客户区窗口转成离屏时保留最后一帧，不再闪一两帧黑屏 |
@@ -80,6 +82,10 @@
 GE-Proton 主线在正式版之前的一部分修复会提前搬过来，放在 GE 自己的补丁目录里，见 `we/ge-backports.md`。
 
 0003、0016、0023 在换到 GE-Proton 底座时改过（0049、0050、0052–0056、0059、0060 是换底座之后新加的）：0003 改到 GE-Proton 新的 SIGSYS 处理函数里；0016 修了一处 `-Werror` 下报错的格式串；0023 和 GE-Proton 覆盖层窗口的条件合并。
+
+## 可选的共享网络入口
+
+[网络集成说明](network-integration/README.md)介绍如何调用现有 shorin-proton-wrapper，让原生 Steam 及标准子进程加入加速器网络。入口单独使用，不自动覆盖系统 Steam 命令；配置、接口修复原理与验证范围见该目录。
 
 ## 测试
 
