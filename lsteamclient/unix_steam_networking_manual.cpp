@@ -7,6 +7,136 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(steamclient);
 
+class wrap_ISteamNetworkingConnectionSignaling : public u_ISteamNetworkingConnectionCustomSignaling
+{
+    static constexpr uint64_t uninitialized_value = 0x4545bcaf1d55cd8d;
+    bool last_send_signal_win_ret = true;
+
+    int8_t SendSignal( /*HSteamNetConnection*/uint32_t hConn, const SteamNetConnectionInfo_t_144 *info, const void *pMsg, int32_t cbMsg ) override
+    {
+        if (TRACE_ON(steamclient))
+            fprintf( stderr, "trace:steamclient:wrap_ISteamNetworkingConnectionSignaling::SendSignal %p, %#x, %p, %p, %d, last ret %d.\n",
+                     this, hConn, info, pMsg, cbMsg, last_send_signal_win_ret );
+        if (!last_send_signal_win_ret) return 0;
+        queue_connection_send_signal( win_class, hConn, (const SteamNetConnectionInfo_t_153a *)info, cbMsg, pMsg,
+                                      before_delivery, send_signal_set_result, (ULONG_PTR)this );
+        return 1;
+    }
+
+    void Release() override
+    {
+        if (TRACE_ON(steamclient))
+            fprintf( stderr, "trace:steamclient:wrap_ISteamNetworkingConnectionSignaling::Release %p.\n", this );
+        queue_connection_release( win_class, before_delivery, release_set_result, (ULONG_PTR)this );
+    }
+
+    /* This is called right before Win side gets the callback data, fix up win class value */
+    static bool before_delivery( struct callback *cb, uint64_t context )
+    {
+        class wrap_ISteamNetworkingConnectionSignaling *c = (class wrap_ISteamNetworkingConnectionSignaling *)(ULONG_PTR)context;
+
+        cb->connection_send_signal.win_class = c->win_class;
+        if (!c->win_class)
+        {
+            FIXME( "NULL win_class.\n" );
+            if (cb->type == CALL_IFACE_VTABLE_1_CONNECTION_RELEASE)
+                delete c;
+            return true;
+        }
+        if (c->win_class == uninitialized_value)
+        {
+            ERR( "wrap_ISteamNetworkingConnectionSignaling win_class is not initialized.\n" );
+            return false;
+        }
+        return true;
+    }
+
+    static void send_signal_set_result( uint64_t retval, uint64_t context )
+    {
+        class wrap_ISteamNetworkingConnectionSignaling *c = (class wrap_ISteamNetworkingConnectionSignaling *)(ULONG_PTR)context;
+        TRACE( "result %d.\n", (int)(retval & 0xff) );
+        c->last_send_signal_win_ret = !!(retval & 0xff);
+    }
+
+    static void release_set_result( uint64_t retval, uint64_t context )
+    {
+        class wrap_ISteamNetworkingConnectionSignaling *c = (class wrap_ISteamNetworkingConnectionSignaling *)(ULONG_PTR)context;
+        delete c;
+    }
+
+public:
+    uint64_t win_class;
+
+    static void set_win_create_connection_signaling_callback_result( uint64_t retval, uint64_t context )
+    {
+        class wrap_ISteamNetworkingConnectionSignaling *c = (class wrap_ISteamNetworkingConnectionSignaling *)(ULONG_PTR)context;
+        c->win_class = retval;
+    }
+
+
+    wrap_ISteamNetworkingConnectionSignaling()
+    {
+        if (TRACE_ON(steamclient))
+            fprintf( stderr, "trace:steamclient:wrap_ISteamNetworkingConnectionSignaling() created %p.\n", this );
+        win_class = uninitialized_value;
+    }
+
+    wrap_ISteamNetworkingConnectionSignaling(void *win_class)
+    {
+        if (TRACE_ON(steamclient))
+            fprintf( stderr, "trace:steamclient:wrap_ISteamNetworkingConnectionSignaling() created %p, win_class %p.\n",
+                     this, win_class );
+
+        this->win_class = (ULONG_PTR)win_class;
+    }
+
+    ~wrap_ISteamNetworkingConnectionSignaling()
+    {
+        TRACE( "destroyed %p.\n", this );
+    }
+};
+
+class ISteamNetworkingSignalingRecvContext
+{
+public:
+    virtual u_ISteamNetworkingConnectionCustomSignaling *OnConnectRequest( /*HSteamNetConnection*/uint32_t hConn, const SteamNetworkingIdentity *identityPeer, int nLocalVirtualPort ) = 0;
+    virtual void SendRejectionSignal( const SteamNetworkingIdentity *identityPeer, const void *pMsg, int cbMsg ) = 0;
+};
+
+class wrap_ISteamNetworkingCustomSignalingRecvContext : public ISteamNetworkingSignalingRecvContext
+{
+    u_ISteamNetworkingConnectionCustomSignaling * OnConnectRequest( uint32_t hconn, const SteamNetworkingIdentity *identityPeer, int nLocalVirtualPort ) override
+    {
+        static int once;
+
+        u_ISteamNetworkingConnectionCustomSignaling *signaling_wrapper = new wrap_ISteamNetworkingConnectionSignaling();
+
+        TRACE( "%#x %p %d.\n", hconn, identityPeer, nLocalVirtualPort );
+
+        /* The last interface definition in headers doesn't have nLocalVirtualPort parameter while there newer class
+         * apparently has the parameter. Just use the new one for now (will work for win64 with old too but not for win32. */
+        if (!once++) FIXME( "Using the newer class definition without version check.\n" );
+        queue_on_connect_request( win_class, hconn, identityPeer, nLocalVirtualPort,
+                                  wrap_ISteamNetworkingConnectionSignaling::set_win_create_connection_signaling_callback_result,
+                                  (ULONG_PTR)signaling_wrapper );
+        return signaling_wrapper;
+    }
+
+    void SendRejectionSignal( const SteamNetworkingIdentity *identityPeer, const void * pMsg, int cbMsg ) override
+    {
+        TRACE( "%p %p, %d.\n", identityPeer, pMsg, cbMsg );
+        queue_send_rejection_signal( win_class, identityPeer, cbMsg, pMsg );
+    }
+
+public:
+    uint64_t win_class;
+
+    wrap_ISteamNetworkingCustomSignalingRecvContext( void *win_class )
+    {
+        this->win_class = (ULONG_PTR)win_class;
+    }
+};
+
 template< typename Wmsg >
 static void steam_networking_message_utow( Wmsg &dst, const u_SteamNetworkingMessage_t_144 &src )
 {
@@ -272,22 +402,10 @@ static NTSTATUS ISteamNetworkingSockets_ReceiveMessagesOnPollGroup( Iface *iface
     return 0;
 }
 
-struct u_ISteamNetworkingConnectionCustomSignaling *create_LinuxISteamNetworkingConnectionCustomSignaling( void *win )
-{
-    FIXME( "not implemented!\n" );
-    return NULL;
-}
-
-struct u_ISteamNetworkingCustomSignalingRecvContext *create_LinuxISteamNetworkingCustomSignalingRecvContext( void *win )
-{
-    FIXME( "not implemented!\n" );
-    return NULL;
-}
-
 template< typename Iface, typename Params, typename Umsg >
 static NTSTATUS ISteamNetworkingSockets_ConnectP2PCustomSignaling( Iface *iface, Params *params, bool wow64, Umsg const& )
 {
-    u_ISteamNetworkingConnectionCustomSignaling *u_pSignaling = create_LinuxISteamNetworkingConnectionCustomSignaling( params->pSignaling );
+    u_ISteamNetworkingConnectionCustomSignaling *u_pSignaling = new wrap_ISteamNetworkingConnectionSignaling( params->pSignaling );
     params->_ret = iface->ConnectP2PCustomSignaling( u_pSignaling, params->pPeerIdentity, params->nOptions, params->pOptions );
     return 0;
 }
@@ -295,8 +413,9 @@ static NTSTATUS ISteamNetworkingSockets_ConnectP2PCustomSignaling( Iface *iface,
 template< typename Iface, typename Params, typename Umsg >
 static NTSTATUS ISteamNetworkingSockets_ReceivedP2PCustomSignal( Iface *iface, Params *params, bool wow64, Umsg const& )
 {
-    u_ISteamNetworkingCustomSignalingRecvContext *u_pContext = create_LinuxISteamNetworkingCustomSignalingRecvContext( params->pContext );
-    params->_ret = iface->ReceivedP2PCustomSignal( params->pMsg, params->cbMsg, u_pContext );
+    wrap_ISteamNetworkingCustomSignalingRecvContext u_context ( params->pContext );
+    params->_ret = iface->ReceivedP2PCustomSignal( params->pMsg, params->cbMsg,
+            params->pContext ? (u_ISteamNetworkingCustomSignalingRecvContext *)&u_context : NULL );
     return 0;
 }
 
@@ -315,7 +434,10 @@ class wrap_callback_cdecl_impl
         static void *w_callback_func;
         static void U_CDECL u_callback( u_callback_type *u_dat )
         {
-            TRACE( "u_callback %p, w_callback_func %p, u_dat %p.\n", u_callback, w_callback_func, u_dat );
+            /* This may be called from native thread. */
+            if (TRACE_ON(steamclient))
+                fprintf( stderr, "trace:steamclient:wrap_callback_cdecl_impl::u_callback %p, w_callback_func %p, u_dat %p.\n",
+                         u_callback, w_callback_func, u_dat );
             if (std::is_same<w_callback_type, u_callback_type>::value)
             {
                 if (w_callback_func) queue_cdecl_func_callback( (w_cdecl_func)w_callback_func, u_dat, sizeof(*u_dat) );
@@ -338,16 +460,57 @@ class wrap_callback_cdecl_impl
 template<typename w_callback_type, typename u_callback_type>
 void *wrap_callback_cdecl_impl<w_callback_type, u_callback_type>::w_callback_func;
 
+static void *create_connection_signaling_callback_w_func;
+static int create_connection_signaling_callback_sdk_version;
+
+/* We should return ISteamNetworkingConnectionSignaling * and may start receving callback calls at once, while
+ * we don't have Windows side callback yet. The logic here currently depends on the sequential callback
+ * queue processing. wrap_ISteamNetworkingConnectionSignaling::set_win_create_connection_signaling_callback_result
+ * is called after windows callback is called, while Unix side fired ISteamNetworkingConnectionSignaling callback can be already
+ * queued. When that callback is fetched by the Win side the win interface is updated with 'before_delivery' callback. */
+static u_ISteamNetworkingConnectionCustomSignaling * U_CDECL wrap_create_connection_signaling_callback(
+    /*ISteamNetworkingSockets*/void *local_interface, const SteamNetworkingIdentity *identityPeer, int nLocalVirtualPort,
+    int nRemoteVirtualPort )
+{
+    u_ISteamNetworkingConnectionCustomSignaling *cb_class_wrapper;
+    int iface_version;
+    if (TRACE_ON(steamclient))
+        fprintf( stderr, "trace:steamclient:wrap_create_connection_signaling_callback %p, %p, %d, %d, w_func %p.\n",
+                 local_interface, identityPeer, nLocalVirtualPort, nRemoteVirtualPort, create_connection_signaling_callback_w_func );
+    if (!create_connection_signaling_callback_w_func)
+    {
+        if (ERR_ON(steamclient))
+            fprintf( stderr, "err:steamclient:wrap_create_connection_signaling_callback w_func is NULL.\n" );
+        return NULL;
+    }
+
+    cb_class_wrapper = new wrap_ISteamNetworkingConnectionSignaling();
+    assert( create_connection_signaling_callback_sdk_version == 150 || create_connection_signaling_callback_sdk_version == 153 );
+    iface_version = create_connection_signaling_callback_sdk_version == 150 ? 9 : 12 /* latest for now */;
+    queue_create_connection_signaling_callback( (w_create_connection_signaling_callback_func)create_connection_signaling_callback_w_func,
+        local_interface, iface_version, identityPeer, nLocalVirtualPort, nRemoteVirtualPort,
+        wrap_ISteamNetworkingConnectionSignaling::set_win_create_connection_signaling_callback_result, (ULONG_PTR)cb_class_wrapper );
+    return cb_class_wrapper;
+}
+
+static void *wrap_create_connection_signaling( void ***w_callback_ptr, int sdk_version )
+{
+    create_connection_signaling_callback_sdk_version = sdk_version;
+    *w_callback_ptr = &create_connection_signaling_callback_w_func;
+    return (void *)wrap_create_connection_signaling_callback;
+}
+
 template <int sdk_version>
 void *wrap_callback_cdecl( int eValue, void ***w_callback_ptr )
 {
-    static_assert(sdk_version == 151 || sdk_version == 153);
+    /* Check for other occurances guarded by runtime assert() if changing this. */
+    static_assert(sdk_version == 150 || sdk_version == 153);
 
     switch (eValue)
     {
         case 201 /*ConnectionStatusChanged*/:
-            if (sdk_version == 151)
-                return wrap_callback_cdecl_impl<w_SteamNetConnectionStatusChangedCallback_t_151, u_SteamNetConnectionStatusChangedCallback_t_151>
+            if (sdk_version == 150)
+                return wrap_callback_cdecl_impl<w_SteamNetConnectionStatusChangedCallback_t_144, u_SteamNetConnectionStatusChangedCallback_t_144>
                        ::get_wrapped_callback( w_callback_ptr );
             return wrap_callback_cdecl_impl<w_SteamNetConnectionStatusChangedCallback_t_153a, u_SteamNetConnectionStatusChangedCallback_t_153a>
                    ::get_wrapped_callback( w_callback_ptr );
@@ -356,16 +519,16 @@ void *wrap_callback_cdecl( int eValue, void ***w_callback_ptr )
         case 203 /*RelayNetworkStatusChanged*/:
             return wrap_callback_cdecl_impl<SteamRelayNetworkStatus_t, SteamRelayNetworkStatus_t>::get_wrapped_callback( w_callback_ptr );
         case 204 /*MessagesSessionRequest*/:
-            return wrap_callback_cdecl_impl<SteamNetworkingMessagesSessionRequest_t_151, SteamNetworkingMessagesSessionRequest_t_151>::get_wrapped_callback( w_callback_ptr );
+            return wrap_callback_cdecl_impl<SteamNetworkingMessagesSessionRequest_t, SteamNetworkingMessagesSessionRequest_t>::get_wrapped_callback( w_callback_ptr );
         case 205 /*MessagesSessionFailed*/:
-            if (sdk_version == 151)
-                return wrap_callback_cdecl_impl<SteamNetworkingMessagesSessionFailed_t_151, SteamNetworkingMessagesSessionFailed_t_151>
+            if (sdk_version == 150)
+                return wrap_callback_cdecl_impl<SteamNetworkingMessagesSessionFailed_t_150, SteamNetworkingMessagesSessionFailed_t_150>
                        ::get_wrapped_callback( w_callback_ptr );
             return wrap_callback_cdecl_impl<SteamNetworkingMessagesSessionFailed_t_153a, SteamNetworkingMessagesSessionFailed_t_153a>
                    ::get_wrapped_callback( w_callback_ptr );
         case 206 /*CreateConnectionSignaling*/:
-            FIXME( "CreateConnectionSignaling not handled.\n");
-            break;
+            WARN( "Undocumented CreateConnectionSignaling.\n");
+            return wrap_create_connection_signaling( w_callback_ptr, sdk_version );
         case 207 /*FakeIPResult*/:
             return wrap_callback_cdecl_impl<SteamNetworkingFakeIPResult_t, SteamNetworkingFakeIPResult_t>
                    ::get_wrapped_callback( w_callback_ptr );
@@ -421,7 +584,7 @@ static NTSTATUS ISteamNetworkingUtils_SetConfigValue( u_ISteamNetworkingUtils_St
 
     TRACE("eValue %d, pArg %p.\n", params->eValue, params->pArg);
 
-    if (params->pArg && (u_fn = wrap_callback_cdecl<151>( params->eValue, &w_callback_ptr )))
+    if (params->pArg && (u_fn = wrap_callback_cdecl<150>( params->eValue, &w_callback_ptr )))
     {
         if (!*(void **)(const void *)params->pArg) u_fn = NULL;
         params->_ret = iface->SetConfigValue( params->eValue, params->eScopeType,
@@ -490,8 +653,9 @@ static NTSTATUS ISteamNetworkingSockets_CreateListenSocketIP( Iface *iface, Para
 template< typename Iface, typename Params >
 static NTSTATUS ISteamNetworkingSockets_ConnectP2PCustomSignaling( Iface *iface, Params *params, bool wow64, u_SteamNetworkingMessage_t_153a const & )
 {
+    u_ISteamNetworkingConnectionCustomSignaling *u_pSignaling = new wrap_ISteamNetworkingConnectionSignaling( params->pSignaling );
     convert_SteamNetworkingConfigValue_t_array conv( params->pOptions, params->nOptions );
-    params->_ret = iface->ConnectP2PCustomSignaling( params->pSignaling, params->pPeerIdentity, params->nRemoteVirtualPort, params->nOptions, conv.converted_options );
+    params->_ret = iface->ConnectP2PCustomSignaling( u_pSignaling, params->pPeerIdentity, params->nRemoteVirtualPort, params->nOptions, conv.converted_options );
     return 0;
 }
 
@@ -564,6 +728,7 @@ LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets008, Rece
 LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets009, ReceiveMessagesOnConnection, u_SteamNetworkingMessage_t_147() );
 LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets009, ReceiveMessagesOnPollGroup, u_SteamNetworkingMessage_t_147() );
 LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets009, SendMessages, u_SteamNetworkingMessage_t_147() );
+LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets009, ReceivedP2PCustomSignal, u_SteamNetworkingMessage_t_147() );
 
 LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets012, ReceiveMessagesOnConnection, u_SteamNetworkingMessage_t_153a() );
 LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets012, ReceiveMessagesOnPollGroup, u_SteamNetworkingMessage_t_153a() );
@@ -576,6 +741,7 @@ LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets012, Conn
 LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets012, ConnectToHostedDedicatedServer );
 LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets012, CreateHostedDedicatedServerListenSocket );
 LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets012, CreateListenSocketP2PFakeIP );
+LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets012, ReceivedP2PCustomSignal, u_SteamNetworkingMessage_t_153a() );
 
 LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets013, ReceiveMessagesOnConnection, u_SteamNetworkingMessage_t_153a() );
 LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets013, ReceiveMessagesOnPollGroup, u_SteamNetworkingMessage_t_153a() );
@@ -588,6 +754,7 @@ LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets013, Conn
 LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets013, ConnectToHostedDedicatedServer );
 LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets013, CreateHostedDedicatedServerListenSocket );
 LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets013, CreateListenSocketP2PFakeIP );
+LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingSockets, SteamNetworkingSockets013, ReceivedP2PCustomSignal, u_SteamNetworkingMessage_t_153a() );
 
 LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingUtils, SteamNetworkingUtils003, AllocateMessage, u_SteamNetworkingMessage_t_147() );
 LSTEAMCLIENT_UNIX_IMPL( ISteamNetworkingUtils, SteamNetworkingUtils003, SetConfigValue, u_SteamNetworkingMessage_t_147() );

@@ -60,19 +60,13 @@ apply_all_in_dir() {
     git submodule foreach --recursive --quiet 'git reset --hard -q HEAD && git clean -xdfq'
     echo "VKD3D-PROTON: prevent stalled present waits from deadlocking swapchain teardown"
     echo "VKD3D-PROTON: don't map the parent process image for engine detection (EAC untrusted file, Star Citizen/Hunt)"
+    echo "VKD3D-PROTON: disable viewports not set by RSSetViewports (Assetto Corsa Rally triple screen on AMD)"
     apply_all_in_dir "../patches/vkd3d-proton/"
     popd
 
     pushd dxvk-nvapi
     git reset --hard HEAD
     git clean -xdf
-    popd
-
-    pushd protonfixes
-    git reset --hard HEAD
-    git clean -xdf
-    echo "PROTONFIXES: apply GE protonfixes patches"
-    apply_all_in_dir "../patches/protonfixes/"
     popd
 
     pushd wineopenxr
@@ -97,8 +91,13 @@ apply_all_in_dir() {
     echo "DISCORD: -DISCORD RPC BRIDGE- patch steam/umu helpers"
     apply_all_in_dir "patches/discordrpc/helpers"
 
+    # Ubisoft games stayed "Running" in Steam after quitting: https://github.com/ValveSoftware/Proton/pull/10356
+    echo "STEAM_HELPER: close Ubisoft Connect after the game exits"
+    apply_all_in_dir "patches/steam_helper"
+
     git checkout -- \
         lsteamclient/Makefile.in \
+        lsteamclient/overlay_bridge/src/focus_proxy.c \
         lsteamclient/gen_wrapper.py \
         lsteamclient/steam_input_manual.c \
         lsteamclient/steam_matchmaking_manual.c \
@@ -453,6 +452,9 @@ apply_all_in_dir() {
     echo "WINE: -HOTFIX- Share selected cursor images across processes"
     apply_patch "../patches/wine-hotfixes/pending/win32u-share-selected-cursors-across-processes.patch"
 
+    echo "WINE: -HOTFIX- Share resource cursors when they are created (Rockstar overlay cursor)"
+    apply_patch "../patches/wine-hotfixes/pending/win32u-share-resource-cursors-at-creation.patch"
+
     echo "WINE: -HOTFIX- Limit the extra Vulkan swapchain image workaround to DOOM"
     apply_patch "../patches/wine-hotfixes/pending/win32u-limit-extra-swapchain-image-to-doom.patch"
 
@@ -597,6 +599,12 @@ apply_all_in_dir() {
     echo "WINE: expose native DualSense Edge as DualSense for Diablo IV"
     apply_patch "../patches/wine-hotfixes/pending/winebus-diablo-iv-dualsense-edge-identity.patch"
 
+    echo "WINE: expose Bluetooth DualSense controllers as USB when Steam Input is disabled"
+    apply_patch "../patches/wine-hotfixes/pending/winebus-expose-bluetooth-dualsense-as-usb.patch"
+
+    echo "WINE: send DualSense haptics and speaker audio to Bluetooth controllers"
+    apply_patch "../patches/wine-hotfixes/pending/winepulse-bluetooth-dualsense-haptics.patch"
+
     echo "WINE: -HOTFIX- ntdll: skip needless wake in RtlReleaseSRWLockShared (ValveSoftware/wine#367)"
     apply_patch "../patches/wine-hotfixes/pending/ntdll-srwlock-skip-needless-shared-release-wake.patch"
 
@@ -678,11 +686,113 @@ apply_all_in_dir() {
     apply_patch "../patches/wine-hotfixes/pending/ntdll-free-teb-and-stacks-of-killed-threads.patch"
     apply_patch "../patches/wine-hotfixes/pending/kernel32-tests-killed-thread-stack-freed.patch"
 
-    # https://github.com/ValveSoftware/Proton/issues/7486#issuecomment-6594771550
-    echo "WINE: -PENDING- ntdll: let a thread killed during its startup exit instead of hanging (Helldivers 2 thread growth)"
-    apply_patch "../patches/wine-hotfixes/pending/ntdll-dont-keep-reply-pipe-open-during-thread-init.patch"
+    # NtCreateThreadEx() fails with STATUS_INVALID_CID when the server drains a stale fd
+    echo "WINE: -PENDING- server: keep the request's status when receive_fd() drops a stale fd (spurious thread creation failures)"
+    apply_patch "../patches/wine-hotfixes/pending/server-keep-request-status-when-dropping-stale-fd.patch"
 
+    # The killed-thread freeing (#917 follow-up) can put a TEB on its list twice
+    echo "WINE: -PENDING- ntdll: don't queue a killed thread twice for freeing (double free under thread churn)"
+    apply_patch "../patches/wine-hotfixes/pending/ntdll-dont-queue-a-killed-thread-twice.patch"
+
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/937
+    apply_patch "../patches/wine-hotfixes/pending/winewayland-use-steam-app-id-as-app-id.patch"
+
+    # https://github.com/ValveSoftware/Proton/issues/9994
+    echo "WINE: -HOTFIX- Use the exe name as WM_CLASS/app ID when SteamAppId is 0 or default (umu)"
+    apply_patch "../patches/wine-hotfixes/pending/winex11-winewayland-use-exe-name-for-non-steam-app-ids.patch"
+
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/877
+    apply_patch "../patches/wine-hotfixes/pending/win32u-winewayland-add-focus-debug-channel.patch"
+    # AION 2 (#877): deactivate when the host focus loss cannot set the desktop foreground
+    apply_patch "../patches/wine-hotfixes/pending/win32u-deactivate-window-when-host-focus-loss-fails.patch"
+    # niri/Smithay offer xdg-decoration version 1, which got no server-side decorations (#955)
+    apply_patch "../patches/wine-hotfixes/pending/winewayland-bind-xdg-decoration-manager-version-1.patch"
+    # Balatro (#957): the pointer jumped to the top left corner when an early cursor lock ended
+    apply_patch "../patches/wine-hotfixes/pending/winewayland-dont-hint-an-unknown-cursor-position-to-a-locked-pointer.patch"
+
+    # PROTON_PREFER_SDL / Steam Deck: Sony pads were dropped by both hidraw and SDL
+    apply_patch "../patches/wine-hotfixes/pending/winebus-sdl-keep-sony-pads-when-hidraw-is-disabled.patch"
+    # Bluetooth DualShock 4 presented as a wired one, like the DualSense
+    apply_patch "../patches/wine-hotfixes/pending/winebus-expose-bluetooth-dualshock4-as-usb.patch"
+    apply_patch "../patches/wine-hotfixes/pending/winepulse-bluetooth-dualshock4-audio.patch"
     apply_patch "../patches/wine-hotfixes/pending/winedmo-disable-d3d11-aware-for-phantom-blade-zero.patch"
+    # FlatOut 2 (#939): XInput deadlocked when first called with the loader lock held
+    apply_patch "../patches/wine-hotfixes/pending/xinput-dont-wait-for-update-thread-under-loader-lock.patch"
+    # Le Mans Ultimate VR loads a .cur cursor through D3DX (#944)
+    apply_patch "../patches/wine-hotfixes/pending/d3dx-cur-ico-loading-for-le-mans-ultimate.patch"
+    apply_patch "../patches/wine-hotfixes/pending/d3dx-cur-ico-bounds-and-cursor-alpha-for-le-mans-ultimate.patch"
+    # Le Mans Ultimate: online key derivation and wheel reconnection (#777, #944)
+    apply_patch "../patches/wine-hotfixes/pending/bcrypt-kdf-secret-append-for-le-mans-ultimate.patch"
+    apply_patch "../patches/wine-hotfixes/pending/dinput-find-hotplugged-devices-for-le-mans-ultimate.patch"
+    # RPG Maker games and others: MIDI music was silent without a user-run synth (#949)
+    apply_patch "../patches/wine-hotfixes/pending/winemidisynth-add-software-synth-for-midi-output.patch"
+    # PROTON_NO_XIM=1: games get every key press, dead keys included, and dead keys combine like Windows
+    apply_patch "../patches/wine-hotfixes/pending/winex11-no-xim-windows-dead-keys.patch"
+    # ETQW: no WM_INPUTLANGCHANGE at startup when the layout is unchanged (#629)
+    apply_patch "../patches/wine-hotfixes/pending/win32u-dont-send-wm-inputlangchange-for-an-unchanged-layout.patch"
+    # Arc Raiders: no null host swapchain in vkSetLatencySleepModeNV for managed swapchains (#891)
+    apply_patch "../patches/wine-hotfixes/pending/win32u-skip-vksetlatencysleepmodenv-for-managed-swapchains.patch"
+    # HDR: Steam overlay and MangoHud see the real colorspace of pass-through HDR swapchains
+    apply_patch "../patches/wine-hotfixes/pending/win32u-let-host-layers-see-the-hdr-colorspace-of-pass-through-swapchains.patch"
+    # PROTON_STREAMLINE_UPGRADE: list newer Streamline plugins the game does not ship (#964)
+    apply_patch "../patches/wine-hotfixes/pending/kernelbase-ntdll-list-upgraded-streamline-plugins-the-game-does-not-ship.patch"
+    # Stronghold Crusader HD: cursor and scrolling too fast on high refresh rate displays (enabled via protonfixes 40970)
+    # Applied after the video playback rework, which changes the same ddraw files.
+    apply_patch "../patches/game-patches/ddraw-max-game-ticks.patch"
+    # Stronghold Crusader HD: tiny cursor on high-resolution displays (enabled via protonfixes 40970)
+    apply_patch "../patches/game-patches/winex11-cursor-scale.patch"
+    # Warhammer Survivors: the picture froze after Alt+Tab in exclusive fullscreen, the presentation owner went idle
+    echo "WINE: -WAYLAND- win32u, winewayland: promote a retired presenter once the owner stops presenting (frozen picture after Alt+Tab)"
+    apply_patch "../patches/wine-hotfixes/pending/winewayland-promote-retired-presenter-when-owner-stops-presenting.patch"
+    # Assetto Corsa + Custom Shaders Patch: CSP checks its signed dwrite.dll with CryptSIPVerifyIndirectData;
+    # the stub made online servers (No Hesi scores, Setup Exchange) reject Linux clients
+    apply_patch "../patches/wine-hotfixes/pending/wintrust-implement-cryptsipverifyindirectdata.patch"
+    # WritePrivateProfileStringA: values over 32766 characters failed and freed an uninitialized buffer
+    apply_patch "../patches/wine-hotfixes/pending/kernel32-write-profile-string-a-allow-values-over-32k.patch"
+    # Layered overlay DIRECT mode: input shape never updated for windows reaching past the screen (#752)
+    apply_patch "../patches/wine-hotfixes/pending/winex11-read-the-direct-layered-overlay-shape-from-the-toplevel-pixmap.patch"
+    # TriggerHeart EXELICA ENHANCED: LoadAccelerators in the message loop used up the user handles (abort in win32u)
+    apply_patch "../patches/wine-hotfixes/pending/user32-cache-accelerator-tables.patch"
+    # GTA III/VC/SA (Wine-Wayland): DirectShow intro videos drawn with GDI into a child window with a pixel format were cut out, window looked minimized (#958)
+    apply_patch "../patches/wine-hotfixes/pending/win32u-keep-gdi-drawn-into-child-windows-that-have-a-pixel-format.patch"
+    # RuneScape (Wine-Wayland): GDI drawn into its Vulkan child window once stayed over the game after #958, fullscreen was black (#995)
+    apply_patch "../patches/wine-hotfixes/pending/win32u-clear-a-child-windows-gdi-over-self-region-when-it-presents.patch"
+    # Battlefield 4: PunkBuster's module scans through a real handle to its own process stalled the game every few seconds (#984)
+    apply_patch "../patches/wine-hotfixes/pending/kernelbase-read-own-loader-list-directly-through-real-process-handles.patch"
+    # Battlefield 4 (Wine-Wayland): alt-tab and applying settings added a decoration to a mapped toplevel, a protocol error that killed the game
+    apply_patch "../patches/wine-hotfixes/pending/winewayland-recreate-the-toplevel-role-when-adding-server-side-decorations.patch"
+    # Chromium/NW.js/WebView2 games lost Tahoma in DirectWrite (browser stack overflow, black window): backport of upstream wine 5ba6d469
+    apply_patch "../patches/wine-hotfixes/pending/win32u-dont-count-not-external-fonts-as-external-font-duplicates.patch"
+    # HORGIHUGH: GetPrivateProfileString("", ...) must read the "[]" section, not the keys before the first header
+    apply_patch "../patches/wine-hotfixes/pending/kernel32-profile-empty-section-name.patch"
+    # Battle.net/Chromium (Wine-Wayland): a restarted GPU process kept showing the dead one's last frame until a resize (#952)
+    apply_patch "../patches/wine-hotfixes/pending/win32u-winewayland-wined3d-make-hwnd-dmabuf-producer-ids-unique-across-processes.patch"
+    # WINE_VK_MANAGED_LINEAR=1: diagnostic, export cross-process Vulkan producers as linear dmabufs (#952 NVIDIA Xid faults)
+    apply_patch "../patches/wine-hotfixes/pending/win32u-add-wine-vk-managed-linear-to-export-cross-process-producers-as-linear.patch"
+    # Battle.net/Chromium (Wine-Wayland): DXVK renders through sRGB views, managed producer images lacked MUTABLE_FORMAT (#952 NVIDIA Xid faults)
+    apply_patch "../patches/wine-hotfixes/pending/win32u-create-managed-swapchain-images-with-the-requested-mutable-format-flags.patch"
+    # Battle.net/Chromium (Wine-Wayland): managed acquire submitted to the app queue while DXVK submitted on another thread (#952 NVIDIA Xid faults, validation THREADING ERROR)
+    apply_patch "../patches/wine-hotfixes/pending/win32u-serialize-application-queue-submits-with-managed-swapchain-acquires.patch"
+    # The Witcher 3: InternetGetConnectedState enumerated all network adapters about 10 times a second while signed in to a CDPR account (periodic stutter)
+    # https://bugs.winehq.org/show_bug.cgi?id=60465
+    # By Erhan Bilgili, from nanomatters/wine-salkim (Wineland), LGPL-2.1+. The wininet cache needs the nsiproxy link/route notifications.
+    # https://github.com/nanomatters/wine-salkim/commit/cca95f22ea5b2ab546a84a72626781467f4b677c
+    echo "WINE: -GAME FIXES- nsiproxy.sys: notify interface and route changes (needed by the wininet connectivity cache)"
+    apply_patch "../patches/wine-hotfixes/pending/nsiproxy-notify-link-and-route-changes.patch"
+    # https://github.com/nanomatters/wine-salkim/commit/fd5c36a6aa68d785e5c0aaabd210053760c61a9d
+    echo "WINE: -GAME FIXES- wininet: cache InternetGetConnectedState until the network changes (Witcher 3 stutter, wine bug 60465)"
+    apply_patch "../patches/wine-hotfixes/pending/wininet-cache-connectivity-until-network-state-changes.patch"
+    # AngelWish (disc): WMA decoder creation fails without the reader's undocumented secure channel interface; stub returning success (#982)
+    apply_patch "../patches/wine-hotfixes/pending/wmvcore-add-a-stub-for-the-undocumented-reader-secure-channel-interface.patch"
+    # GTA III (Wine-Wayland): in a 4:3 emulated display mode the GDI-drawn intro videos were shifted left with the desktop showing on the right
+    apply_patch "../patches/wine-hotfixes/pending/win32u-cover-the-raw-visible-rect-with-the-window-surface-in-emulated-display-modes.patch"
+    # 32-bit Vulkan games (Wine-Wayland): instance creation failed when the 64-bit only HDR colorspace layer was requested (#997)
+    apply_patch "../patches/wine-hotfixes/pending/win32u-retry-vulkan-instance-creation-without-the-hdr-colorspace-layer-if-it-cannot-be-loaded.patch"
+
+    # https://github.com/GloriousEggroll/proton-ge-custom/issues/692
+    # winepipewire.drv by M0n7y5 from CachyOS/wine-cachyos, adapted to this mmdevapi. Opt-in with PROTON_USE_PIPEWIRE=1.
+    echo "WINE: -PIPEWIRE- add winepipewire.drv"
+    apply_all_in_dir "../patches/wine-hotfixes/winepipewire/"
 
 ### (2-8) DW-PROTON AND WE-PROTON PATCHES ###
 

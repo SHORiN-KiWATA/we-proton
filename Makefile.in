@@ -242,6 +242,24 @@ $(eval $(call rules-configure,libpcap,x86_64,unix))
 $(eval $(call rules-configure,libpcap,aarch64,unix))
 
 ##
+## sbc
+##
+
+# SBC encoder for Bluetooth DualShock 4 speaker audio, loaded at runtime by
+# winepulse.
+
+SBC_CONFIGURE_ARGS := \
+	--enable-shared \
+	--disable-static \
+	--disable-tools \
+	--disable-tester
+
+$(eval $(call rules-source,sbc,$(SRCDIR)/sbc))
+$(eval $(call rules-configure,sbc,i386,unix))
+$(eval $(call rules-configure,sbc,x86_64,unix))
+$(eval $(call rules-configure,sbc,aarch64,unix))
+
+##
 ## graphene
 ##
 
@@ -477,13 +495,13 @@ $(eval $(call rules-makedep,lsteamclient,aarch64))
 
 ##
 ## openxr
-## Note 32-bit is not supported by SteamVR, so we don't build it.
+## 32-bit is built for the decoupled wineopenxr (i386 apps without WoW64).
 ##
 
 OPENXR_CMAKE_ARGS = -DHAVE_FILESYSTEM_WITHOUT_LIB=0
 
 $(eval $(call rules-source,openxr,$(SRCDIR)/OpenXR-SDK))
-# $(eval $(call rules-cmake,openxr,i386,unix))
+$(eval $(call rules-cmake,openxr,i386,unix))
 $(eval $(call rules-cmake,openxr,x86_64,unix))
 $(eval $(call rules-cmake,openxr,aarch64,unix))
 
@@ -515,8 +533,35 @@ $(eval $(call rules-makedep,steamexe,aarch64))
 
 
 ##
+## piper-phonemize
+##
+
+PIPER_PHONEMIZE_SOURCE_ARGS = \
+  --exclude lib/**/*
+
+PIPER_PHONEMIZE_x86_64_CMAKE_ARGS = -DONNXRUNTIME_URL=https://proton-archive.steamos.cloud/download/onnx/onnxruntime-linux-x64-1.14.1.tgz
+PIPER_PHONEMIZE_aarch64_CMAKE_ARGS = -DONNXRUNTIME_URL=https://proton-archive.steamos.cloud/download/onnx/onnxruntime-linux-aarch64-1.14.1.tgz
+
+$(eval $(call rules-source,piper-phonemize,$(SRCDIR)/piper-phonemize))
+$(eval $(call rules-cmake,piper-phonemize,x86_64,unix))
+$(eval $(call rules-cmake,piper-phonemize,aarch64,unix))
+
+$(OBJ)/.piper-phonemize-x86_64-post-build:
+	mv $(PIPER_PHONEMIZE_x86_64_DST)/lib/*.so* $(PIPER_PHONEMIZE_x86_64_DST)/lib/$(x86_64-unix_TARGET)
+	touch $@
+
+$(OBJ)/.piper-phonemize-aarch64-post-build:
+	mv $(PIPER_PHONEMIZE_aarch64_DST)/lib/*.so* $(PIPER_PHONEMIZE_aarch64_DST)/lib/$(aarch64-unix_TARGET)
+	touch $@
+
+##
 ## piper
 ##
+
+PIPER_DEPENDS = piper-phonemize
+
+PIPER_x86_64_CMAKE_ARGS = -DPIPER_PHONEMIZE_DIR=$(PIPER_PHONEMIZE_x86_64_DST)
+PIPER_aarch64_CMAKE_ARGS = -DPIPER_PHONEMIZE_DIR=$(PIPER_PHONEMIZE_aarch64_DST)
 
 $(eval $(call rules-source,piper,$(SRCDIR)/piper))
 $(eval $(call rules-cmake,piper,x86_64,unix))
@@ -524,14 +569,18 @@ $(eval $(call rules-cmake,piper,aarch64,unix))
 
 $(OBJ)/.piper-x86_64-post-build:
 	mkdir -p $(PIPER_x86_64_DST)/lib/$(x86_64-unix_TARGET)
+	mv $(PIPER_x86_64_DST)/$(x86_64-unix_TARGET)/* $(PIPER_x86_64_DST)/lib/$(x86_64-unix_TARGET)
 	mv $(PIPER_x86_64_DST)/*.so* $(PIPER_x86_64_DST)/lib/$(x86_64-unix_TARGET)
+	rmdir $(PIPER_x86_64_DST)/$(x86_64-unix_TARGET)
 	mkdir -p $(DST_DIR)/share
 	cp -a $(PIPER_x86_64_DST)/{espeak-ng-data,libtashkeel_model.ort} $(DST_DIR)/share/
 	touch $@
 
 $(OBJ)/.piper-aarch64-post-build:
 	mkdir -p $(PIPER_aarch64_DST)/lib/$(aarch64-unix_TARGET)
+	mv $(PIPER_aarch64_DST)/$(aarch64-unix_TARGET)/* $(PIPER_aarch64_DST)/lib/$(aarch64-unix_TARGET)
 	mv $(PIPER_aarch64_DST)/*.so* $(PIPER_aarch64_DST)/lib/$(aarch64-unix_TARGET)
+	rmdir $(PIPER_aarch64_DST)/$(aarch64-unix_TARGET)
 ifeq ($(findstring x86_64,$(unix_ARCHS)),)
 	mkdir -p $(DST_DIR)/share
 	cp -a $(PIPER_aarch64_DST)/{espeak-ng-data,libtashkeel_model.ort} $(DST_DIR)/share/
@@ -677,9 +726,9 @@ WINE_x86_64_AUTOCONF_ARGS += \
   VKD3D_PE_LIBS="-L$(VKD3D_x86_64_LIBDIR) -lvkd3d -lvkd3d-shader -lvkd3d-utils"
 
 WINE_DEPENDS = ffmpeg openfst kaldi vosk libxml2 libxkbcommon libpcap
-WINE_i386_DEPENDS = vkd3d
-WINE_x86_64_DEPENDS = piper vkd3d openxr
-WINE_aarch64_DEPENDS = piper openxr
+WINE_i386_DEPENDS = vkd3d openxr
+WINE_x86_64_DEPENDS = piper-phonemize piper vkd3d openxr
+WINE_aarch64_DEPENDS = piper-phonemize piper openxr
 
 WINE_i386_LIBDIR = $(WINE_i386_DST)/lib
 WINE_x86_64_LIBDIR = $(WINE_x86_64_DST)/lib
@@ -716,6 +765,9 @@ $(OBJ)/.wine-x86_64-post-build:
 	mkdir -p $(DST_DIR)/share
 	cp -a $(WINE_x86_64_DST)/share/wine $(DST_DIR)/share
 
+	mkdir -p $(DST_DIR)/share/soundfonts
+	cp -a $(SRCDIR)/soundfonts/GeneralUser-GS.sf2 $(SRCDIR)/soundfonts/GeneralUser-GS-LICENSE.txt $(DST_DIR)/share/soundfonts/
+
 	# Install wineopenxr runtime json
 	mkdir -p $(DST_DIR)/share/openxr
 	if [ -f "$(WINEOPENXR64_JSON_SRC)" ]; then \
@@ -734,6 +786,9 @@ ifeq ($(findstring x86_64,$(unix_ARCHS)),)
 	mkdir -p $(DST_DIR)/share
 	cp -a $(WINE_aarch64_DST)/share/wine $(DST_DIR)/share
 endif
+	mkdir -p $(DST_DIR)/share/soundfonts
+	cp -a $(SRCDIR)/soundfonts/GeneralUser-GS.sf2 $(SRCDIR)/soundfonts/GeneralUser-GS-LICENSE.txt $(DST_DIR)/share/soundfonts/
+
 	# Install wineopenxr runtime json
 	mkdir -p $(DST_DIR)/share/openxr
 	if [ -f "$(WINEOPENXR64_JSON_SRC)" ]; then \
@@ -1031,6 +1086,7 @@ include $(SRC)/vklayers/build-pyroveil.mk
 include $(SRC)/vklayers/build-low_latency_layer.mk
 include $(SRC)/vklayers/build-vkbasalt.mk
 include $(SRC)/vklayers/build-steam-overlay-wayland.mk
+include $(SRC)/vklayers/build-hdr-colorspace.mk
 endif # WITHOUT_VKLAYERS
 
 
@@ -1557,7 +1613,7 @@ distclean: mono-distclean
 ## xalia
 ##
 
-XALIA_VER := 0.5.0.1
+XALIA_VER := 0.5.1
 ifeq ($(TARGET_ARCH),arm64)
 XALIA_ZIP := xalia-$(XALIA_VER)-net48-arm64-mono.zip
 else
@@ -1579,12 +1635,6 @@ $(DIST_XALIA_MAIN): $(SRC)/contrib/$(XALIA_ZIP) $(SRC)/xalia-fixups.gudl
 	mv $(DIST_XALIA_DIR)/main.gudl $(DIST_XALIA_DIR)/main.gudl.orig
 	cat $(SRC)/xalia-fixups.gudl $(DIST_XALIA_DIR)/main.gudl.orig|sed 's/\xef\xbb\xbf//' > $(DIST_XALIA_DIR)/main.gudl
 	rm $(DIST_XALIA_DIR)/main.gudl.orig
-	rm $(DIST_XALIA_DIR)/SDL3.dll
-ifeq ($(TARGET_ARCH),arm64)
-	ln -s ../wine/mono/wine-mono/lib/arm64/SDL3.dll $(DIST_XALIA_DIR)/SDL3.dll
-else
-	ln -s ../wine/mono/wine-mono/lib/x86_64/SDL3.dll $(DIST_XALIA_DIR)/SDL3.dll
-endif
 
 $(DIST_XALIA): $(DIST_XALIA_MAIN)
 	touch $@
