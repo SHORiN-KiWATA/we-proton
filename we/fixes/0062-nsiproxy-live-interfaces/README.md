@@ -22,14 +22,25 @@
 
 PE32 WoW64 使用 x86_64 Unix 后端；不是 legacy i386 Unix 后端的实际执行结果。没有证明同名同索引再利用、任意并发热插拔或所有客户端流程都正确。公开材料保留方法和匿名化结果，完整个人诊断日志不发布。
 
-历史生命周期原始前后输出及 SHA256 见[接口生命周期证据](../../network-integration/VALIDATION.md#接口生命周期的前后输出)：每种 PE 架构的基准为 26/61 通过（35 项失败），0062 候选为 61/61，通过后未删除基准失败记录。
+历史生命周期原始前后输出是 `we/tests/ndis_interface_lifecycle_probe.wine31-*.txt`（SHA256 在 `.wine31-evidence.json`）：每种 PE 架构的基准为 26/61 通过（35 项失败），0062 候选为 61/61，通过后未删除基准失败记录。
 
 ## 性能回退与最终状态
 
 单独加入 0062 后，逐路由全表扫描会重复调用同一接口的实时查询，3000 条合成路由创建/删除明显变慢。该回退由 [0063](../0063-route-interface-cache/README.md)修复；不能只应用 0062 后声称获得最终网络修正版。
 
-历史实机随后有成功的多目标切换复测，但也保留更早同版本仍卡住的记录。准确结果、失败与未解决项见[验证说明](../../network-integration/VALIDATION.md)。
+历史实机随后有成功的多目标切换复测，但也保留更早同版本仍卡住的记录。准确结果、失败与未解决项见 [PR #1](https://github.com/SHORiN-KiWATA/we-proton/pull/1) 的说明。
 
 ## 构建与许可
 
-按[构建说明](../../network-integration/BUILD.md)在独立源码目录内准备运行器；不要直接替换正在使用的模块。Wine 补丁及明确带 LGPL 头的探针沿用 LGPL-2.1-or-later。上游网络能力来源及本地贡献边界见[来源说明](../../network-integration/PROVENANCE.md)。
+Wine 补丁及明确带 LGPL 头的探针沿用 LGPL-2.1-or-later。
+
+## 合并时的复核
+
+这个修复由 Felix Li 在 OpenAI Codex 协助下提交（[PR #1](https://github.com/SHORiN-KiWATA/we-proton/pull/1)）。合并时在当前基底上重新核对过（2026-11-27）：
+
+- 问题属实：`dlls/nsiproxy.sys/ndis.c` 的接口表只增不删（`update_if_table()` 只调 `add_entry()`），按名字查找返回第一条同名记录。生命周期探针在 `we-proton-ge11-14-33`（没有这两个补丁）上是 26 通过、35 失败，和上面的历史基准相同（`we/tests/ndis_interface_lifecycle_probe.ge33.txt`）
+- 两个补丁在 GE-Proton11-14 的基底上原样打上，`-Werror` 下编过；探针 61/61 通过（`.ge33-0063.txt`）。探针在新的用户 + 网络命名空间里跑（`unshare -Urn`），不碰真实网络
+- Wine 自己的测试，同一个测试程序在带和不带这两个补丁的 runner 上各跑一遍：`nsi:nsi` 1453 项，结果相同；`iphlpapi:iphlpapi` 在真实网络上（无特权）3536 项、0 失败，两边相同。在隔离的命名空间里 `iphlpapi` 卡在 ICMP 回显的用例上（两边都是），没有跑完
+- 没有复核的：上面的 90 项改名/兼容接口边界、PE32、路由语义的 194 项和 3000 条路由的耗时（需要 PR 里没有带的外层脚本），以及真实加速器
+- PR 里另带的共享网络启动入口（`we/integration/uu-network/`）和配套说明（`we/network-integration/`）没有留在这个仓库：它们是对 shorin-proton-wrapper 的一层封装，wrapper 自己已经能在前置环境的网络里运行 Linux 程序，不属于 runner
+

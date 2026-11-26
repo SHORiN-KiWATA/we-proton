@@ -30,7 +30,7 @@
 
 每个版本一次完整循环，全部零探针失败，删除后无测试路由残留，重建后 3000 条。结果是恢复到接近原有水平，不能称为比原版提速八倍，更不能用来推算实际 ping、带宽或整段加速时间。
 
-源代码：[性能探针](../../tests/route_perf_probe.c)、[路由读取探针](../../tests/route_interface_enumeration_probe.c)。合成原始输出与完整结果限制见[验证说明](../../network-integration/VALIDATION.md)。
+源代码：[性能探针](../../tests/route_perf_probe.c)、[路由读取探针](../../tests/route_interface_enumeration_probe.c)。合成原始输出是 `we/tests/route_perf_probe.wine31-*.txt` 和 `route_interface_enumeration_probe.wine31-*.txt`；两个探针都要外层脚本配置临时接口和路由，脚本没有随 PR 提供。
 
 ## 正确性与 Windows 对照边界
 
@@ -48,4 +48,4 @@ Wine NSI 双方各 1453 项、0 失败、2 todo。受控 IP Helper 双方各 687
 
 ## 构建、发布与许可
 
-见[构建说明](../../network-integration/BUILD.md)。本分支是源码发布，仅含两项网络补丁；历史基底另有桌面补丁 0061，因此不宣称新精简分支的全量运行器已重新实测。Wine 改动沿用 LGPL-2.1-or-later，其他组件保留自身许可。[来源说明](../../network-integration/PROVENANCE.md)列出完整继承关系。
+历史基底另有桌面补丁 0061，不在这个仓库里。Wine 改动沿用 LGPL-2.1-or-later，其他组件保留自身许可。合并时在当前基底上的复核见 [0062 的报告](../0062-nsiproxy-live-interfaces/README.md#合并时的复核)。
