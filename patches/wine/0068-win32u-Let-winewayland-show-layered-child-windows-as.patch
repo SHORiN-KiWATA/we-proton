@@ -1,0 +1,50 @@
+From c89d18579628580c0a6a3c0c52fb68b05d7a2e92 Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Fri, 27 Nov 2026 03:27:20 +0900
+Subject: [PATCH] win32u: Let winewayland show layered child windows as
+ subsurfaces.
+
+winewayland turns the surface of a child window into a subsurface of
+its toplevel, which the compositor blends over the client surfaces: just
+what a layered child window needs. Only a driver with GDI functions of
+its own, like winex11, would make a separate toplevel window of it, so
+only there a layered child window has to do without a surface.
+
+When such a window loses its surface, after it was resized and before
+the next UpdateLayeredWindow, don't copy the old contents into the
+surface of its parent, where they would stay.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+---
+ dlls/win32u/window.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 4353fc5c7e4..cb44dc92e13 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -2527,6 +2527,12 @@ static BOOL apply_window_pos( HWND hwnd, HWND insert_after, UINT swp_flags, stru
+         swp_flags |= SWP_NOCOPYBITS;
+         valid_rects = NULL;
+     }
++    else if (is_child && old_surface && old_surface != new_surface && old_surface->alpha_mask)
++    {
++        /* the image of a layered child window that loses its surface doesn't belong in its parent's */
++        swp_flags |= SWP_NOCOPYBITS;
++        valid_rects = NULL;
++    }
+ 
+     SERVER_START_REQ( set_window_pos )
+     {
+@@ -3267,7 +3273,10 @@ BOOL WINAPI NtUserUpdateLayeredWindow( HWND hwnd, HDC hdc_dst, const POINT *pts_
+     DWORD swp_flags = SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOREDRAW;
+     BYTE source_alpha = blend ? blend->SourceConstantAlpha : 0xff;
+     HWND parent = NtUserGetAncestor( hwnd, GA_PARENT );
+-    BOOL is_child = parent && parent != get_desktop_window();
++    /* A driver without GDI functions of its own shows the surface of a child window inside its
++     * toplevel (winewayland, as a subsurface that the compositor blends). Only for the others a
++     * layered child window has to do without a surface. */
++    BOOL is_child = parent && parent != get_desktop_window() && user_driver->dc_funcs.pPutImage;
+     struct window_rects new_rects;
+     struct window_surface *surface;
+     RECT surface_rect, old_rect;

@@ -1,0 +1,128 @@
+From ed71ebd4312b8c7a04da23ec3b5b460ad0b7320f Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Fri, 27 Nov 2026 03:27:20 +0900
+Subject: [PATCH] winex11: Keep the last frame when a client window goes
+ offscreen.
+
+A client window that is made offscreen gets a new, empty pixmap from
+the redirection, and the whole window is cleared where it was. The copy
+of the next frame may come before that frame has arrived, so the window
+showed black for a frame or two.
+
+Save what the client window shows before, and put it back into the
+client window and into its place in the whole window.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+---
+ dlls/winex11.drv/init.c | 76 ++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 75 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
+index 614a8aa0095..55f837c608e 100644
+--- a/dlls/winex11.drv/init.c
++++ b/dlls/winex11.drv/init.c
+@@ -688,10 +688,76 @@ static void client_surface_update_geometry( HWND hwnd, struct x11drv_client_surf
+     XFlush( gdi_display );
+ }
+ 
++static int client_window_error( Display *display, XErrorEvent *event, void *arg )
++{
++    return 1;
++}
++
++/* The client window loses its contents when it goes offscreen: it gets a new pixmap, and
++ * is taken out of the whole window. Frames are copied from it from then on, and the next
++ * one may not have arrived yet for the first copy. Keep what it shows to start with. */
++static Pixmap save_client_window_frame( struct x11drv_client_surface *surface, SIZE *size )
++{
++    XWindowAttributes attr;
++    XGCValues values = {.subwindow_mode = IncludeInferiors, .graphics_exposures = False};
++    Pixmap pixmap = 0;
++    GC gc;
++
++    X11DRV_expect_error( gdi_display, client_window_error, NULL );
++    if (XGetWindowAttributes( gdi_display, surface->window, &attr ) && attr.map_state == IsViewable &&
++        attr.width > 0 && attr.height > 0)
++    {
++        pixmap = XCreatePixmap( gdi_display, root_window, attr.width, attr.height, attr.depth );
++        gc = XCreateGC( gdi_display, surface->window, GCSubwindowMode | GCGraphicsExposures, &values );
++        XCopyArea( gdi_display, surface->window, pixmap, gc, 0, 0, attr.width, attr.height, 0, 0 );
++        XFreeGC( gdi_display, gc );
++        size->cx = attr.width;
++        size->cy = attr.height;
++    }
++    XSync( gdi_display, False );
++    if (X11DRV_check_error() && pixmap)
++    {
++        XFreePixmap( gdi_display, pixmap );
++        pixmap = 0;
++    }
++    return pixmap;
++}
++
++/* put the frame back, into the client window and in its place in the whole window */
++static void restore_client_window_frame( struct x11drv_client_surface *surface, Pixmap pixmap, const SIZE *size,
++                                         Window whole_window, const POINT *pos )
++{
++    XGCValues values = {.subwindow_mode = IncludeInferiors, .graphics_exposures = False};
++    GC gc;
++
++    X11DRV_expect_error( gdi_display, client_window_error, NULL );
++    gc = XCreateGC( gdi_display, surface->window, GCSubwindowMode | GCGraphicsExposures, &values );
++    XCopyArea( gdi_display, pixmap, surface->window, gc, 0, 0, size->cx, size->cy, 0, 0 );
++    XFreeGC( gdi_display, gc );
++    XSync( gdi_display, False );
++    X11DRV_check_error();
++
++    if (whole_window)
++    {
++        /* its visual may be another one, the next frame fills it then */
++        X11DRV_expect_error( gdi_display, client_window_error, NULL );
++        gc = XCreateGC( gdi_display, whole_window, GCSubwindowMode | GCGraphicsExposures, &values );
++        XCopyArea( gdi_display, pixmap, whole_window, gc, 0, 0, size->cx, size->cy, pos->x, pos->y );
++        XFreeGC( gdi_display, gc );
++        XSync( gdi_display, False );
++        X11DRV_check_error();
++    }
++    XFreePixmap( gdi_display, pixmap );
++}
++
+ static void client_surface_update_offscreen( HWND hwnd, struct x11drv_client_surface *surface )
+ {
+     BOOL offscreen = needs_offscreen_rendering( hwnd );
+     struct x11drv_win_data *data;
++    Pixmap saved_frame = 0;
++    SIZE saved_size = {0};
++    Window whole_window = 0;
++    POINT pos = {0};
+ 
+     if (surface->other_process) offscreen = TRUE;
+ 
+@@ -733,6 +799,7 @@ static void client_surface_update_offscreen( HWND hwnd, struct x11drv_client_sur
+         surface->hdc_dst = NtGdiOpenDCW( &device_str, NULL, NULL, 0, TRUE, NULL, NULL, NULL );
+         surface->hdc_src = NtGdiOpenDCW( &device_str, NULL, NULL, 0, TRUE, NULL, NULL, NULL );
+         set_dc_drawable( surface->hdc_src, surface->window, &surface->rect, IncludeInferiors, NULL );
++        saved_frame = save_client_window_frame( surface, &saved_size );
+ #ifdef SONAME_LIBXCOMPOSITE
+         if (usexcomposite) pXCompositeRedirectWindow( gdi_display, surface->window, CompositeRedirectManual );
+ #endif
+@@ -740,11 +807,18 @@ static void client_surface_update_offscreen( HWND hwnd, struct x11drv_client_sur
+ 
+     if ((data = get_win_data( hwnd )))
+     {
+-        if (offscreen) detach_client_window( data, surface->window );
++        if (offscreen)
++        {
++            whole_window = data->whole_window;
++            pos.x = data->rects.client.left - data->rects.visible.left;
++            pos.y = data->rects.client.top - data->rects.visible.top;
++            detach_client_window( data, surface->window );
++        }
+         else attach_client_window( data, surface->window );
+         release_win_data( data );
+     }
+ 
++    if (saved_frame) restore_client_window_frame( surface, saved_frame, &saved_size, whole_window, &pos );
+     XFlush( gdi_display );
+ }
+ 

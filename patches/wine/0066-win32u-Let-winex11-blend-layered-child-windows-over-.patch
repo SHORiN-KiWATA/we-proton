@@ -1,0 +1,806 @@
+From 48d5a80b6db86b4374ae6d24f8da0b5ecb7fc697 Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Fri, 27 Nov 2026 03:27:20 +0900
+Subject: [PATCH] win32u: Let winex11 blend layered child windows over client
+ surfaces.
+
+Since Windows 8 a child window can be layered, and the system composes
+it over what its parent shows, including the frames the parent presents
+with Direct3D or OpenGL. A popup window that is given a parent with
+SetParent, without changing its style, is such a child as well. Toolkits
+show their translucent dialogs over a 3D window this way.
+
+A layered child window has no surface of its own here, what it passes to
+UpdateLayeredWindow was drawn into the window surface of its parent.
+That surface is below the client window the parent presents into, so the
+child was not visible at all, or over black where the client window was
+offscreen already. A call without an image, which changes the opacity of
+the window as a whole, was ignored: a window that fades in, with its
+image set at opacity 0, stayed invisible in any case.
+
+Keep the image of a layered child window as premultiplied ARGB, and its
+opacity apart from it. Tell the driver about the visible ones below a
+window. winex11 then presents the client window offscreen and blends
+them over a copy of each frame before it copies that to the whole
+window, from pixmaps that are only uploaded where the images change. The
+frames are no longer clipped where such a child is. When an image, the
+opacity, the position or the visibility changes, the last frame is
+composed again.
+
+Below a parent that draws with GDI the image is still drawn into the
+parent's surface, now also when only the opacity changes, and the parent
+is redrawn when the child is hidden.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+---
+ dlls/win32u/window.c      | 377 ++++++++++++++++++++++++++++++++++++--
+ dlls/winex11.drv/init.c   | 208 ++++++++++++++++++++-
+ include/wine/gdi_driver.h |  14 ++
+ 3 files changed, 583 insertions(+), 16 deletions(-)
+
+diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
+index 0835c607960..4353fc5c7e4 100644
+--- a/dlls/win32u/window.c
++++ b/dlls/win32u/window.c
+@@ -280,6 +280,9 @@ void *free_user_handle( HANDLE handle, unsigned short type )
+     return ptr;
+ }
+ 
++static void free_layered_child( HWND hwnd );
++static BOOL has_layered_child_image( HWND hwnd );
++
+ static pthread_mutex_t surfaces_lock = PTHREAD_MUTEX_INITIALIZER;
+ static struct list client_surfaces = LIST_INIT( client_surfaces );
+ 
+@@ -333,6 +336,47 @@ void update_client_surfaces( HWND hwnd )
+     pthread_mutex_unlock( &surfaces_lock );
+ }
+ 
++/* The layered child windows of a window have changed. The driver decides from
++ * them how the client surfaces are shown, and blends them over the frames of
++ * the offscreen ones: show the last frames again. */
++static void present_layered_children( HWND hwnd )
++{
++    struct client_surface *surface;
++    HDC hdc;
++
++    pthread_mutex_lock( &surfaces_lock );
++
++    LIST_FOR_EACH_ENTRY( surface, &client_surfaces, struct client_surface, entry )
++    {
++        if (NtUserGetAncestor( surface->hwnd, GA_ROOT ) != hwnd) continue;
++        surface->funcs->update( surface );
++        if (!surface->offscreen) continue;
++        if (!(hdc = NtUserGetDCEx( surface->hwnd, 0, DCX_CACHE | DCX_USESTYLE ))) continue;
++        surface->funcs->present( surface, hdc );
++        NtUserReleaseDC( surface->hwnd, hdc );
++    }
++
++    pthread_mutex_unlock( &surfaces_lock );
++}
++
++/* whether a window is inside a window with a client surface: the driver draws layered child windows over its frames */
++static BOOL is_inside_client_surface( HWND hwnd )
++{
++    struct client_surface *surface;
++    BOOL ret = FALSE;
++    HWND parent;
++
++    pthread_mutex_lock( &surfaces_lock );
++    LIST_FOR_EACH_ENTRY( surface, &client_surfaces, struct client_surface, entry )
++    {
++        for (parent = NtUserGetAncestor( hwnd, GA_PARENT ); parent && !ret; parent = NtUserGetAncestor( parent, GA_PARENT ))
++            ret = surface->hwnd == parent;
++        if (ret) break;
++    }
++    pthread_mutex_unlock( &surfaces_lock );
++    return ret;
++}
++
+ void *client_surface_create( UINT size, const struct client_surface_funcs *funcs, HWND hwnd )
+ {
+     struct client_surface *surface;
+@@ -723,6 +767,9 @@ HWND WINAPI NtUserSetParent( HWND hwnd, HWND parent )
+     release_win_ptr( win );
+     if (!ret) return 0;
+ 
++    /* a top-level layered window has a surface of its own */
++    if (parent == get_desktop_window()) free_layered_child( full_handle );
++
+     get_window_rect_rel( hwnd, COORDS_SCREEN, &new_screen_rect, 0 );
+     context = set_thread_dpi_awareness_context( get_window_dpi_awareness_context( hwnd ));
+ 
+@@ -1657,6 +1704,7 @@ LONG_PTR set_window_long( HWND hwnd, INT offset, UINT size, LONG_PTR newval, BOO
+         style.styleOld = retval;
+         style.styleNew = newval;
+         user_driver->pSetWindowStyle( hwnd, offset, &style );
++        if (layered) free_layered_child( hwnd );
+         if (made_visible || layered) update_window_state( hwnd );
+         send_message( hwnd, WM_STYLECHANGED, offset, (LPARAM)&style );
+     }
+@@ -2855,6 +2903,8 @@ BOOL WINAPI NtUserSetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alph
+ 
+     if (ret)
+     {
++        /* from now on the window paints itself */
++        free_layered_child( hwnd );
+         user_driver->pSetLayeredWindowAttributes( hwnd, key, alpha, flags );
+         update_window_state( hwnd );
+     }
+@@ -2862,15 +2912,293 @@ BOOL WINAPI NtUserSetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alph
+     return ret;
+ }
+ 
++/* Layered child windows (Windows 8 and later) have no surface of their own: the
++ * driver would turn one into a separate toplevel window, placed at the child's
++ * parent-relative position as if it were a screen position. What is given to
++ * UpdateLayeredWindow for them is kept here, as premultiplied ARGB, so that a
++ * driver can blend it over the frames of a client surface of their parent. */
++struct layered_child
++{
++    struct list entry;
++    HWND        hwnd;
++    HBITMAP     bitmap;
++    void       *bits;
++    SIZE        size;
++    UINT        serial;   /* changes with the image */
++    RECT        dirty;    /* what the last change touched */
++    BOOL        empty;    /* nothing but transparent pixels */
++    BYTE        alpha;    /* opacity of the window as a whole */
++};
++
++static struct list layered_children = LIST_INIT( layered_children );
++static pthread_mutex_t layered_children_lock = PTHREAD_MUTEX_INITIALIZER;
++static LONG layered_children_count;
++
++static struct layered_child *find_layered_child( HWND hwnd )
++{
++    struct layered_child *child;
++
++    LIST_FOR_EACH_ENTRY( child, &layered_children, struct layered_child, entry )
++        if (child->hwnd == hwnd) return child;
++    return NULL;
++}
++
++static BOOL has_layered_child_image( HWND hwnd )
++{
++    BOOL ret;
++
++    if (!ReadNoFence( &layered_children_count )) return FALSE;
++
++    pthread_mutex_lock( &layered_children_lock );
++    ret = find_layered_child( hwnd ) != NULL;
++    pthread_mutex_unlock( &layered_children_lock );
++    return ret;
++}
++
++/***********************************************************************
++ *           free_layered_child
++ *
++ * Forget the image of a window that was a layered child.
++ */
++static void free_layered_child( HWND hwnd )
++{
++    struct layered_child *child;
++
++    if (!ReadNoFence( &layered_children_count )) return;
++
++    pthread_mutex_lock( &layered_children_lock );
++    if ((child = find_layered_child( hwnd )))
++    {
++        list_remove( &child->entry );
++        InterlockedDecrement( &layered_children_count );
++    }
++    pthread_mutex_unlock( &layered_children_lock );
++    if (!child) return;
++
++    NtGdiDeleteObjectApp( child->bitmap );
++    free( child );
++}
++
++/***********************************************************************
++ *           set_layered_child_image
++ *
++ * Keep the image of a layered child window. rect is the part to update, in
++ * window coordinates, src_rect the matching part of the source. Without a
++ * source only the opacity of the window as a whole changes. It is kept apart
++ * from the image: a window fades in with a first image at opacity 0.
++ */
++static void set_layered_child_image( HWND hwnd, const RECT *window_rect, const RECT *rect, HDC hdc_src,
++                                     const RECT *src_rect, COLORREF key, const BLENDFUNCTION *blend, DWORD flags )
++{
++    char buffer[FIELD_OFFSET( BITMAPINFO, bmiColors[256] )];
++    BITMAPINFO *info = (BITMAPINFO *)buffer;
++    SIZE size = {window_rect->right - window_rect->left, window_rect->bottom - window_rect->top};
++    BOOL src_alpha = (flags & ULW_ALPHA) && blend && (blend->AlphaFormat & AC_SRC_ALPHA);
++    BYTE alpha = (flags & ULW_ALPHA) && blend ? blend->SourceConstantAlpha : 0xff;
++    int x, y, width = rect->right - rect->left, height = rect->bottom - rect->top;
++    struct layered_child *child;
++    RECT dirty = *rect;
++    HDC hdc = 0;
++
++    if (hdc_src && !(hdc = NtGdiCreateCompatibleDC( 0 ))) return;
++
++    pthread_mutex_lock( &layered_children_lock );
++
++    if (!(child = find_layered_child( hwnd )))
++    {
++        if (!hdc_src || !(child = calloc( 1, sizeof(*child) ))) goto done;
++        child->hwnd = hwnd;
++        list_add_tail( &layered_children, &child->entry );
++        InterlockedIncrement( &layered_children_count );
++    }
++    if (hdc_src || ((flags & ULW_ALPHA) && blend)) child->alpha = alpha;
++    if (!hdc_src) goto done;
++
++    if (!child->bitmap || child->size.cx != size.cx || child->size.cy != size.cy)
++    {
++        if (child->bitmap) NtGdiDeleteObjectApp( child->bitmap );
++        memset( info, 0, sizeof(info->bmiHeader) );
++        info->bmiHeader.biSize        = sizeof(info->bmiHeader);
++        info->bmiHeader.biWidth       = size.cx;
++        info->bmiHeader.biHeight      = -size.cy;
++        info->bmiHeader.biPlanes      = 1;
++        info->bmiHeader.biBitCount    = 32;
++        info->bmiHeader.biCompression = BI_RGB;
++        child->bitmap = NtGdiCreateDIBSection( 0, NULL, 0, info, DIB_RGB_COLORS, 0, 0, 0, &child->bits );
++        child->size = size;
++        /* the rest of a new image is transparent */
++        SetRect( &dirty, 0, 0, size.cx, size.cy );
++    }
++    if (!child->bitmap)
++    {
++        list_remove( &child->entry );
++        InterlockedDecrement( &layered_children_count );
++        free( child );
++        goto done;
++    }
++
++    NtGdiSelectBitmap( hdc, child->bitmap );
++    if (src_alpha)
++    {
++        /* premultiplied ARGB, as it is */
++        BLENDFUNCTION copy = {AC_SRC_OVER, 0, 0xff, AC_SRC_ALPHA};
++
++        NtGdiPatBlt( hdc, rect->left, rect->top, width, height, BLACKNESS );
++        NtGdiAlphaBlend( hdc, rect->left, rect->top, width, height, hdc_src, src_rect->left, src_rect->top,
++                         src_rect->right - src_rect->left, src_rect->bottom - src_rect->top, *(DWORD *)&copy, 0 );
++    }
++    else
++    {
++        /* no alpha in the source: opaque, except for the color key */
++        DWORD key_bgr = (GetRValue( key ) << 16) | (GetGValue( key ) << 8) | GetBValue( key );
++
++        NtGdiBitBlt( hdc, rect->left, rect->top, width, height, hdc_src, src_rect->left, src_rect->top,
++                     SRCCOPY, 0, 0 );
++        for (y = rect->top; y < rect->bottom; y++)
++        {
++            DWORD *ptr = (DWORD *)child->bits + y * size.cx + rect->left;
++
++            for (x = 0; x < width; x++, ptr++)
++            {
++                if ((flags & ULW_COLORKEY) && (*ptr & 0xffffff) == key_bgr) *ptr = 0;
++                else *ptr |= 0xff000000;
++            }
++        }
++    }
++
++    /* an image that shows nothing doesn't need to be blended */
++    for (x = 0, y = size.cx * size.cy; x < y; x++) if (((DWORD *)child->bits)[x]) break;
++    child->empty = x == y;
++
++    child->serial++;
++    child->dirty = dirty;
++
++done:
++    if (child) TRACE( "hwnd %p size %dx%d rect %s flags %#x serial %u empty %u alpha %u\n", hwnd,
++                      (int)child->size.cx, (int)child->size.cy, wine_dbgstr_rect( rect ), (int)flags,
++                      child->serial, child->empty, child->alpha );
++    pthread_mutex_unlock( &layered_children_lock );
++    if (hdc) NtGdiDeleteObjectApp( hdc );
++}
++
++/***********************************************************************
++ *           draw_layered_child_image
++ *
++ * Draw the image of a layered child window over black, with the opacity of the window.
++ */
++static BOOL draw_layered_child_image( HWND hwnd, HDC hdc )
++{
++    BLENDFUNCTION blend = {AC_SRC_OVER, 0, 0xff, AC_SRC_ALPHA};
++    struct layered_child *child;
++    BOOL ret = FALSE;
++    HDC hdc_src;
++
++    if (!(hdc_src = NtGdiCreateCompatibleDC( 0 ))) return FALSE;
++
++    pthread_mutex_lock( &layered_children_lock );
++    if ((child = find_layered_child( hwnd )) && child->bitmap)
++    {
++        blend.SourceConstantAlpha = child->alpha;
++        NtGdiSelectBitmap( hdc_src, child->bitmap );
++        NtGdiPatBlt( hdc, 0, 0, child->size.cx, child->size.cy, BLACKNESS );
++        ret = NtGdiAlphaBlend( hdc, 0, 0, child->size.cx, child->size.cy, hdc_src, 0, 0,
++                               child->size.cx, child->size.cy, *(DWORD *)&blend, 0 );
++    }
++    pthread_mutex_unlock( &layered_children_lock );
++
++    NtGdiDeleteObjectApp( hdc_src );
++    return ret;
++}
++
++/* is_child() only follows WS_CHILD windows, a popup that was given a parent with SetParent is not one */
++static BOOL is_layered_child_of( HWND ancestor, HWND hwnd )
++{
++    ancestor = get_full_window_handle( ancestor );
++    while ((hwnd = NtUserGetAncestor( hwnd, GA_PARENT ))) if (hwnd == ancestor) return TRUE;
++    return FALSE;
++}
++
++/***********************************************************************
++ *           get_layered_children
++ *
++ * List the visible layered child windows below a window that have an image
++ * with something to show. Their rectangles are relative to the window's
++ * client area.
++ */
++W32KAPI UINT get_layered_children( HWND hwnd, struct layered_child_info *info, UINT count, UINT dpi )
++{
++    struct layered_child_info all[16];
++    struct layered_child *child;
++    UINT i, ret = 0, total = 0;
++
++    if (!ReadNoFence( &layered_children_count )) return 0;
++
++    pthread_mutex_lock( &layered_children_lock );
++    LIST_FOR_EACH_ENTRY( child, &layered_children, struct layered_child, entry )
++    {
++        if (total == ARRAY_SIZE(all)) break;
++        if (child->empty || !child->alpha) continue;
++        all[total].hwnd   = child->hwnd;
++        all[total].size   = child->size;
++        all[total].serial = child->serial;
++        all[total].alpha  = child->alpha;
++        total++;
++    }
++    pthread_mutex_unlock( &layered_children_lock );
++
++    /* not with the lock held: these take the user lock, which a window that is being destroyed holds */
++    for (i = 0; i < total && ret < count; i++)
++    {
++        if (!is_layered_child_of( hwnd, all[i].hwnd ) || !is_window_visible( all[i].hwnd )) continue;
++        if (!get_window_rect_rel( all[i].hwnd, COORDS_SCREEN, &all[i].rect, dpi )) continue;
++        map_window_points( 0, hwnd, (POINT *)&all[i].rect, 2, dpi );
++        info[ret++] = all[i];
++    }
++    if (total) TRACE( "hwnd %p has %u of %u layered child windows with an image\n", hwnd, ret, total );
++    return ret;
++}
++
++/***********************************************************************
++ *           lock_layered_child_bits
++ *
++ * Get the image of a layered child window, top-down premultiplied ARGB, and
++ * what changed in it since prev_serial. Returns NULL if there is no image,
++ * otherwise unlock_layered_child_bits must be called.
++ */
++W32KAPI const void *lock_layered_child_bits( HWND hwnd, UINT prev_serial, SIZE *size, UINT *serial, RECT *dirty )
++{
++    struct layered_child *child;
++
++    pthread_mutex_lock( &layered_children_lock );
++    if ((child = find_layered_child( hwnd )))
++    {
++        *size = child->size;
++        *serial = child->serial;
++        if (child->serial == prev_serial) SetRectEmpty( dirty );
++        else if (child->serial == prev_serial + 1) *dirty = child->dirty;
++        else SetRect( dirty, 0, 0, child->size.cx, child->size.cy );
++        return child->bits;
++    }
++    pthread_mutex_unlock( &layered_children_lock );
++    return NULL;
++}
++
++/***********************************************************************
++ *           unlock_layered_child_bits
++ */
++W32KAPI void unlock_layered_child_bits(void)
++{
++    pthread_mutex_unlock( &layered_children_lock );
++}
++
+ /***********************************************************************
+  *           update_layered_child
+  *
+- * Draw the contents given to UpdateLayeredWindow for a layered child window
+- * (Windows 8 and later). Such a window has no surface of its own: the driver
+- * would turn one into a separate toplevel window, placed at the child's
+- * parent-relative position as if it were a screen position. Draw into the
+- * surface the child shares with its parent instead. Per-pixel alpha is blended
+- * over black, like the contents of a new layered surface.
++ * Draw the contents given to UpdateLayeredWindow for a layered child window.
++ * Inside a window that shows a client surface, the driver blends the image
++ * over the frames. Otherwise the window shares the surface of its parent:
++ * draw there, per-pixel alpha blended over black like the contents of a new
++ * layered surface.
+  */
+ static BOOL update_layered_child( HWND hwnd, const RECT *window_rect, HDC hdc_src, const POINT *pts_src,
+                                   COLORREF key, const BLENDFUNCTION *blend, DWORD flags, const RECT *dirty )
+@@ -2881,21 +3209,32 @@ static BOOL update_layered_child( HWND hwnd, const RECT *window_rect, HDC hdc_sr
+     BOOL ret;
+     HDC hdc;
+ 
+-    if (!hdc_src) return TRUE;
+-
+     OffsetRect( &rect, -rect.left, -rect.top );
+-    if (dirty) intersect_rect( &rect, &rect, dirty );
++    if (dirty && hdc_src) intersect_rect( &rect, &rect, dirty );
+     if (IsRectEmpty( &rect )) return TRUE;
+     width = rect.right - rect.left;
+     height = rect.bottom - rect.top;
+ 
+     src_rect = rect;
+-    if (pts_src) OffsetRect( &src_rect, pts_src->x, pts_src->y );
+-    NtGdiTransformPoints( hdc_src, (POINT *)&src_rect, (POINT *)&src_rect, 2, NtGdiDPtoLP );
++    if (hdc_src)
++    {
++        if (pts_src) OffsetRect( &src_rect, pts_src->x, pts_src->y );
++        NtGdiTransformPoints( hdc_src, (POINT *)&src_rect, (POINT *)&src_rect, 2, NtGdiDPtoLP );
++    }
++
++    set_layered_child_image( hwnd, window_rect, &rect, hdc_src, &src_rect, key, blend, flags );
++    if (is_inside_client_surface( hwnd ))
++    {
++        present_layered_children( NtUserGetAncestor( hwnd, GA_ROOT ) );
++        return TRUE;
++    }
+ 
+     if (!(hdc = NtUserGetDCEx( hwnd, 0, DCX_CACHE | DCX_WINDOW | DCX_CLIPSIBLINGS | DCX_CLIPCHILDREN )))
+         return FALSE;
+-    if ((flags & ULW_ALPHA) && blend)
++    if (!hdc_src)
++        /* only the opacity of the window has changed */
++        ret = !(flags & ULW_ALPHA) || !blend || draw_layered_child_image( hwnd, hdc );
++    else if ((flags & ULW_ALPHA) && blend)
+     {
+         NtGdiPatBlt( hdc, rect.left, rect.top, width, height, BLACKNESS );
+         ret = NtGdiAlphaBlend( hdc, rect.left, rect.top, width, height, hdc_src, src_rect.left, src_rect.top,
+@@ -4484,6 +4823,18 @@ BOOL set_window_pos( WINDOWPOS *winpos, int parent_x, int parent_y )
+     }
+     if (surface) window_surface_release( surface );
+ 
++    if (has_layered_child_image( winpos->hwnd ))
++    {
++        /* The server redraws nothing for a layered window that is updated with UpdateLayeredWindow,
++         * but the image of a child window is blended over the frames of its parent by the driver,
++         * or was drawn into the surface of its parent. */
++        if (is_inside_client_surface( winpos->hwnd ))
++            present_layered_children( NtUserGetAncestor( winpos->hwnd, GA_ROOT ) );
++        else if (winpos->flags & SWP_HIDEWINDOW)
++            NtUserRedrawWindow( NtUserGetAncestor( winpos->hwnd, GA_PARENT ), &old_rects.window, 0,
++                                RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN );
++    }
++
+     if (winpos->flags & SWP_HIDEWINDOW)
+     {
+         NtUserNotifyWinEvent( EVENT_OBJECT_HIDE, winpos->hwnd, 0, 0 );
+@@ -5882,6 +6233,7 @@ LRESULT destroy_window( HWND hwnd )
+     }
+ 
+     detach_client_surfaces( hwnd );
++    free_layered_child( hwnd );
+     if (win->current_drawable) opengl_drawable_release( win->current_drawable );
+     if (win->unused_drawable) opengl_drawable_release( win->unused_drawable );
+     user_driver->pDestroyWindow( hwnd );
+@@ -5998,6 +6350,7 @@ static void destroy_window_objects( struct list *windows, struct list *drawables
+ 
+         list_remove( &win->entry );
+         detach_client_surfaces( win->handle );
++        free_layered_child( win->handle );
+         user_driver->pDestroyWindow( win->handle );
+         if (win->current_drawable) opengl_drawable_release( win->current_drawable );
+         if (win->unused_drawable) opengl_drawable_release( win->unused_drawable );
+diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
+index 5ced9338898..614a8aa0095 100644
+--- a/dlls/winex11.drv/init.c
++++ b/dlls/winex11.drv/init.c
+@@ -357,6 +357,11 @@ BOOL needs_offscreen_rendering( HWND hwnd )
+     }
+     if (needs_offscreen) return needs_offscreen;
+ 
++    if (argb_visual.visualid)
++    {
++        struct layered_child_info info;
++        if (get_layered_children( hwnd, &info, 1, 0 )) return TRUE; /* layered children are blended over the frames */
++    }
+     if (NtUserGetDpiForWindow( hwnd ) != NtUserGetWinMonitorDpi( hwnd, MDT_RAW_DPI ) && !enable_fullscreen_hack( hwnd )) return TRUE; /* needs DPI scaling */
+     if (NtUserGetAncestor( hwnd, GA_PARENT ) != NtUserGetDesktopWindow()) return TRUE; /* child window, needs compositing */
+     if (NtUserGetWindowRelative( hwnd, GW_CHILD )) return needs_client_window_clipping( hwnd ); /* window has children, needs compositing */
+@@ -396,6 +401,16 @@ HRGN get_dc_monitor_region( HWND hwnd, HDC hdc )
+ 
+ static const struct client_surface_funcs x11drv_client_surface_funcs;
+ 
++/* the image of a layered child window, in a pixmap */
++struct layered_overlay
++{
++    HWND   hwnd;
++    UINT   serial;
++    SIZE   size;
++    Pixmap pixmap;
++    HDC    hdc;
++};
++
+ struct x11drv_client_surface
+ {
+     struct client_surface client;
+@@ -409,6 +424,12 @@ struct x11drv_client_surface
+     HDC hdc_dst;
+     BOOL other_process;
+ 
++    /* layered child windows of the window, blended over a copy of each offscreen frame */
++    struct layered_overlay overlays[8];
++    Pixmap frame_pixmap;
++    HDC hdc_frame;
++    SIZE frame_size;
++
+     BYTE *shape_age;
+     unsigned int shape_cols;
+     unsigned int shape_rows;
+@@ -432,6 +453,161 @@ static struct x11drv_client_surface *impl_from_client_surface( struct client_sur
+     return CONTAINING_RECORD( client, struct x11drv_client_surface, client );
+ }
+ 
++static int scale_coord( int value, int num, int den )
++{
++    return den ? (int)((LONGLONG)value * num / den) : value;
++}
++
++static HDC create_pixmap_dc( Pixmap pixmap, int width, int height, const XVisualInfo *vis )
++{
++    static const WCHAR displayW[] = {'D','I','S','P','L','A','Y', 0};
++    UNICODE_STRING device_str = RTL_CONSTANT_STRING(displayW);
++    RECT rect = {0, 0, width, height};
++    HDC hdc;
++
++    if ((hdc = NtGdiOpenDCW( &device_str, NULL, NULL, 0, TRUE, NULL, NULL, NULL )))
++        set_dc_drawable( hdc, pixmap, &rect, IncludeInferiors, vis );
++    return hdc;
++}
++
++static void free_layered_overlay( struct layered_overlay *overlay )
++{
++    if (overlay->hdc) NtGdiDeleteObjectApp( overlay->hdc );
++    if (overlay->pixmap) XFreePixmap( gdi_display, overlay->pixmap );
++    memset( overlay, 0, sizeof(*overlay) );
++}
++
++static void free_layered_overlays( struct x11drv_client_surface *surface )
++{
++    unsigned int i;
++
++    for (i = 0; i < ARRAY_SIZE(surface->overlays); i++) free_layered_overlay( &surface->overlays[i] );
++    if (surface->hdc_frame) NtGdiDeleteObjectApp( surface->hdc_frame );
++    if (surface->frame_pixmap) XFreePixmap( gdi_display, surface->frame_pixmap );
++    surface->hdc_frame = 0;
++    surface->frame_pixmap = 0;
++}
++
++/* bring the pixmap of a layered child window up to date with its image */
++static BOOL update_layered_overlay( struct layered_overlay *overlay, HWND hwnd )
++{
++    const void *bits;
++    UINT serial;
++    RECT dirty;
++    SIZE size;
++
++    if (!(bits = lock_layered_child_bits( hwnd, overlay->serial, &size, &serial, &dirty ))) return FALSE;
++
++    if (!overlay->pixmap || overlay->size.cx != size.cx || overlay->size.cy != size.cy)
++    {
++        free_layered_overlay( overlay );
++        overlay->hwnd = hwnd;
++        overlay->size = size;
++        overlay->pixmap = XCreatePixmap( gdi_display, root_window, size.cx, size.cy, argb_visual.depth );
++        overlay->hdc = create_pixmap_dc( overlay->pixmap, size.cx, size.cy, &argb_visual );
++        SetRect( &dirty, 0, 0, size.cx, size.cy );
++    }
++
++    if (!IsRectEmpty( &dirty ))
++    {
++        int width = dirty.right - dirty.left, height = dirty.bottom - dirty.top;
++        const char *start = (const char *)bits + (dirty.top * size.cx + dirty.left) * 4;
++        XImage *image;
++        GC gc;
++
++        if ((image = XCreateImage( gdi_display, argb_visual.visual, argb_visual.depth, ZPixmap, 0,
++                                   (char *)start, width, height, 32, size.cx * 4 )))
++        {
++            gc = XCreateGC( gdi_display, overlay->pixmap, 0, NULL );
++            XPutImage( gdi_display, overlay->pixmap, gc, image, 0, 0, dirty.left, dirty.top, width, height );
++            XFreeGC( gdi_display, gc );
++            image->data = NULL;
++            XDestroyImage( image );
++        }
++    }
++    overlay->serial = serial;
++
++    unlock_layered_child_bits();
++    return overlay->hdc != 0;
++}
++
++/* Windows composes layered child windows over what their parent presents. Blend them
++ * over a copy of the frame in the offscreen client window, and return the DC to
++ * present from. */
++static HDC blend_layered_children( struct x11drv_client_surface *surface, HWND hwnd, RECT *covered )
++{
++    BLENDFUNCTION blend = {AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
++    struct layered_child_info info[ARRAY_SIZE(surface->overlays)];
++    int width = surface->rect.right - surface->rect.left, height = surface->rect.bottom - surface->rect.top;
++    UINT i, j, count = 0, dpi = NtUserGetDpiForWindow( hwnd );
++    struct layered_overlay *overlay;
++    RECT client, rect;
++    SIZE src;
++
++    SetRectEmpty( covered );
++    if (argb_visual.visualid) count = get_layered_children( hwnd, info, ARRAY_SIZE(info), dpi );
++    if (count) TRACE( "hwnd %p client window %lx, %u layered child windows\n", hwnd, surface->window, count );
++
++    /* keep the pixmaps of the windows that are still there */
++    for (i = 0; i < ARRAY_SIZE(surface->overlays); i++)
++    {
++        if (!surface->overlays[i].hwnd) continue;
++        for (j = 0; j < count; j++) if (info[j].hwnd == surface->overlays[i].hwnd) break;
++        if (j == count) free_layered_overlay( &surface->overlays[i] );
++    }
++    if (!count || !NtUserGetClientRect( hwnd, &client, dpi ) || IsRectEmpty( &client ))
++    {
++        free_layered_overlays( surface );
++        return surface->hdc_src;
++    }
++
++    if (!surface->frame_pixmap || surface->frame_size.cx != width || surface->frame_size.cy != height)
++    {
++        if (surface->hdc_frame) NtGdiDeleteObjectApp( surface->hdc_frame );
++        if (surface->frame_pixmap) XFreePixmap( gdi_display, surface->frame_pixmap );
++        surface->frame_pixmap = XCreatePixmap( gdi_display, root_window, width, height, default_visual.depth );
++        surface->hdc_frame = create_pixmap_dc( surface->frame_pixmap, width, height, NULL );
++        surface->frame_size.cx = width;
++        surface->frame_size.cy = height;
++    }
++    if (!surface->hdc_frame) return surface->hdc_src;
++
++    NtGdiStretchBlt( surface->hdc_frame, 0, 0, width, height, surface->hdc_src, 0, 0, width, height, SRCCOPY, 0 );
++
++    for (i = 0; i < count; i++)
++    {
++        for (j = 0, overlay = NULL; j < ARRAY_SIZE(surface->overlays); j++)
++        {
++            if (surface->overlays[j].hwnd == info[i].hwnd) break;
++            if (!overlay && !surface->overlays[j].hwnd) overlay = &surface->overlays[j];
++        }
++        if (j < ARRAY_SIZE(surface->overlays)) overlay = &surface->overlays[j];
++        if (!overlay || !update_layered_overlay( overlay, info[i].hwnd )) continue;
++
++        /* the part of the image that fits into the window, an image is not stretched to a new window size */
++        src.cx = min( overlay->size.cx, info[i].rect.right - info[i].rect.left );
++        src.cy = min( overlay->size.cy, info[i].rect.bottom - info[i].rect.top );
++        /* from client coordinates to the pixels of the client window */
++        rect.left   = scale_coord( info[i].rect.left, width, client.right );
++        rect.top    = scale_coord( info[i].rect.top, height, client.bottom );
++        rect.right  = scale_coord( info[i].rect.left + src.cx, width, client.right );
++        rect.bottom = scale_coord( info[i].rect.top + src.cy, height, client.bottom );
++        blend.SourceConstantAlpha = info[i].alpha;
++        NtGdiAlphaBlend( surface->hdc_frame, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
++                         overlay->hdc, 0, 0, src.cx, src.cy, *(DWORD *)&blend, 0 );
++
++        if (IsRectEmpty( covered )) *covered = rect;
++        else
++        {
++            covered->left   = min( covered->left, rect.left );
++            covered->top    = min( covered->top, rect.top );
++            covered->right  = max( covered->right, rect.right );
++            covered->bottom = max( covered->bottom, rect.bottom );
++        }
++    }
++    return surface->hdc_frame;
++}
++
+ static void x11drv_client_surface_destroy( struct client_surface *client )
+ {
+     struct x11drv_client_surface *surface = impl_from_client_surface( client );
+@@ -441,6 +617,7 @@ static void x11drv_client_surface_destroy( struct client_surface *client )
+ 
+     if (surface->colormap != default_colormap) XFreeColormap( gdi_display, surface->colormap );
+     if (surface->window) destroy_client_window( hwnd, surface->window );
++    free_layered_overlays( surface );
+     if (surface->hdc_dst) NtGdiDeleteObjectApp( surface->hdc_dst );
+     if (surface->hdc_src) NtGdiDeleteObjectApp( surface->hdc_src );
+     free( surface->shape_age );
+@@ -537,6 +714,7 @@ static void client_surface_update_offscreen( HWND hwnd, struct x11drv_client_sur
+ #ifdef SONAME_LIBXCOMPOSITE
+         if (usexcomposite) pXCompositeUnredirectWindow( gdi_display, surface->window, CompositeRedirectManual );
+ #endif
++        free_layered_overlays( surface );
+         if (surface->hdc_dst)
+         {
+             NtGdiDeleteObjectApp( surface->hdc_dst );
+@@ -936,6 +1114,8 @@ static void X11DRV_client_surface_present( struct client_surface *client, HDC hd
+     RECT rect_dst, rect;
+     XVisualInfo vis;
+     Drawable window;
++    RECT covered;
++    HDC hdc_src;
+     HRGN region;
+ 
+     client_surface_update_geometry( hwnd, surface );
+@@ -967,8 +1147,11 @@ static void X11DRV_client_surface_present( struct client_surface *client, HDC hd
+            window holds the D3D clear colour — skip the blit so the previous correct
+            pixels stay in the whole window, avoiding flicker. */
+         if (update_layered_overlay_shape( surface, toplevel ))
++        {
++            hdc_src = blend_layered_children( surface, hwnd, &covered );
+             NtGdiStretchBlt( hdc, 0, 0, surface->rect.right - surface->rect.left, surface->rect.bottom - surface->rect.top,
+-                             surface->hdc_src, 0, 0, surface->rect.right, surface->rect.bottom, SRCCOPY, 0 );
++                             hdc_src, 0, 0, surface->rect.right, surface->rect.bottom, SRCCOPY, 0 );
++        }
+         if (region) NtGdiDeleteObjectApp( region );
+         window_surface_release( win_surface );
+         return;
+@@ -1000,11 +1183,28 @@ static void X11DRV_client_surface_present( struct client_surface *client, HDC hd
+ 
+     if (get_dc_drawable( surface->hdc_dst, &rect ) != window || !EqualRect( &rect, &rect_dst ))
+         set_dc_drawable( surface->hdc_dst, window, &rect_dst, IncludeInferiors, &vis );
+-    if (region) NtGdiExtSelectClipRgn( surface->hdc_dst, region, RGN_COPY );
+-
+     if (update_layered_overlay_shape( surface, toplevel ))
++    {
++        hdc_src = blend_layered_children( surface, hwnd, &covered );
++        if (region && !IsRectEmpty( &covered ))
++        {
++            /* layered children don't clip the frame, they are part of it now */
++            HRGN rgn;
++
++            covered.left   = scale_coord( covered.left, rect_dst.right - rect_dst.left, surface->rect.right );
++            covered.top    = scale_coord( covered.top, rect_dst.bottom - rect_dst.top, surface->rect.bottom );
++            covered.right  = scale_coord( covered.right, rect_dst.right - rect_dst.left, surface->rect.right );
++            covered.bottom = scale_coord( covered.bottom, rect_dst.bottom - rect_dst.top, surface->rect.bottom );
++            if ((rgn = NtGdiCreateRectRgn( covered.left, covered.top, covered.right, covered.bottom )))
++            {
++                NtGdiCombineRgn( region, region, rgn, RGN_OR );
++                NtGdiDeleteObjectApp( rgn );
++            }
++        }
++        if (region) NtGdiExtSelectClipRgn( surface->hdc_dst, region, RGN_COPY );
+         NtGdiStretchBlt( surface->hdc_dst, 0, 0, rect_dst.right - rect_dst.left, rect_dst.bottom - rect_dst.top,
+-                         surface->hdc_src, 0, 0, surface->rect.right, surface->rect.bottom, SRCCOPY, 0 );
++                         hdc_src, 0, 0, surface->rect.right, surface->rect.bottom, SRCCOPY, 0 );
++    }
+     XFlush( gdi_display );
+ 
+ done:
+diff --git a/include/wine/gdi_driver.h b/include/wine/gdi_driver.h
+index b67795a12e0..5845b7a75f9 100644
+--- a/include/wine/gdi_driver.h
++++ b/include/wine/gdi_driver.h
+@@ -353,6 +353,20 @@ W32KAPI void window_surface_set_shape( struct window_surface *surface, HRGN shap
+ W32KAPI void window_surface_set_gdi_over_producer_region( struct window_surface *surface, HRGN region );
+ W32KAPI struct window_surface *window_surface_get( HWND hwnd );
+ 
++/* layered child windows have no surface, the driver draws them over the client surfaces of their parent */
++struct layered_child_info
++{
++    HWND hwnd;      /* the layered child window */
++    RECT rect;      /* its rectangle in the client area of the window that was asked about */
++    SIZE size;      /* size of its image */
++    UINT serial;    /* changes with its image */
++    BYTE alpha;     /* opacity of the window as a whole */
++};
++
++W32KAPI UINT get_layered_children( HWND hwnd, struct layered_child_info *info, UINT count, UINT dpi );
++W32KAPI const void *lock_layered_child_bits( HWND hwnd, UINT prev_serial, SIZE *size, UINT *serial, RECT *dirty );
++W32KAPI void unlock_layered_child_bits(void);
++
+ /* display manager interface, used to initialize display device registry data */
+ 
+ struct pci_id

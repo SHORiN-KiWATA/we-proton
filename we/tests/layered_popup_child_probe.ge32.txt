@@ -1,0 +1,558 @@
+== layered_popup_child_probe.exe 
+host style 94000000, Direct3D 11, client area 600 x 400
+d3d11 device: hardware, bitblt model
+host-only: host X window 600x400 depth 24
+   1/12 r=255 g=255 b=255
+   3/12 r=255 g=255 b=255
+   5/12 r=255 g=255 b=255
+   7/12 r=255 g=255 b=255
+   9/12 r=255 g=255 b=255
+  11/12 r=255 g=255 b=255
+top-level: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT desktop GW_OWNER 0 GA_ROOT popup visible 0 screen rect 240,180-560,420 in host client 140,80-460,320
+  host first child 0, own X window 0x1400006
+SetParent returned desktop, error 0
+after SetParent: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 0 screen rect 340,280-660,520 in host client 240,180-560,420
+  host first child popup, own X window 0
+shown: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 100,100-700,500 in host client 0,0-600,400
+  host first child popup, own X window 0
+popup-shown: host X window 600x400 depth 24
+   1/12 r=  0 g=  0 b=255
+   3/12 r=  0 g=  0 b=255
+   5/12 r=  0 g=  0 b=255
+   7/12 r=  0 g=  0 b=255
+   9/12 r=  0 g=  0 b=255
+  11/12 r=  0 g=  0 b=255
+  WindowFromPoint: popup popup popup
+frames-changed: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: popup popup popup
+moved: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 400,100-700,500 in host client 300,0-600,400
+  host first child popup, own X window 0
+popup-moved: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: host popup popup
+popup-hidden: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: host host host
+popup-shown-again: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: host popup popup
+popup-destroyed: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+
+== layered_popup_child_probe.exe fade
+host style 94000000, Direct3D 11, client area 600 x 400
+d3d11 device: hardware, bitblt model
+host-only: host X window 600x400 depth 24
+   1/12 r=255 g=255 b=255
+   3/12 r=255 g=255 b=255
+   5/12 r=255 g=255 b=255
+   7/12 r=255 g=255 b=255
+   9/12 r=255 g=255 b=255
+  11/12 r=255 g=255 b=255
+top-level: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT desktop GW_OWNER 0 GA_ROOT popup visible 0 screen rect 240,180-560,420 in host client 140,80-460,320
+  host first child 0, own X window 0x1400006
+SetParent returned desktop, error 0
+after SetParent: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 0 screen rect 340,280-660,520 in host client 240,180-560,420
+  host first child popup, own X window 0
+popup-fading: host X window 600x400 depth 24
+   1/12 r=  0 g=  0 b=255
+   3/12 r=  0 g=  0 b=255
+   5/12 r=  0 g=  0 b=255
+   7/12 r=  0 g=  0 b=255
+   9/12 r=  0 g=  0 b=255
+  11/12 r=  0 g=  0 b=255
+  WindowFromPoint: popup popup popup
+shown: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 100,100-700,500 in host client 0,0-600,400
+  host first child popup, own X window 0
+popup-shown: host X window 600x400 depth 24
+   1/12 r=  0 g=  0 b=255
+   3/12 r=  0 g=  0 b=255
+   5/12 r=  0 g=  0 b=255
+   7/12 r=  0 g=  0 b=255
+   9/12 r=  0 g=  0 b=255
+  11/12 r=  0 g=  0 b=255
+  WindowFromPoint: popup popup popup
+frames-changed: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: popup popup popup
+moved: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 400,100-700,500 in host client 300,0-600,400
+  host first child popup, own X window 0
+popup-moved: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: host popup popup
+popup-hidden: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: host host host
+popup-shown-again: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: host popup popup
+popup-destroyed: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+
+== layered_popup_child_probe.exe clip
+host style 96000000, Direct3D 11, client area 600 x 400
+d3d11 device: hardware, bitblt model
+host-only: host X window 600x400 depth 24
+   1/12 r=255 g=255 b=255
+   3/12 r=255 g=255 b=255
+   5/12 r=255 g=255 b=255
+   7/12 r=255 g=255 b=255
+   9/12 r=255 g=255 b=255
+  11/12 r=255 g=255 b=255
+top-level: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT desktop GW_OWNER 0 GA_ROOT popup visible 0 screen rect 240,180-560,420 in host client 140,80-460,320
+  host first child 0, own X window 0x1600006
+SetParent returned desktop, error 0
+after SetParent: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 0 screen rect 340,280-660,520 in host client 240,180-560,420
+  host first child popup, own X window 0
+shown: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 100,100-700,500 in host client 0,0-600,400
+  host first child popup, own X window 0
+popup-shown: host X window 600x400 depth 24
+   1/12 r=  0 g=255 b=  0
+   3/12 r=  0 g=255 b=  0
+   5/12 r=128 g=  0 b=  0
+   7/12 r=128 g=  0 b=  0
+   9/12 r=  0 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: popup popup popup
+frames-changed: host X window 600x400 depth 24
+   1/12 r=  0 g=255 b=  0
+   3/12 r=  0 g=255 b=  0
+   5/12 r=128 g=  0 b=  0
+   7/12 r=128 g=  0 b=  0
+   9/12 r=  0 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: popup popup popup
+moved: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 400,100-700,500 in host client 300,0-600,400
+  host first child popup, own X window 0
+popup-moved: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=255 b=  0
+   9/12 r=128 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: host popup popup
+popup-hidden: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: host host host
+popup-shown-again: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=255 b=  0
+   9/12 r=128 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: host popup popup
+popup-destroyed: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+
+== layered_popup_child_probe.exe caption
+host style 14cf0000, Direct3D 11, client area 600 x 400
+d3d11 device: hardware, bitblt model
+host-only: host X window 600x400 depth 24
+   1/12 r=255 g=255 b=255
+   3/12 r=255 g=255 b=255
+   5/12 r=255 g=255 b=255
+   7/12 r=255 g=255 b=255
+   9/12 r=255 g=255 b=255
+  11/12 r=255 g=255 b=255
+top-level: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT desktop GW_OWNER 0 GA_ROOT popup visible 0 screen rect 240,180-560,420 in host client 140,80-460,320
+  host first child 0, own X window 0x1400006
+SetParent returned desktop, error 0
+after SetParent: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 0 screen rect 340,280-660,520 in host client 240,180-560,420
+  host first child popup, own X window 0
+shown: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 100,100-700,500 in host client 0,0-600,400
+  host first child popup, own X window 0
+popup-shown: host X window 600x400 depth 24
+   1/12 r=  0 g=  0 b=255
+   3/12 r=  0 g=  0 b=255
+   5/12 r=  0 g=  0 b=255
+   7/12 r=  0 g=  0 b=255
+   9/12 r=  0 g=  0 b=255
+  11/12 r=  0 g=  0 b=255
+  WindowFromPoint: popup popup popup
+frames-changed: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: popup popup popup
+moved: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 400,100-700,500 in host client 300,0-600,400
+  host first child popup, own X window 0
+popup-moved: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: host popup popup
+popup-hidden: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: host host host
+popup-shown-again: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: host popup popup
+popup-destroyed: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+
+== layered_popup_child_probe.exe flip
+host style 94000000, Direct3D 11, client area 600 x 400
+d3d11 device: hardware, flip model
+host-only: host X window 600x400 depth 24
+   1/12 r=255 g=255 b=255
+   3/12 r=255 g=255 b=255
+   5/12 r=255 g=255 b=255
+   7/12 r=255 g=255 b=255
+   9/12 r=255 g=255 b=255
+  11/12 r=255 g=255 b=255
+top-level: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT desktop GW_OWNER 0 GA_ROOT popup visible 0 screen rect 240,180-560,420 in host client 140,80-460,320
+  host first child 0, own X window 0x1200006
+SetParent returned desktop, error 0
+after SetParent: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 0 screen rect 340,280-660,520 in host client 240,180-560,420
+  host first child popup, own X window 0
+shown: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 100,100-700,500 in host client 0,0-600,400
+  host first child popup, own X window 0
+popup-shown: host X window 600x400 depth 24
+   1/12 r=  0 g=  0 b=255
+   3/12 r=  0 g=  0 b=255
+   5/12 r=  0 g=  0 b=255
+   7/12 r=  0 g=  0 b=255
+   9/12 r=  0 g=  0 b=255
+  11/12 r=  0 g=  0 b=255
+  WindowFromPoint: popup popup popup
+frames-changed: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: popup popup popup
+moved: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 400,100-700,500 in host client 300,0-600,400
+  host first child popup, own X window 0
+popup-moved: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: host popup popup
+popup-hidden: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: host host host
+popup-shown-again: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: host popup popup
+popup-destroyed: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+
+== layered_popup_child_probe.exe full indirect fade
+host style 94000000, Direct3D 11, client area 1280 x 800
+d3d11 device: hardware, bitblt model
+host-only: host X window 1280x800 depth 24
+   1/12 r=255 g=255 b=255
+   3/12 r=255 g=255 b=255
+   5/12 r=255 g=255 b=255
+   7/12 r=255 g=255 b=255
+   9/12 r=255 g=255 b=255
+  11/12 r=255 g=255 b=255
+top-level: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT desktop GW_OWNER 0 GA_ROOT popup visible 0 screen rect 480,280-800,520 in host client 480,280-800,520
+  host first child 0, own X window 0x1600006
+SetParent returned desktop, error 0
+after SetParent: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 0 screen rect 480,280-800,520 in host client 480,280-800,520
+  host first child popup, own X window 0
+popup-fading: host X window 1280x800 depth 24
+   1/12 r=  0 g=  0 b=  0
+   3/12 r=  0 g=  0 b=  0
+   5/12 r=  0 g=  0 b=  0
+   7/12 r=  0 g=  0 b=  0
+   9/12 r=  0 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: popup popup popup
+shown: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 0,0-1280,800 in host client 0,0-1280,800
+  host first child popup, own X window 0
+popup-shown: host X window 1280x800 depth 24
+   1/12 r=  0 g=  0 b=  0
+   3/12 r=  0 g=  0 b=  0
+   5/12 r=  0 g=  0 b=  0
+   7/12 r=  0 g=  0 b=  0
+   9/12 r=  0 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: popup popup popup
+frames-changed: host X window 1280x800 depth 24
+   1/12 r=  0 g=  0 b=  0
+   3/12 r=  0 g=  0 b=  0
+   5/12 r=  0 g=  0 b=  0
+   7/12 r=  0 g=  0 b=  0
+   9/12 r=  0 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: popup popup popup
+moved: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 640,0-1280,800 in host client 640,0-1280,800
+  host first child popup, own X window 0
+popup-moved: host X window 1280x800 depth 24
+   1/12 r=  0 g=  0 b=  0
+   3/12 r=  0 g=  0 b=  0
+   5/12 r=  0 g=  0 b=  0
+   7/12 r=  0 g=255 b=  0
+   9/12 r=128 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: host popup popup
+popup-hidden: host X window 1280x800 depth 24
+   1/12 r=  0 g=  0 b=  0
+   3/12 r=  0 g=  0 b=  0
+   5/12 r=  0 g=  0 b=  0
+   7/12 r=  0 g=255 b=  0
+   9/12 r=128 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: host host host
+popup-shown-again: host X window 1280x800 depth 24
+   1/12 r=  0 g=  0 b=  0
+   3/12 r=  0 g=  0 b=  0
+   5/12 r=  0 g=  0 b=  0
+   7/12 r=  0 g=255 b=  0
+   9/12 r=128 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: host popup popup
+popup-destroyed: host X window 1280x800 depth 24
+   1/12 r=  0 g=  0 b=  0
+   3/12 r=  0 g=  0 b=  0
+   5/12 r=  0 g=  0 b=  0
+   7/12 r=  0 g=255 b=  0
+   9/12 r=128 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+
+== layered_popup_child_probe.exe gdi
+host style 94000000, GDI, client area 600 x 400
+host-only: host X window 600x400 depth 24
+   1/12 r=  0 g=  0 b=255
+   3/12 r=  0 g=  0 b=255
+   5/12 r=  0 g=  0 b=255
+   7/12 r=  0 g=  0 b=255
+   9/12 r=  0 g=  0 b=255
+  11/12 r=  0 g=  0 b=255
+top-level: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT desktop GW_OWNER 0 GA_ROOT popup visible 0 screen rect 240,180-560,420 in host client 140,80-460,320
+  host first child 0, own X window 0x1600006
+SetParent returned desktop, error 0
+after SetParent: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 0 screen rect 340,280-660,520 in host client 240,180-560,420
+  host first child popup, own X window 0
+shown: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 100,100-700,500 in host client 0,0-600,400
+  host first child popup, own X window 0
+popup-shown: host X window 600x400 depth 24
+   1/12 r=  0 g=255 b=  0
+   3/12 r=  0 g=255 b=  0
+   5/12 r=128 g=  0 b=  0
+   7/12 r=128 g=  0 b=  0
+   9/12 r=  0 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: popup popup popup
+frames-changed: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: popup popup popup
+moved: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 400,100-700,500 in host client 300,0-600,400
+  host first child popup, own X window 0
+popup-moved: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=255 b=  0
+   9/12 r=128 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: host popup popup
+popup-hidden: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=255 b=  0
+   9/12 r=128 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: host host host
+popup-shown-again: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=255 b=  0
+   9/12 r=128 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: host popup popup
+popup-destroyed: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=255 b=  0
+   9/12 r=128 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+
+== layered_popup_child_probe.exe gdi fade
+host style 94000000, GDI, client area 600 x 400
+host-only: host X window 600x400 depth 24
+   1/12 r=  0 g=  0 b=255
+   3/12 r=  0 g=  0 b=255
+   5/12 r=  0 g=  0 b=255
+   7/12 r=  0 g=  0 b=255
+   9/12 r=  0 g=  0 b=255
+  11/12 r=  0 g=  0 b=255
+top-level: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT desktop GW_OWNER 0 GA_ROOT popup visible 0 screen rect 240,180-560,420 in host client 140,80-460,320
+  host first child 0, own X window 0x1600006
+SetParent returned desktop, error 0
+after SetParent: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 0 screen rect 340,280-660,520 in host client 240,180-560,420
+  host first child popup, own X window 0
+popup-fading: host X window 600x400 depth 24
+   1/12 r=  0 g=  0 b=  0
+   3/12 r=  0 g=  0 b=  0
+   5/12 r=  0 g=  0 b=  0
+   7/12 r=  0 g=  0 b=  0
+   9/12 r=  0 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: popup popup popup
+shown: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 100,100-700,500 in host client 0,0-600,400
+  host first child popup, own X window 0
+popup-shown: host X window 600x400 depth 24
+   1/12 r=  0 g=  0 b=  0
+   3/12 r=  0 g=  0 b=  0
+   5/12 r=  0 g=  0 b=  0
+   7/12 r=  0 g=  0 b=  0
+   9/12 r=  0 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: popup popup popup
+frames-changed: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=128 b=128
+   9/12 r=  0 g=128 b=128
+  11/12 r=  0 g=128 b=128
+  WindowFromPoint: popup popup popup
+moved: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 400,100-700,500 in host client 300,0-600,400
+  host first child popup, own X window 0
+popup-moved: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=255 b=  0
+   9/12 r=128 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: host popup popup
+popup-hidden: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=255 b=  0
+   9/12 r=128 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: host host host
+popup-shown-again: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=255 b=  0
+   9/12 r=128 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+  WindowFromPoint: host popup popup
+popup-destroyed: host X window 600x400 depth 24
+   1/12 r=  0 g=128 b=128
+   3/12 r=  0 g=128 b=128
+   5/12 r=  0 g=128 b=128
+   7/12 r=  0 g=255 b=  0
+   9/12 r=128 g=  0 b=  0
+  11/12 r=  0 g=  0 b=  0
+

@@ -1,0 +1,97 @@
+== layered_popup_child_probe.exe fade
+capture 600x400: 0000ff 0000ff 0000ff 0000ff 0000ff 0000ff
+capture 600x400: 00ff00 00ff00 80007f 80007f 0000ff 0000ff
+capture 600x400: 00ff00 00ff00 804040 804040 008080 008080
+capture 600x400: 008080 008080 008080 00ff00 804040 008080
+capture 600x400: 008080 008080 008080 008080 008080 008080
+capture 600x400: 008080 008080 008080 00ff00 804040 008080
+capture 600x400: 008080 008080 008080 008080 008080 008080
+host style 94000000, Direct3D 11, client area 600 x 400
+d3d11 device: hardware, bitblt model
+SAMPLE host-only 0 0
+top-level: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT desktop GW_OWNER 0 GA_ROOT popup visible 0 screen rect 240,180-560,420 in host client 240,180-560,420
+  host first child 0, own X window 0
+SetParent returned desktop, error 0
+after SetParent: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 0 screen rect 240,180-560,420 in host client 240,180-560,420
+  host first child popup, own X window 0
+SAMPLE popup-fading 0 0
+  WindowFromPoint: popup popup popup
+shown: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 0,0-600,400 in host client 0,0-600,400
+  host first child popup, own X window 0
+SAMPLE popup-shown 0 0
+  WindowFromPoint: popup popup popup
+SAMPLE frames-changed 0 0
+  WindowFromPoint: popup popup popup
+moved: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 300,0-600,400 in host client 300,0-600,400
+  host first child popup, own X window 0
+SAMPLE popup-moved 0 0
+  WindowFromPoint: host popup popup
+SAMPLE popup-hidden 0 0
+  WindowFromPoint: host host host
+SAMPLE popup-shown-again 0 0
+  WindowFromPoint: host popup popup
+SAMPLE popup-destroyed 0 0
+
+== layered_popup_child_probe.exe caption
+capture 1265x1389: 0000ff 0000ff 0000ff 0000ff 0000ff 0000ff
+capture 1265x1389: 00ff00 00ff00 80007f 80007f 0000ff 0000ff
+capture 1265x1389: 00ff00 00ff00 804040 804040 008080 008080
+capture 1265x1389: 008080 008080 008080 00ff00 804040 008080
+capture 1265x1389: 008080 008080 008080 008080 008080 008080
+capture 1265x1389: 008080 008080 008080 00ff00 804040 008080
+capture 1265x1389: 008080 008080 008080 008080 008080 008080
+host style 14cf0000, Direct3D 11, client area 600 x 400
+d3d11 device: hardware, bitblt model
+SAMPLE host-only 4 30
+top-level: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT desktop GW_OWNER 0 GA_ROOT popup visible 0 screen rect 240,180-560,420 in host client 236,150-556,390
+  host first child 0, own X window 0
+SetParent returned desktop, error 0
+after SetParent: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 0 screen rect 244,210-564,450 in host client 240,180-560,420
+  host first child popup, own X window 0
+shown: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 4,30-604,430 in host client 0,0-600,400
+  host first child popup, own X window 0
+SAMPLE popup-shown 4 30
+  WindowFromPoint: popup popup popup
+SAMPLE frames-changed 4 30
+  WindowFromPoint: popup popup popup
+moved: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 304,30-604,430 in host client 300,0-600,400
+  host first child popup, own X window 0
+SAMPLE popup-moved 4 30
+  WindowFromPoint: host popup popup
+SAMPLE popup-hidden 4 30
+  WindowFromPoint: host host host
+SAMPLE popup-shown-again 4 30
+  WindowFromPoint: host popup popup
+SAMPLE popup-destroyed 4 30
+
+== layered_popup_child_probe.exe gdi
+capture 600x400: 0000ff 0000ff 0000ff 0000ff 0000ff 0000ff
+capture 600x400: 00ff00 00ff00 80007f 80007f 0000ff 0000ff
+capture 600x400: 00ff00 00ff00 804040 804040 008080 008080
+capture 600x400: 008080 008080 008080 00ff00 804040 008080
+capture 600x400: 008080 008080 008080 008080 008080 008080
+capture 600x400: 008080 008080 008080 00ff00 804040 008080
+capture 600x400: 008080 008080 008080 008080 008080 008080
+host style 94000000, GDI, client area 600 x 400
+SAMPLE host-only 0 0
+top-level: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT desktop GW_OWNER 0 GA_ROOT popup visible 0 screen rect 240,180-560,420 in host client 240,180-560,420
+  host first child 0, own X window 0
+SetParent returned desktop, error 0
+after SetParent: style 86000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 0 screen rect 240,180-560,420 in host client 240,180-560,420
+  host first child popup, own X window 0
+shown: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 0,0-600,400 in host client 0,0-600,400
+  host first child popup, own X window 0
+SAMPLE popup-shown 0 0
+  WindowFromPoint: popup popup popup
+SAMPLE frames-changed 0 0
+  WindowFromPoint: popup popup popup
+moved: style 96000000 exstyle 00080080 GetParent 0 GA_PARENT host GW_OWNER 0 GA_ROOT host visible 1 screen rect 300,0-600,400 in host client 300,0-600,400
+  host first child popup, own X window 0
+SAMPLE popup-moved 0 0
+  WindowFromPoint: host popup popup
+SAMPLE popup-hidden 0 0
+  WindowFromPoint: host host host
+SAMPLE popup-shown-again 0 0
+  WindowFromPoint: host popup popup
+SAMPLE popup-destroyed 0 0
+

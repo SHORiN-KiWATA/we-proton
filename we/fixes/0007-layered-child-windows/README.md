@@ -64,6 +64,10 @@ Windows 8 开始，`WS_EX_LAYERED` 可以用在子窗口上（文档 *Extended W
 2. 在同一个 wineserver 里跑一个枚举程序（`EnumWindows` + `EnumChildWindows`，读 `__wine_x11_whole_window` 属性对应 X 窗口）：override-redirect 窗口属于一个 `WS_CHILD | WS_EX_LAYERED` 的子窗口——子窗口本来不该有 X 窗口
 3. 顺着 `UpdateLayeredWindow` → `get_window_surface` → `X11DRV_CreateWindowSurface` → `set_window_visual` 找到建窗口的地方
 
+## 后续
+
+父窗口用 D3D/OpenGL 交帧时，画进父窗口表面的内容被 3D 画面挡住；只改整体不透明度的 `UpdateLayeredWindow`（不带图像）被这里忽略；Wayland 驱动其实能把有表面的子窗口做成子表面。这三点见 `../0066-layered-child-over-client-surface/`。
+
 ## 另外看到的问题（没修）
 
 - **宿主被平铺、界面被拉伸**：宿主带 `WS_THICKFRAME`，Wine 认为它可以调大小，不设固定大小提示（`WM_NORMAL_HINTS` 没有最小/最大尺寸），niri 就把它平铺，程序再按平铺后的尺寸重新排版。这个程序在 Windows 上靠 `WM_NCHITTEST` 不返回边框来禁止拖大小，`WM_GETMINMAXINFO` 也没有给出固定尺寸（最小 0×0、最大为默认的屏幕尺寸），Wine 没有依据把它当成固定大小。要在合成器的窗口规则里处理

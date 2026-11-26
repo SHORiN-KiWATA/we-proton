@@ -1,0 +1,104 @@
+From 35a40b18ad18907df49c2eec2f5f9227736b4eb5 Mon Sep 17 00:00:00 2001
+From: shorinkiwata <fcl709@outlook.com>
+Date: Fri, 27 Nov 2026 03:27:20 +0900
+Subject: [PATCH] winewayland: Show a child window with a surface as a
+ subsurface in its parent.
+
+A child window that has a surface of its own, as a layered one does,
+belongs into the surface tree of its toplevel. Whether it got there was
+left to the rules for unmanaged top-level windows: a popup window that
+was given a parent with SetParent keeps the style of one, and was taken
+out of the tree again, and moved, when it was shown a second time.
+Keep a window that has a parent in its toplevel whatever its style.
+
+The rectangle of a child window is relative to the client area of its
+parent. The position of its subsurface was computed like that of a
+top-level window that is shown as a subsurface, from the difference to
+the rectangle of the toplevel. That leaves out the offset of the client
+area: below a parent with a caption the window was off by the size of
+the frame.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+---
+ dlls/winewayland.drv/wayland_surface.c | 20 ++++++++++++++++++--
+ dlls/winewayland.drv/window.c          |  9 ++++++---
+ 2 files changed, 24 insertions(+), 5 deletions(-)
+
+diff --git a/dlls/winewayland.drv/wayland_surface.c b/dlls/winewayland.drv/wayland_surface.c
+index 4f46727fd19..2b831fd5743 100644
+--- a/dlls/winewayland.drv/wayland_surface.c
++++ b/dlls/winewayland.drv/wayland_surface.c
+@@ -2347,6 +2347,7 @@ static void wayland_surface_reconfigure_subsurface(struct wayland_surface *surfa
+     struct wayland_win_data *toplevel_data;
+     struct wayland_surface *toplevel_surface;
+     POINT point;
++    HWND parent;
+ 
+     if (!(toplevel_data = wayland_win_data_get_nolock(surface->toplevel_hwnd)) ||
+         !(toplevel_surface = toplevel_data->wayland_surface))
+@@ -2362,8 +2363,23 @@ static void wayland_surface_reconfigure_subsurface(struct wayland_surface *surfa
+         return;
+     }
+ 
+-    point.x = surface->window.rect.left - toplevel_surface->window.rect.left;
+-    point.y = surface->window.rect.top - toplevel_surface->window.rect.top;
++    parent = NtUserGetAncestor(surface->hwnd, GA_PARENT);
++    if (parent && parent != NtUserGetDesktopWindow())
++    {
++        /* The rectangle of a child window is relative to the client area of
++         * its parent, unlike that of a top-level window shown as a subsurface. */
++        point.x = surface->window.rect.left;
++        point.y = surface->window.rect.top;
++        NtUserMapWindowPoints(parent, toplevel_surface->hwnd, &point, 1,
++                              NtUserGetWinMonitorDpi(surface->hwnd, MDT_RAW_DPI));
++        point.x += toplevel_surface->window.client_rect.left - toplevel_surface->window.rect.left;
++        point.y += toplevel_surface->window.client_rect.top - toplevel_surface->window.rect.top;
++    }
++    else
++    {
++        point.x = surface->window.rect.left - toplevel_surface->window.rect.left;
++        point.y = surface->window.rect.top - toplevel_surface->window.rect.top;
++    }
+     point = map_point_to_surface(surface, point);
+ 
+     TRACE("hwnd=%p pos=%d,%d\n", surface->hwnd, point.x, point.y);
+diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
+index 89c061e64bc..d6f6ab9143e 100644
+--- a/dlls/winewayland.drv/window.c
++++ b/dlls/winewayland.drv/window.c
+@@ -1001,6 +1001,9 @@ void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, HWND owner_hint, UIN
+     struct wayland_surface *toplevel_surface = NULL, *owner_surface = NULL;
+     struct wayland_win_data *data, *toplevel_data, *owner_data;
+     BOOL managed, fullscreen = swp_flags & WINE_SWP_FULLSCREEN;
++    /* a child window with a surface stays in its toplevel, whatever its style says:
++     * a popup window that was given a parent keeps the style of a top-level window */
++    BOOL child = toplevel && toplevel != hwnd;
+     BOOL tray_menu = swp_flags & WINE_SWP_TRAY_MENU;
+     BOOL notification = FALSE;
+     BOOL use_layer_shell = FALSE;
+@@ -1014,14 +1017,14 @@ void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, HWND owner_hint, UIN
+         break;
+     }
+ 
+-    backing_parent = get_fullscreen_backing_parent(hwnd, insert_after, fullscreen);
++    backing_parent = child ? NULL : get_fullscreen_backing_parent(hwnd, insert_after, fullscreen);
+ 
+     /* Get the managed state with win_data unlocked, as is_window_managed
+      * may need to query win_data information about other HWNDs and thus
+      * acquire the lock itself internally. */
+     menu_popup_owner = wayland_is_menu_popup_candidate(hwnd) ? get_menu_popup_owner(hwnd, owner_hint) : NULL;
+     managed = is_window_managed(hwnd, menu_popup_owner, swp_flags, fullscreen);
+-    if (!tray_menu && surface && process_wayland.zwlr_layer_shell_v1)
++    if (!tray_menu && !child && surface && process_wayland.zwlr_layer_shell_v1)
+         notification = is_notification_window(hwnd, swp_flags, new_rects);
+     if (backing_parent)
+     {
+@@ -1036,7 +1039,7 @@ void WAYLAND_WindowPosChanged(HWND hwnd, HWND insert_after, HWND owner_hint, UIN
+         owner = NULL;
+         use_layer_shell = TRUE;
+     }
+-    else if (!managed && surface)
++    else if (!managed && surface && !child)
+     {
+         toplevel = NULL;
+         owner = menu_popup_owner ? menu_popup_owner : owner_hint;
