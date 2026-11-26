@@ -1,4 +1,4 @@
-From 4e66fe06106a410965178f25b548524a0d95541b Mon Sep 17 00:00:00 2001
+From 2505fef867bd5d5fc338027b69b7762f9c0116e6 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Sun, 15 Nov 2026 03:12:38 +0900
 Subject: [PATCH] winedmo: Use frame threading for H.264 also for low-latency
@@ -21,10 +21,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  1 file changed, 5 insertions(+), 2 deletions(-)
 
 diff --git a/dlls/winedmo/unix_transform.c b/dlls/winedmo/unix_transform.c
-index 03e51cc26c4..b0a648bb23d 100644
+index 03736c6822b..15f81b797d5 100644
 --- a/dlls/winedmo/unix_transform.c
 +++ b/dlls/winedmo/unix_transform.c
-@@ -950,9 +950,12 @@ NTSTATUS transform_create( void *arg )
+@@ -956,9 +956,12 @@ NTSTATUS transform_create( void *arg )
              int thread_count = av_cpu_count();
  
              /* libavcodec defaults to one thread. Bound the worker count like

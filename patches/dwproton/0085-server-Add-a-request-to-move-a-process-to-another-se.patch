@@ -1,4 +1,4 @@
-From d5e585e1c3c8a5386e6cee6a31bc9aa0ecf88a97 Mon Sep 17 00:00:00 2001
+From c19f61e38063ddb8668fd80b8204549928e09fcb Mon Sep 17 00:00:00 2001
 From: shxrrydw <sherrydrv@gmail.com>
 Date: Thu, 6 Aug 2026 12:24:53 +0200
 Subject: [PATCH] server: Add a request to move a process to another session.
@@ -41,10 +41,10 @@ index 7cf792de80a..e6deced750d 100644
  DECL_HANDLER(create_job)
  {
 diff --git a/server/protocol.def b/server/protocol.def
-index ad3a5b836ac..605209cd586 100644
+index 06f55e0366c..4d8cd854278 100644
 --- a/server/protocol.def
 +++ b/server/protocol.def
-@@ -4035,6 +4035,13 @@ struct handle_info
+@@ -4036,6 +4036,13 @@ struct handle_info
  @END
  
  

@@ -1,4 +1,4 @@
-From 6d5f9b8340b3ee67745f62836b0290b4037e23ff Mon Sep 17 00:00:00 2001
+From ba8e281f06f6c8241f5444629f0b0cbd7988cd31 Mon Sep 17 00:00:00 2001
 From: Ziia Shi <mkrsym1@gmail.com>
 Date: Thu, 6 Aug 2026 22:00:20 +0200
 Subject: [PATCH] wdf01000.sys: Add KMDF stub.
@@ -15,10 +15,10 @@ App: Neverness to Everness (4508340).
  create mode 100644 dlls/wdf01000.sys/main.c
 
 diff --git a/configure.ac b/configure.ac
-index 98265f54014..cf55aecc1c9 100644
+index 030b228ff3a..910f9297f7c 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3344,6 +3344,7 @@ WINE_CONFIG_MAKEFILE(dlls/wbemdisp/tests)
+@@ -3363,6 +3363,7 @@ WINE_CONFIG_MAKEFILE(dlls/wbemdisp/tests)
  WINE_CONFIG_MAKEFILE(dlls/wbemprox)
  WINE_CONFIG_MAKEFILE(dlls/wbemprox/tests)
  WINE_CONFIG_MAKEFILE(dlls/wdfldr.sys)

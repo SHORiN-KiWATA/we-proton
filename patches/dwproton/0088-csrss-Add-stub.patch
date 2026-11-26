@@ -1,4 +1,4 @@
-From 68a3e815ba05033f6b836175e393816199b75742 Mon Sep 17 00:00:00 2001
+From e66fcbdd1dc9c4735d54163c829be60edda07333 Mon Sep 17 00:00:00 2001
 From: shxrrydw <sherrydrv@gmail.com>
 Date: Thu, 6 Aug 2026 12:58:38 +0200
 Subject: [PATCH] csrss: Add stub.
@@ -13,10 +13,10 @@ Subject: [PATCH] csrss: Add stub.
  create mode 100644 programs/csrss/main.c
 
 diff --git a/configure.ac b/configure.ac
-index be0866c3e64..98265f54014 100644
+index f10361285eb..030b228ff3a 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3617,6 +3617,7 @@ WINE_CONFIG_MAKEFILE(programs/certutil)
+@@ -3633,6 +3633,7 @@ WINE_CONFIG_MAKEFILE(programs/certutil)
  WINE_CONFIG_MAKEFILE(programs/chcp.com)
  WINE_CONFIG_MAKEFILE(programs/clock)
  WINE_CONFIG_MAKEFILE(programs/cmd)

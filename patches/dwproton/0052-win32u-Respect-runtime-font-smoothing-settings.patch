@@ -1,4 +1,4 @@
-From 74fef345a21a6099b396fedcbe93a1b877878921 Mon Sep 17 00:00:00 2001
+From 96b11d3d0bdf39fc8aceeee8bf3cf4b04aa00df3 Mon Sep 17 00:00:00 2001
 From: Ziqing Hui <zhui@codeweavers.com>
 Date: Tue, 5 May 2026 14:44:49 +0800
 Subject: [PATCH] win32u: Respect runtime font smoothing settings.
@@ -11,7 +11,7 @@ Subject: [PATCH] win32u: Respect runtime font smoothing settings.
  3 files changed, 48 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/win32u/font.c b/dlls/win32u/font.c
-index d9e87508b2e..f796518ac16 100644
+index 3c627b6635b..91d53df03b9 100644
 --- a/dlls/win32u/font.c
 +++ b/dlls/win32u/font.c
 @@ -4542,6 +4542,8 @@ static HFONT font_SelectFont( PHYSDEV dev, HFONT hfont, UINT *aa_flags )
@@ -95,10 +95,10 @@ index 6681dc7fc50..ebbeeecddc3 100644
 +    return TRUE;
 +}
 diff --git a/dlls/win32u/win32u_private.h b/dlls/win32u/win32u_private.h
-index cd6d06fdee3..5ed70cc16d2 100644
+index 2e8adda398b..6b19076e371 100644
 --- a/dlls/win32u/win32u_private.h
 +++ b/dlls/win32u/win32u_private.h
-@@ -174,6 +174,7 @@ extern COLORREF get_sys_color( int index );
+@@ -175,6 +175,7 @@ extern COLORREF get_sys_color( int index );
  extern HBRUSH get_sys_color_brush( unsigned int index );
  extern HPEN get_sys_color_pen( unsigned int index );
  extern UINT get_system_dpi(void);

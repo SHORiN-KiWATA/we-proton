@@ -1,4 +1,4 @@
-From e6d51aaa34d34da22a7cb99172026e50fd5f1161 Mon Sep 17 00:00:00 2001
+From e7ee35693074e1bf1032c14ebd6f1db144d057f3 Mon Sep 17 00:00:00 2001
 From: William Horvath <william@horvath.blog>
 Date: Fri, 22 Nov 2024 10:31:07 -0800
 Subject: [PATCH] configure: Enforce 4-byte stack alignment on clang for PE
@@ -14,10 +14,10 @@ https://linux.kernel.narkive.com/y7hAplfS/patch-x86-build-specify-stack-alignmen
  1 file changed, 1 insertion(+)
 
 diff --git a/configure.ac b/configure.ac
-index a036ee45433..be0866c3e64 100644
+index 7b8887b4fdb..f10361285eb 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -582,6 +582,7 @@ This is an error since --enable-archs=$wine_arch was requested.])])
+@@ -583,6 +583,7 @@ This is an error since --enable-archs=$wine_arch was requested.])])
  
      case $wine_arch in
        i386) WINE_TRY_PE_CFLAGS([-fno-omit-frame-pointer])

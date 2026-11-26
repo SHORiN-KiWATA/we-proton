@@ -1,4 +1,4 @@
-From 3877d54ae38ebf79d2822fd01507a1ba726ddfe0 Mon Sep 17 00:00:00 2001
+From 9a93d0a408086b6ffa656997e74d43d133cd322d Mon Sep 17 00:00:00 2001
 From: shxrrydw <sherrydrv@gmail.com>
 Date: Tue, 29 Sep 2026 22:16:42 +0200
 Subject: [PATCH] winex11: Implement drawing onto ARGB windows of other
@@ -27,7 +27,7 @@ App: Wuthering Waves (3513350).
  5 files changed, 26 insertions(+), 9 deletions(-)
 
 diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
-index 5155d9a0b95..4da4d028a92 100644
+index 30b13160a1d..5ced9338898 100644
 --- a/dlls/winex11.drv/init.c
 +++ b/dlls/winex11.drv/init.c
 @@ -363,7 +363,7 @@ BOOL needs_offscreen_rendering( HWND hwnd )
@@ -56,7 +56,7 @@ index 5155d9a0b95..4da4d028a92 100644
  #ifdef SONAME_LIBXCOMPOSITE
          if (usexcomposite) pXCompositeRedirectWindow( gdi_display, surface->window, CompositeRedirectManual );
  #endif
-@@ -869,6 +870,7 @@ static void X11DRV_client_surface_present( struct client_surface *client, HDC hd
+@@ -933,6 +934,7 @@ static void X11DRV_client_surface_present( struct client_surface *client, HDC hd
      struct window_surface *win_surface;
      struct x11drv_win_data *data;
      RECT rect_dst, rect;
@@ -64,7 +64,7 @@ index 5155d9a0b95..4da4d028a92 100644
      Drawable window;
      HRGN region;
  
-@@ -927,11 +929,13 @@ static void X11DRV_client_surface_present( struct client_surface *client, HDC hd
+@@ -991,11 +993,13 @@ static void X11DRV_client_surface_present( struct client_surface *client, HDC hd
      {
          OffsetRect( &rect_dst, data->rects.client.left - data->rects.visible.left,
                      data->rects.client.top - data->rects.visible.top );
@@ -93,7 +93,7 @@ index d4ffd385c95..f34352d0521 100644
      *drawable = &gl->base;
      return TRUE;
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 4fdc81aa65a..b66c019b881 100644
+index 104bd596226..23d6c185e6b 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
 @@ -111,6 +111,8 @@ static XContext host_window_context = 0;
@@ -105,7 +105,7 @@ index 4fdc81aa65a..b66c019b881 100644
  static const WCHAR clip_window_prop[] =
      {'_','_','w','i','n','e','_','x','1','1','_','c','l','i','p','_','w','i','n','d','o','w',0};
  static const WCHAR focus_time_prop[] =
-@@ -2951,6 +2953,7 @@ static void create_whole_window( struct x11drv_win_data *data )
+@@ -2957,6 +2959,7 @@ static void create_whole_window( struct x11drv_win_data *data )
  
      XSaveContext( data->display, data->whole_window, winContext, (char *)data->hwnd );
      NtUserSetProp( data->hwnd, whole_window_prop, (HANDLE)data->whole_window );
@@ -113,7 +113,7 @@ index 4fdc81aa65a..b66c019b881 100644
  
      set_gamescope_overlay_prop( data->display, data->whole_window, data->hwnd );
  
-@@ -3023,6 +3026,7 @@ static void destroy_whole_window( struct x11drv_win_data *data, BOOL already_des
+@@ -3029,6 +3032,7 @@ static void destroy_whole_window( struct x11drv_win_data *data, BOOL already_des
      /* Outlook stops processing messages after destroying a dialog, so we need an explicit flush */
      XFlush( data->display );
      NtUserRemoveProp( data->hwnd, whole_window_prop );
@@ -121,7 +121,7 @@ index 4fdc81aa65a..b66c019b881 100644
  
      /* It's possible that we are in a different thread, when called from
       * set_window_visual, and about to recreate the window. In this case
-@@ -3548,6 +3552,17 @@ Window X11DRV_get_whole_window( HWND hwnd )
+@@ -3554,6 +3558,17 @@ Window X11DRV_get_whole_window( HWND hwnd )
  }
  
  
@@ -139,7 +139,7 @@ index 4fdc81aa65a..b66c019b881 100644
  /***********************************************************************
   *		X11DRV_GetDC   (X11DRV.@)
   */
-@@ -3584,7 +3599,7 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, HWND top, const RECT *win_rect,
+@@ -3590,7 +3605,7 @@ void X11DRV_GetDC( HDC hdc, HWND hwnd, HWND top, const RECT *win_rect,
      else
      {
          escape.drawable = X11DRV_get_whole_window( top );
@@ -149,7 +149,7 @@ index 4fdc81aa65a..b66c019b881 100644
      }
  
 diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
-index 5fc004bf73d..027672e35b8 100644
+index 742af20880e..53286d770a4 100644
 --- a/dlls/winex11.drv/x11drv.h
 +++ b/dlls/winex11.drv/x11drv.h
 @@ -370,8 +370,9 @@ extern BOOL needs_offscreen_rendering( HWND hwnd );

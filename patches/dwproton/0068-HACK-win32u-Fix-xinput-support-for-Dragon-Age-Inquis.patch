@@ -1,4 +1,4 @@
-From 60920c7294ea44ff337c58df502bac7f5d18a914 Mon Sep 17 00:00:00 2001
+From 653ad9284f5e797a24eeec93c117f8f220599233 Mon Sep 17 00:00:00 2001
 From: Cameron Moore <moore.cameron1111@gmail.com>
 Date: Sat, 3 Feb 2024 21:21:50 -0500
 Subject: [PATCH] HACK: win32u: Fix xinput support for Dragon Age Inquisition.
@@ -42,7 +42,7 @@ functionality / stubs. Although, this part is speculation.
  1 file changed, 57 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
-index 6958a54d4d4..ce61f9898af 100644
+index 84299d9fb35..ba9ec2e3e76 100644
 --- a/dlls/win32u/input.c
 +++ b/dlls/win32u/input.c
 @@ -30,6 +30,8 @@
@@ -54,7 +54,7 @@ index 6958a54d4d4..ce61f9898af 100644
  #include "ntstatus.h"
  #define WIN32_NO_STATUS
  #include "win32u_private.h"
-@@ -586,12 +588,32 @@ HWND WINAPI NtUserGetForegroundWindow(void)
+@@ -587,12 +589,32 @@ HWND WINAPI NtUserGetForegroundWindow(void)
      return hwnd;
  }
  
@@ -88,7 +88,7 @@ index 6958a54d4d4..ce61f9898af 100644
  }
  
  /* see GetCapture */
-@@ -616,6 +638,40 @@ HWND get_focus(void)
+@@ -617,6 +639,40 @@ HWND get_focus(void)
  BOOL WINAPI NtUserAttachThreadInput( DWORD from, DWORD to, BOOL attach )
  {
      BOOL ret;

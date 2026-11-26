@@ -1,4 +1,4 @@
-From e6c90f2506e5bbb78a0ac30fdd958c1a818a19b2 Mon Sep 17 00:00:00 2001
+From 211cd91606b61624fffd6edf07d8a5d030b51125 Mon Sep 17 00:00:00 2001
 From: SHORiN-KIWATA <shorin@users.noreply.github.com>
 Date: Thu, 8 Oct 2026 23:10:06 +0900
 Subject: [PATCH] wintun: Implement the Wintun userspace tunnel driver
@@ -32,10 +32,10 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  create mode 100644 dlls/wintun/wintun.spec
 
 diff --git a/configure.ac b/configure.ac
-index 0e7c7b4feb6..db4158c2dad 100644
+index c9a3624891e..265e216c0bf 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3476,6 +3476,7 @@ WINE_CONFIG_MAKEFILE(dlls/wintab32)
+@@ -3492,6 +3492,7 @@ WINE_CONFIG_MAKEFILE(dlls/wintab32)
  WINE_CONFIG_MAKEFILE(dlls/wintab32/tests)
  WINE_CONFIG_MAKEFILE(dlls/wintrust)
  WINE_CONFIG_MAKEFILE(dlls/wintrust/tests)

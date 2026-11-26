@@ -1,4 +1,4 @@
-From 3e5d3ec140ef8baf27392f660929e58e69372c32 Mon Sep 17 00:00:00 2001
+From 4c4d1b9fc972ce206f94c4e936e24643ab3e674f Mon Sep 17 00:00:00 2001
 From: shxrrydw <sherrydrv@gmail.com>
 Date: Thu, 6 Aug 2026 17:42:59 +0200
 Subject: [PATCH] ntdll: Report loaded kernel drivers in
@@ -10,10 +10,10 @@ App: Hololive Dreams (4282500).
  1 file changed, 53 insertions(+), 4 deletions(-)
 
 diff --git a/dlls/ntdll/unix/system.c b/dlls/ntdll/unix/system.c
-index 80c84925035..a63a769f4a8 100644
+index 35caa0ab058..3679b9efbdf 100644
 --- a/dlls/ntdll/unix/system.c
 +++ b/dlls/ntdll/unix/system.c
-@@ -3870,13 +3870,38 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
+@@ -3871,13 +3871,38 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
          {
              "\\SystemRoot\\system32\\ntoskrnl.exe",
              "\\SystemRoot\\system32\\hal.dll",
@@ -55,7 +55,7 @@ index 80c84925035..a63a769f4a8 100644
          if (len <= size)
          {
              memset( smi, 0, len );
-@@ -3890,10 +3915,34 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
+@@ -3891,10 +3916,34 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
                  strcpy( (char *)sm->Name, fake_modules[i] );
                  sm->NameOffset = strrchr( fake_modules[i], '\\' ) - fake_modules[i] + 1;
              }

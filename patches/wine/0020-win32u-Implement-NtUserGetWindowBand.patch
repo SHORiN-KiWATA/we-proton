@@ -1,4 +1,4 @@
-From 49f35a46174b54471bb4ce79807a4ff1cd763353 Mon Sep 17 00:00:00 2001
+From 6430f7ea6879d00a2c2acb4f58d2d6d69dd283b6 Mon Sep 17 00:00:00 2001
 From: SHORiN-KIWATA <shorin@users.noreply.github.com>
 Date: Sun, 11 Oct 2026 15:19:13 +0900
 Subject: [PATCH] win32u: Implement NtUserGetWindowBand.
@@ -130,10 +130,10 @@ index 5cb723a52ef..3ccad81a3f7 100644
  @ stub -syscall NtUserGetWindowCompositionInfo
  @ stdcall -syscall NtUserGetWindowContextHelpId(long)
 diff --git a/dlls/win32u/window.c b/dlls/win32u/window.c
-index 46096db7867..f8ebf518403 100644
+index b7ef80d7729..0835c607960 100644
 --- a/dlls/win32u/window.c
 +++ b/dlls/win32u/window.c
-@@ -7123,6 +7123,31 @@ BOOL WINAPI NtUserIsChildWindowDpiMessageEnabled( HWND hwnd )
+@@ -7164,6 +7164,31 @@ BOOL WINAPI NtUserIsChildWindowDpiMessageEnabled( HWND hwnd )
      return FALSE;
  }
  

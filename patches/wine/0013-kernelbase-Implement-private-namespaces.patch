@@ -1,4 +1,4 @@
-From 2d2af782bc096469b8c44918529de35230bb6bec Mon Sep 17 00:00:00 2001
+From 115b55e64362d440a9c856d50fbfe3865f21e5c6 Mon Sep 17 00:00:00 2001
 From: SHORiN-KiWATA <feng13862095732@gmail.com>
 Date: Thu, 8 Oct 2026 22:18:35 +0900
 Subject: [PATCH] kernelbase: Implement private namespaces.
@@ -18,7 +18,7 @@ Subject: [PATCH] kernelbase: Implement private namespaces.
  11 files changed, 524 insertions(+), 18 deletions(-)
 
 diff --git a/dlls/kernel32/kernel32.spec b/dlls/kernel32/kernel32.spec
-index ace3578a434..3f433e7ec8b 100644
+index 993130de744..68fe351bf69 100644
 --- a/dlls/kernel32/kernel32.spec
 +++ b/dlls/kernel32/kernel32.spec
 @@ -141,11 +141,11 @@
@@ -182,7 +182,7 @@ index 8ebc2bb78a3..f607aa4b70c 100644
  }
  
 diff --git a/dlls/kernelbase/kernelbase.spec b/dlls/kernelbase/kernelbase.spec
-index 14d99d97c8c..7d5af1533ae 100644
+index c779c84e4cc..9b59d21194a 100644
 --- a/dlls/kernelbase/kernelbase.spec
 +++ b/dlls/kernelbase/kernelbase.spec
 @@ -25,7 +25,7 @@
@@ -772,7 +772,7 @@ index 3b2287140b1..799f39b0fd0 100644
  WINADVAPI  BOOL        WINAPI OpenProcessToken(HANDLE,DWORD,PHANDLE);
  WINBASEAPI HANDLE      WINAPI OpenSemaphoreA(DWORD,BOOL,LPCSTR);
 diff --git a/include/winternl.h b/include/winternl.h
-index 264e4b35a88..9fc2154c0e2 100644
+index 3a6c4bc74a0..a6e8dd4853f 100644
 --- a/include/winternl.h
 +++ b/include/winternl.h
 @@ -3820,6 +3820,28 @@ typedef struct _DIRECTORY_BASIC_INFORMATION {
@@ -804,7 +804,7 @@ index 264e4b35a88..9fc2154c0e2 100644
  typedef struct _INITIAL_TEB {
      void *OldStackBase;
      void *OldStackLimit;
-@@ -4937,9 +4959,11 @@ NTSYSAPI NTSTATUS  WINAPI RtlAddAtomToAtomTable(RTL_ATOM_TABLE,const WCHAR*,RTL_
+@@ -4938,9 +4960,11 @@ NTSYSAPI NTSTATUS  WINAPI RtlAddAtomToAtomTable(RTL_ATOM_TABLE,const WCHAR*,RTL_
  NTSYSAPI NTSTATUS  WINAPI RtlAddAuditAccessAce(PACL,DWORD,DWORD,PSID,BOOL,BOOL);
  NTSYSAPI NTSTATUS  WINAPI RtlAddAuditAccessAceEx(PACL,DWORD,DWORD,DWORD,PSID,BOOL,BOOL);
  NTSYSAPI NTSTATUS  WINAPI RtlAddAuditAccessObjectAce(PACL,DWORD,DWORD,DWORD,GUID*,GUID*,PSID,BOOL,BOOL);
@@ -816,7 +816,7 @@ index 264e4b35a88..9fc2154c0e2 100644
  NTSYSAPI PVOID     WINAPI RtlAddVectoredContinueHandler(ULONG,PVECTORED_EXCEPTION_HANDLER);
  NTSYSAPI PVOID     WINAPI RtlAddVectoredExceptionHandler(ULONG,PVECTORED_EXCEPTION_HANDLER);
  NTSYSAPI PVOID     WINAPI RtlAddressInSectionTable(const IMAGE_NT_HEADERS*,HMODULE,DWORD);
-@@ -4981,6 +5005,7 @@ NTSYSAPI void      WINAPI RtlCopyUnicodeString(UNICODE_STRING*,const UNICODE_STR
+@@ -4982,6 +5006,7 @@ NTSYSAPI void      WINAPI RtlCopyUnicodeString(UNICODE_STRING*,const UNICODE_STR
  NTSYSAPI NTSTATUS  WINAPI RtlCreateAcl(PACL,DWORD,DWORD);
  NTSYSAPI NTSTATUS  WINAPI RtlCreateActivationContext(struct _ACTIVATION_CONTEXT **,const void*);
  NTSYSAPI NTSTATUS  WINAPI RtlCreateAtomTable(ULONG,RTL_ATOM_TABLE*);
@@ -824,7 +824,7 @@ index 264e4b35a88..9fc2154c0e2 100644
  NTSYSAPI NTSTATUS  WINAPI RtlCreateEnvironment(BOOLEAN, PWSTR*);
  NTSYSAPI HANDLE    WINAPI RtlCreateHeap(ULONG,PVOID,SIZE_T,SIZE_T,PVOID,PRTL_HEAP_PARAMETERS);
  NTSYSAPI NTSTATUS  WINAPI RtlCreateProcessParameters(RTL_USER_PROCESS_PARAMETERS**,const UNICODE_STRING*,const UNICODE_STRING*,const UNICODE_STRING*,const UNICODE_STRING*,PWSTR,const UNICODE_STRING*,const UNICODE_STRING*,const UNICODE_STRING*,const UNICODE_STRING*);
-@@ -5006,6 +5031,7 @@ NTSYSAPI NTSTATUS  WINAPI RtlDefaultNpAcl(PACL*);
+@@ -5007,6 +5032,7 @@ NTSYSAPI NTSTATUS  WINAPI RtlDefaultNpAcl(PACL*);
  NTSYSAPI NTSTATUS  WINAPI RtlDeleteAce(PACL,DWORD);
  NTSYSAPI NTSTATUS  WINAPI RtlDeleteAtomFromAtomTable(RTL_ATOM_TABLE,RTL_ATOM);
  NTSYSAPI void      WINAPI RtlDeleteBarrier(RTL_BARRIER*);

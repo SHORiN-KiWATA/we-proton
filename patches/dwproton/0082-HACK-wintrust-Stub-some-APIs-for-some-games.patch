@@ -1,4 +1,4 @@
-From 5d3038d6165944c7b30541cebdc90cb2da4aabf9 Mon Sep 17 00:00:00 2001
+From 1c8f8048a7853bc236fa06a666559b190878d31f Mon Sep 17 00:00:00 2001
 From: shxrrydw <sherrydrv@gmail.com>
 Date: Tue, 4 Aug 2026 13:29:18 +0200
 Subject: [PATCH] HACK: wintrust: Stub some APIs for some games.
@@ -11,7 +11,7 @@ App: HK: Star Rail.
  1 file changed, 37 insertions(+)
 
 diff --git a/dlls/wintrust/crypt.c b/dlls/wintrust/crypt.c
-index ad6f264cffb..5e72f879288 100644
+index 22dddc8ef70..5860bc2768d 100644
 --- a/dlls/wintrust/crypt.c
 +++ b/dlls/wintrust/crypt.c
 @@ -69,6 +69,22 @@ struct catinfo

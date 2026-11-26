@@ -1,4 +1,4 @@
-From c99037e1e3952cafc707fb9303b149365a251d62 Mon Sep 17 00:00:00 2001
+From f7209dd023b75cdddcdcaf8e9315ab006e542bc2 Mon Sep 17 00:00:00 2001
 From: shxrrydw <sherrydrv@gmail.com>
 Date: Thu, 6 Aug 2026 16:27:12 +0200
 Subject: [PATCH] server: Keep track of loaded kernel modules.
@@ -120,10 +120,10 @@ index cfd76e46330..79938845aad 100644
 +}
 +
 diff --git a/server/protocol.def b/server/protocol.def
-index 605209cd586..388e57e0ddc 100644
+index 4d8cd854278..422d7d773d9 100644
 --- a/server/protocol.def
 +++ b/server/protocol.def
-@@ -486,6 +486,14 @@ struct luid_attr
+@@ -487,6 +487,14 @@ struct luid_attr
      unsigned int attrs;
  };
  
@@ -138,7 +138,7 @@ index 605209cd586..388e57e0ddc 100644
  struct acl
  {
      unsigned char  revision;
-@@ -3995,6 +4003,25 @@ struct handle_info
+@@ -3996,6 +4004,25 @@ struct handle_info
      client_ptr_t user_ptr;        /* kernel object pointer */
  @END
  
@@ -165,10 +165,10 @@ index 605209cd586..388e57e0ddc 100644
  /* Grab server object reference from kernel object pointer */
  @REQ(grab_kernel_object)
 diff --git a/server/trace.c b/server/trace.c
-index 2354fb68163..5dfce7515ab 100644
+index db0e1c35fed..2a0831310cb 100644
 --- a/server/trace.c
 +++ b/server/trace.c
-@@ -1718,6 +1718,33 @@ static void dump_varargs_monitor_infos( const char *prefix, data_size_t size )
+@@ -1730,6 +1730,33 @@ static void dump_varargs_monitor_infos( const char *prefix, data_size_t size )
      remove_data( size );
  }
  

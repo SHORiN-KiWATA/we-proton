@@ -1,0 +1,2 @@
+InbvAcquireDisplayOwnership: called ok
+InbvResetDisplay: called ok

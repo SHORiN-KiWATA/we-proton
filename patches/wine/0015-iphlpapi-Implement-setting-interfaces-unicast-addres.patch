@@ -1,4 +1,4 @@
-From 54716aa4c34e7d4dd6be5356e1e099cd5aed853a Mon Sep 17 00:00:00 2001
+From 7c01261cbbbc48b37bf80d27936fb11dd125419f Mon Sep 17 00:00:00 2001
 From: SHORiN-KiWATA <feng13862095732@gmail.com>
 Date: Thu, 8 Oct 2026 22:26:37 +0900
 Subject: [PATCH] iphlpapi: Implement setting interfaces, unicast addresses and
@@ -435,10 +435,10 @@ index 03b43b16d3e..13682134a3d 100644
  {
      const BYTE *p1, *p2;
 diff --git a/dlls/nsi/nsi.c b/dlls/nsi/nsi.c
-index 14be842871a..e74fdb9a2b6 100644
+index ee0f712fc87..575f54d6933 100644
 --- a/dlls/nsi/nsi.c
 +++ b/dlls/nsi/nsi.c
-@@ -391,3 +391,50 @@ DWORD WINAPI NsiRequestChangeNotificationEx( struct nsi_request_change_notificat
+@@ -397,3 +397,50 @@ DWORD WINAPI NsiRequestChangeNotificationEx( struct nsi_request_change_notificat
      free( in );
      return err;
  }
@@ -505,18 +505,18 @@ index 9f1a2472362..d5a2e31f529 100644
  @ stub NsiSetObjectSecurity
  @ stub NsiSetParameter
 diff --git a/dlls/nsiproxy.sys/device.c b/dlls/nsiproxy.sys/device.c
-index 28e69978250..3ec7e3bdfee 100644
+index c7e4db7f17c..741b0902808 100644
 --- a/dlls/nsiproxy.sys/device.c
 +++ b/dlls/nsiproxy.sys/device.c
-@@ -70,6 +70,7 @@ enum unix_calls
-     nsi_get_all_parameters_ex,
-     nsi_get_parameter_ex,
+@@ -75,6 +75,7 @@ enum unix_calls
      nsi_get_notification,
+     nsi_init_notifications,
+     nsi_close_notifications,
 +    nsi_set_all_parameters_ex,
  };
  
  static NTSTATUS nsiproxy_enumerate_all( IRP *irp )
-@@ -152,6 +153,32 @@ static NTSTATUS nsiproxy_get_all_parameters( IRP *irp )
+@@ -157,6 +158,32 @@ static NTSTATUS nsiproxy_get_all_parameters( IRP *irp )
      return status;
  }
  
@@ -549,7 +549,7 @@ index 28e69978250..3ec7e3bdfee 100644
  static NTSTATUS nsiproxy_get_parameter( IRP *irp )
  {
      IO_STACK_LOCATION *irpsp = IoGetCurrentIrpStackLocation( irp );
-@@ -445,6 +472,10 @@ static NTSTATUS WINAPI nsi_ioctl( DEVICE_OBJECT *device, IRP *irp )
+@@ -481,6 +508,10 @@ static NTSTATUS WINAPI nsi_ioctl( DEVICE_OBJECT *device, IRP *irp )
          status = nsiproxy_change_notification( irp );
          break;
  
@@ -1052,10 +1052,10 @@ index 002d2b48f5d..6092854489a 100644
      {
          ~0u
 diff --git a/dlls/nsiproxy.sys/nsi.c b/dlls/nsiproxy.sys/nsi.c
-index 9e88a673610..dd7924bbb20 100644
+index 422e2a59138..05a30b96fc0 100644
 --- a/dlls/nsiproxy.sys/nsi.c
 +++ b/dlls/nsiproxy.sys/nsi.c
-@@ -142,6 +142,24 @@ NTSTATUS nsi_get_parameter_ex( struct nsi_get_parameter_ex *params )
+@@ -143,6 +143,24 @@ NTSTATUS nsi_get_parameter_ex( struct nsi_get_parameter_ex *params )
                                   params->data, params->data_size, params->data_offset );
  }
  
@@ -1080,7 +1080,7 @@ index 9e88a673610..dd7924bbb20 100644
  static NTSTATUS unix_nsi_enumerate_all_ex( void *args )
  {
      struct nsi_enumerate_all_ex *params = (struct nsi_enumerate_all_ex *)args;
-@@ -160,6 +178,12 @@ static NTSTATUS unix_nsi_get_parameter_ex( void *args )
+@@ -161,6 +179,12 @@ static NTSTATUS unix_nsi_get_parameter_ex( void *args )
      return nsi_get_parameter_ex( params );
  }
  
@@ -1093,10 +1093,10 @@ index 9e88a673610..dd7924bbb20 100644
  #if defined(HAVE_LINUX_RTNETLINK_H) || defined(__APPLE__)
  static struct
  {
-@@ -351,4 +375,5 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
-     unix_nsi_get_all_parameters_ex,
-     unix_nsi_get_parameter_ex,
+@@ -484,4 +508,5 @@ const unixlib_entry_t __wine_unix_call_funcs[] =
      unix_nsi_get_notification,
+     unix_nsi_init_notifications,
+     unix_nsi_close_notifications,
 +    unix_nsi_set_all_parameters_ex,
  };
 diff --git a/dlls/nsiproxy.sys/unix_private.h b/dlls/nsiproxy.sys/unix_private.h

@@ -1,4 +1,4 @@
-From b20c6041b9704ca463b21e62680051cdaf7ba2be Mon Sep 17 00:00:00 2001
+From 60d95d25d112dcecba4fc718cae7b1f3cfaa955a Mon Sep 17 00:00:00 2001
 From: Pedro Nishiyama <nishiyama.v3@gmail.com>
 Date: Mon, 20 Nov 2023 02:37:07 -0300
 Subject: [PATCH] HACK: ntdll: Add WINE_DISABLE_SFN option. Fixes Yakuza 5
@@ -12,7 +12,7 @@ Subject: [PATCH] HACK: ntdll: Add WINE_DISABLE_SFN option. Fixes Yakuza 5
  3 files changed, 21 insertions(+), 9 deletions(-)
 
 diff --git a/dlls/ntdll/unix/file.c b/dlls/ntdll/unix/file.c
-index 1413f7f7e0c..cb318149ed3 100644
+index 9d6840ceabb..de10819a8a6 100644
 --- a/dlls/ntdll/unix/file.c
 +++ b/dlls/ntdll/unix/file.c
 @@ -1597,16 +1597,20 @@ static BOOL append_entry( struct dir_data *data, const char *long_name,

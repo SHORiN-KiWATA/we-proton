@@ -1,4 +1,4 @@
-From 95975854a12c6fbe1a1cde349765fed2cbf6dfb1 Mon Sep 17 00:00:00 2001
+From e6e34ad1534b3c83e9850633509c3484921eb705 Mon Sep 17 00:00:00 2001
 From: shxrrydw <sherrydrv@gmail.com>
 Date: Thu, 6 Aug 2026 12:39:22 +0200
 Subject: [PATCH] ntdll: Implement
@@ -47,7 +47,7 @@ index 90faeb19638..49f6927b342 100644
  
      case ProcessExecuteFlags:   /* ULONG */
 diff --git a/include/winternl.h b/include/winternl.h
-index 70dca914b3d..264e4b35a88 100644
+index ef0f24ecbc1..3a6c4bc74a0 100644
 --- a/include/winternl.h
 +++ b/include/winternl.h
 @@ -2034,6 +2034,7 @@ typedef enum _PROCESSINFOCLASS {

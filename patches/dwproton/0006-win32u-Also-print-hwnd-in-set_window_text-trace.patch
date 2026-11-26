@@ -1,4 +1,4 @@
-From a6f37b503bf2a50c7d708d2d25ebd6a1746898bb Mon Sep 17 00:00:00 2001
+From 65d4f1748cd6a4dcddc035122902e615f0c5c438 Mon Sep 17 00:00:00 2001
 From: Dmitry Timoshkov <dmitry@baikal.ru>
 Date: Mon, 29 Dec 2025 09:51:50 +0300
 Subject: [PATCH] win32u: Also print hwnd in set_window_text() trace.
@@ -12,10 +12,10 @@ Signed-off-by: Dmitry Timoshkov <dmitry@baikal.ru>
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/dlls/win32u/defwnd.c b/dlls/win32u/defwnd.c
-index d3067992aa0..65e1bf1ae4d 100644
+index 618922ea52f..16de2468329 100644
 --- a/dlls/win32u/defwnd.c
 +++ b/dlls/win32u/defwnd.c
-@@ -321,7 +321,7 @@ static BOOL set_window_text( HWND hwnd, const void *text, BOOL ansi )
+@@ -323,7 +323,7 @@ static BOOL set_window_text( HWND hwnd, const void *text, BOOL ansi )
      }
      else str = NULL;
  

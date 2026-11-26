@@ -2,7 +2,7 @@
 
 基于 [GE-Proton](https://github.com/GloriousEggroll/proton-ge-custom) 和 [DW-Proton](https://dawn.wine/dawn-winery/dwproton) 的个人 Proton，攒一些 Wine（和 vkd3d-proton）的 bug 修复。自己和朋友用，不往上游提。
 
-- 顶层是 GE-Proton 的仓库，从 tag `GE-Proton11-7` 起的分支，之后跟进到 `GE-Proton11-12`。子模块版本都用 GE-Proton 的（`GE-Proton11-7` 时 dxvk、vkd3d-proton、protonfixes 曾换成 DW-Proton 用的更新版本，`GE-Proton11-11` 的已经比它们新，比较见 [`ge-dw-merge.md`](ge-dw-merge.md)）
+- 顶层是 GE-Proton 的仓库，从 tag `GE-Proton11-7` 起的分支，之后跟进到 `GE-Proton11-14`。子模块版本都用 GE-Proton 的（`GE-Proton11-7` 时 dxvk、vkd3d-proton、protonfixes 曾换成 DW-Proton 用的更新版本，`GE-Proton11-11` 的已经比它们新，比较见 [`ge-dw-merge.md`](ge-dw-merge.md)）
 - Wine 子模块不改：`patches/protonprep-valve-staging.sh`（GE-Proton 的脚本）在构建前往 Valve 的 Wine 上打 GE-Proton 的补丁和 staging，最后打 `patches/dwproton/` 和 `patches/wine/`
 - `patches/dwproton/`：DW-Proton（`dwproton-11.0-14`，之后跟进到 `dwproton-11.0-15`）的 Wine 提交里 GE-Proton 没有的那些，冲突解决过。怎么挑的、丢了哪些、冲突怎么解的，见 [`ge-dw-merge.md`](ge-dw-merge.md)
 - `patches/wine/`：WE-Proton 自己的 Wine 补丁，编号沿用原来的（中间的空号是这一版不再需要的，见下表）

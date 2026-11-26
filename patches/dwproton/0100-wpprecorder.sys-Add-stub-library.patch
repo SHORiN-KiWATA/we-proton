@@ -1,4 +1,4 @@
-From ced0c34b7c8cd60ff8e13873c7b6556b4b1ee071 Mon Sep 17 00:00:00 2001
+From bd8a3040c9a496954b9aa4bda5f40e430124f521 Mon Sep 17 00:00:00 2001
 From: Ziia Shi <mkrsym1@gmail.com>
 Date: Sun, 9 Aug 2026 15:28:44 +0200
 Subject: [PATCH] wpprecorder.sys: Add stub library.
@@ -13,10 +13,10 @@ App: Neverness to Everness (4508340).
  create mode 100644 dlls/wpprecorder.sys/wpprecorder.sys.spec
 
 diff --git a/configure.ac b/configure.ac
-index cf55aecc1c9..0e7c7b4feb6 100644
+index 910f9297f7c..c9a3624891e 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -3508,6 +3508,7 @@ WINE_CONFIG_MAKEFILE(dlls/wpc)
+@@ -3524,6 +3524,7 @@ WINE_CONFIG_MAKEFILE(dlls/wpc)
  WINE_CONFIG_MAKEFILE(dlls/wpc/tests)
  WINE_CONFIG_MAKEFILE(dlls/wpcap)
  WINE_CONFIG_MAKEFILE(dlls/wpcap/tests)

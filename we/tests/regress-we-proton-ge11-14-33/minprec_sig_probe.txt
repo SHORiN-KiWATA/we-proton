@@ -1,0 +1,35 @@
+== minprec_vs.dxbc
+   input: 212 bytes, chunks: ISG1(168)
+   output: 172 bytes, chunks: OSG1(128)
+   in+out: 352 bytes, chunks: ISG1(168) OSG1(128)
+   patch: hr 0x80004005
+   all: hr 0x80004005
+   d3d11 reflect: in 4 out 3 patch 0
+     in  POSITION0 reg 0 sv 0 comp 3 mask 0xf rw 0xf stream 0 minprec 1
+     in  TEXCOORD0 reg 1 sv 0 comp 1 mask 0x3 rw 0x3 stream 0 minprec 5
+     in  TEXCOORD1 reg 2 sv 0 comp 3 mask 0x3 rw 0x3 stream 0 minprec 0
+     in  SV_InstanceID0 reg 3 sv 8 comp 1 mask 0x1 rw 0x1 stream 0 minprec 0
+     out SV_Position0 reg 0 sv 1 comp 3 mask 0xf rw 0 stream 0 minprec 0
+     out TEXCOORD0 reg 1 sv 0 comp 3 mask 0x3 rw 0xc stream 0 minprec 1
+     out TEXCOORD1 reg 2 sv 0 comp 2 mask 0x3 rw 0xc stream 0 minprec 4
+   d3d12 reflect: in 4 out 3 patch 0
+     in  POSITION0 reg 0 sv 0 comp 3 mask 0xf rw 0xf stream 0 minprec 1
+     in  TEXCOORD0 reg 1 sv 0 comp 1 mask 0x3 rw 0x3 stream 0 minprec 5
+     in  TEXCOORD1 reg 2 sv 0 comp 3 mask 0x3 rw 0x3 stream 0 minprec 0
+     in  SV_InstanceID0 reg 3 sv 8 comp 1 mask 0x1 rw 0x1 stream 0 minprec 0
+== minprec_hs.dxbc
+   input: 96 bytes, chunks: ISG1(52)
+   output: 96 bytes, chunks: OSG1(52)
+   in+out: 160 bytes, chunks: ISG1(52) OSG1(52)
+   patch: 256 bytes, chunks: PSG1(212)
+   all: 384 bytes, chunks: ISG1(52) OSG1(52) PSG1(212)
+   d3d11 reflect: in 1 out 1 patch 5
+     in  POSITION0 reg 0 sv 0 comp 3 mask 0xf rw 0xf stream 0 minprec 0
+     out POSITION0 reg 0 sv 0 comp 3 mask 0xf rw 0 stream 0 minprec 0
+     pc  SV_TessFactor0 reg 0 sv 13 comp 3 mask 0x1 rw 0xe stream 0 minprec 0
+     pc  SV_TessFactor1 reg 1 sv 13 comp 3 mask 0x1 rw 0xe stream 0 minprec 0
+     pc  SV_TessFactor2 reg 2 sv 13 comp 3 mask 0x1 rw 0xe stream 0 minprec 0
+     pc  SV_InsideTessFactor0 reg 3 sv 14 comp 3 mask 0x1 rw 0xe stream 0 minprec 0
+     pc  TEXCOORD0 reg 4 sv 0 comp 3 mask 0xf rw 0 stream 0 minprec 1
+   d3d12 reflect: in 1 out 1 patch 5
+     in  POSITION0 reg 0 sv 0 comp 3 mask 0xf rw 0xf stream 0 minprec 0

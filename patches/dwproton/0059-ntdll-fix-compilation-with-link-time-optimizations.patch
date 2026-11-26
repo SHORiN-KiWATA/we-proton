@@ -1,4 +1,4 @@
-From 2a2d9aa13cc7282e3e119afc1debc6dd328a4874 Mon Sep 17 00:00:00 2001
+From b0410fe6fbb819e350d7674d1e4319d2e14982cf Mon Sep 17 00:00:00 2001
 From: Torge Matthies <openglfreak@googlemail.com>
 Date: Wed, 11 Sep 2024 20:42:20 +0300
 Subject: [PATCH] ntdll: fix compilation with link-time optimizations
@@ -26,10 +26,10 @@ index a5de319a6d5..bfcf4a92c29 100644
      struct syscall_frame *frame = ((struct ntdll_thread_data *)&teb->GdiTebBatch)->syscall_frame;
      CONTEXT *ctx, context = { CONTEXT_ALL };
 diff --git a/dlls/ntdll/unix/signal_arm64.c b/dlls/ntdll/unix/signal_arm64.c
-index a7b5e2270bc..463f80a130b 100644
+index 67366a5a738..7d89b2dffc1 100644
 --- a/dlls/ntdll/unix/signal_arm64.c
 +++ b/dlls/ntdll/unix/signal_arm64.c
-@@ -1602,7 +1602,7 @@ void syscall_dispatcher_return_slowpath(void)
+@@ -1644,7 +1644,7 @@ void syscall_dispatcher_return_slowpath(void)
  /***********************************************************************
   *           init_syscall_frame
   */
@@ -39,7 +39,7 @@ index a7b5e2270bc..463f80a130b 100644
      struct syscall_frame *frame = ((struct ntdll_thread_data *)&teb->GdiTebBatch)->syscall_frame;
      CONTEXT *ctx, context = { CONTEXT_ALL };
 diff --git a/dlls/ntdll/unix/signal_i386.c b/dlls/ntdll/unix/signal_i386.c
-index eb1a82612db..b29595a2631 100644
+index 2cd62b3f7bc..32351027e1f 100644
 --- a/dlls/ntdll/unix/signal_i386.c
 +++ b/dlls/ntdll/unix/signal_i386.c
 @@ -2494,7 +2494,7 @@ void signal_init_process(void)
@@ -52,7 +52,7 @@ index eb1a82612db..b29595a2631 100644
      struct x86_thread_data *thread_data = (struct x86_thread_data *)&teb->GdiTebBatch;
      struct syscall_frame *frame = ((struct ntdll_thread_data *)&teb->GdiTebBatch)->syscall_frame;
 diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
-index 8482cfe470f..948eb465b70 100644
+index 8c8361f5c2e..dda0a720109 100644
 --- a/dlls/ntdll/unix/signal_x86_64.c
 +++ b/dlls/ntdll/unix/signal_x86_64.c
 @@ -3187,7 +3187,7 @@ void set_thread_teb( TEB *teb )

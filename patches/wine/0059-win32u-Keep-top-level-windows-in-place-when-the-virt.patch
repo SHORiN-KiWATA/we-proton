@@ -1,4 +1,4 @@
-From c61438db8bfdacd2b2111e9e6d6032d90eef4fb9 Mon Sep 17 00:00:00 2001
+From 7bbea86a35e820a0627b7c3c0bdf5fa606b21ec1 Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Sat, 17 Oct 2026 03:00:00 +0900
 Subject: [PATCH] win32u: Keep top level windows in place when the virtual
@@ -30,10 +30,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  1 file changed, 27 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/win32u/defwnd.c b/dlls/win32u/defwnd.c
-index 65e1bf1ae4d..c2292670499 100644
+index 16de2468329..12d107b06b3 100644
 --- a/dlls/win32u/defwnd.c
 +++ b/dlls/win32u/defwnd.c
-@@ -3121,6 +3121,28 @@ static void update_children_window_state( HWND hwnd )
+@@ -3125,6 +3125,28 @@ static void update_children_window_state( HWND hwnd )
      free( children );
  }
  
@@ -62,7 +62,7 @@ index 65e1bf1ae4d..c2292670499 100644
  LRESULT desktop_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam, BOOL ansi )
  {
      static const WCHAR wine_display_device_guidW[] =
-@@ -3157,7 +3179,7 @@ LRESULT desktop_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
+@@ -3161,7 +3183,7 @@ LRESULT desktop_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
      {
          static RECT virtual_rect = {INT_MIN,INT_MIN,INT_MAX,INT_MAX};
  
@@ -71,7 +71,7 @@ index 65e1bf1ae4d..c2292670499 100644
          UINT context, flags = 0;
  
          if (EqualRect( &new_rect, &old_rect )) return TRUE;
-@@ -3172,9 +3194,13 @@ LRESULT desktop_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
+@@ -3176,9 +3198,13 @@ LRESULT desktop_window_proc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
              flags |= SWP_NOMOVE;
  
          context = NtUserSetThreadDpiAwarenessContext( NTUSER_DPI_PER_MONITOR_AWARE );

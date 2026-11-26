@@ -1,4 +1,4 @@
-From 4de316fdc3800c78e7d9ccfdf7a635c48c34fd4a Mon Sep 17 00:00:00 2001
+From 55018d427118fc7b82f70c87dc9492d62c431a13 Mon Sep 17 00:00:00 2001
 From: teapot4195 <teapot4195@gmail.com>
 Date: Wed, 15 Apr 2026 22:19:21 +0200
 Subject: [PATCH] HACK: ws2_32: Allow changing request timeout with
@@ -12,10 +12,10 @@ App: Genshin Impact.
  1 file changed, 54 insertions(+)
 
 diff --git a/dlls/ws2_32/socket.c b/dlls/ws2_32/socket.c
-index 0142157aec1..7f32d82d9fa 100644
+index ae167ed822f..7d93c18d134 100644
 --- a/dlls/ws2_32/socket.c
 +++ b/dlls/ws2_32/socket.c
-@@ -3996,6 +3996,58 @@ int WINAPI WSAAsyncSelect( SOCKET s, HWND window, UINT message, LONG mask )
+@@ -3998,6 +3998,58 @@ int WINAPI WSAAsyncSelect( SOCKET s, HWND window, UINT message, LONG mask )
      return status ? -1 : 0;
  }
  
@@ -74,7 +74,7 @@ index 0142157aec1..7f32d82d9fa 100644
  
  /***********************************************************************
   *      WSACreateEvent          (WS2_32.31)
-@@ -4006,6 +4058,8 @@ WSAEVENT WINAPI WSACreateEvent(void)
+@@ -4008,6 +4060,8 @@ WSAEVENT WINAPI WSACreateEvent(void)
      /* Create a manual-reset event, with initial state: unsignaled */
      TRACE("\n");
  

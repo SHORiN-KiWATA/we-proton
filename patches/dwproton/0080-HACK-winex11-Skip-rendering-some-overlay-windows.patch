@@ -1,4 +1,4 @@
-From 862413ed0fe5e8ba22a57384d6ddbd6a070a9f79 Mon Sep 17 00:00:00 2001
+From c0d31980f38826b82e519459f3f24027bf6ab549 Mon Sep 17 00:00:00 2001
 From: shxrrydw <sherrydrv@gmail.com>
 Date: Sun, 26 Apr 2026 23:18:43 +0200
 Subject: [PATCH] HACK: winex11: Skip rendering some overlay windows.
@@ -12,10 +12,10 @@ App: Neverness to Everness (4508340).
  1 file changed, 14 insertions(+), 1 deletion(-)
 
 diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
-index 5379bcf0d8b..4fdc81aa65a 100644
+index 47c3ce51c84..104bd596226 100644
 --- a/dlls/winex11.drv/window.c
 +++ b/dlls/winex11.drv/window.c
-@@ -1812,6 +1812,16 @@ static BOOL window_minimize_unsupported( struct x11drv_win_data *data )
+@@ -1818,6 +1818,16 @@ static BOOL window_minimize_unsupported( struct x11drv_win_data *data )
             !is_net_supported( x11drv_atom(_NET_WM_STATE_HIDDEN) );
  }
  
@@ -32,7 +32,7 @@ index 5379bcf0d8b..4fdc81aa65a 100644
  static void window_set_wm_state( struct x11drv_win_data *data, UINT new_state, BOOL activate )
  {
      UINT old_state = data->pending_state.wm_state;
-@@ -1935,7 +1945,10 @@ static void window_set_wm_state( struct x11drv_win_data *data, UINT new_state, B
+@@ -1941,7 +1951,10 @@ static void window_set_wm_state( struct x11drv_win_data *data, UINT new_state, B
      case MAKELONG(WithdrawnState, NormalState):
      case MAKELONG(IconicState, NormalState):
          if (data->embedded) set_xembed_flags( data, XEMBED_MAPPED );

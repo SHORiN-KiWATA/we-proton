@@ -1,4 +1,4 @@
-From 3cfd54cfd0a0c9ad7689f07086053123c8b9040d Mon Sep 17 00:00:00 2001
+From d923d0e35b32e00bb2002c79860e3f99e16e3d76 Mon Sep 17 00:00:00 2001
 From: SHORiN-KIWATA <shorin@users.noreply.github.com>
 Date: Mon, 12 Oct 2026 05:00:25 +0900
 Subject: [PATCH] winewayland: Don't ask for activation of a window that has
@@ -17,10 +17,10 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  1 file changed, 9 insertions(+)
 
 diff --git a/dlls/winewayland.drv/window.c b/dlls/winewayland.drv/window.c
-index 1464c29311f..72209ade972 100644
+index a2340659cef..89c061e64bc 100644
 --- a/dlls/winewayland.drv/window.c
 +++ b/dlls/winewayland.drv/window.c
-@@ -1675,11 +1675,20 @@ void WAYLAND_FlashWindowEx(FLASHWINFO *info)
+@@ -1676,11 +1676,20 @@ void WAYLAND_FlashWindowEx(FLASHWINFO *info)
  void WAYLAND_ActivateWindow(HWND hwnd, HWND previous)
  {
      struct wayland_win_data *data;

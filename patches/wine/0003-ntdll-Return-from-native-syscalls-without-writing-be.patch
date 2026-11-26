@@ -1,4 +1,4 @@
-From 1d3074fe0a959a28af7e4cb7419a040bf49ccb76 Mon Sep 17 00:00:00 2001
+From 9385c66680ec5a6be71a5ea64f9388aba94d3b8e Mon Sep 17 00:00:00 2001
 From: shorinkiwata <fcl709@outlook.com>
 Date: Wed, 7 Oct 2026 07:51:23 +0900
 Subject: [PATCH] ntdll: Return from native syscalls without writing below the
@@ -25,7 +25,7 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
  1 file changed, 6 insertions(+), 4 deletions(-)
 
 diff --git a/dlls/ntdll/unix/signal_x86_64.c b/dlls/ntdll/unix/signal_x86_64.c
-index 948eb465b70..a9c86e6fa06 100644
+index dda0a720109..e1735f8a4a4 100644
 --- a/dlls/ntdll/unix/signal_x86_64.c
 +++ b/dlls/ntdll/unix/signal_x86_64.c
 @@ -2932,15 +2932,17 @@ static void sigsys_handler( int signal, siginfo_t *siginfo, void *sigcontext )
